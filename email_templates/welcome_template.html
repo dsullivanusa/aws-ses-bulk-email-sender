@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Welcome Email</title>
+    <style>
+        body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+        .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+        .header { background: #007bff; color: white; padding: 20px; text-align: center; }
+        .content { padding: 20px; background: #f9f9f9; }
+        .footer { padding: 20px; text-align: center; font-size: 12px; color: #666; }
+        .button { display: inline-block; padding: 12px 24px; background: #007bff; color: white; text-decoration: none; border-radius: 5px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Welcome to Our Service!</h1>
+        </div>
+        <div class="content">
+            <h2>Hello {{first_name}}!</h2>
+            <p>Thank you for joining us at {{company}}. We're excited to have you on board!</p>
+            <p>Here's what you can expect:</p>
+            <ul>
+                <li>Regular updates and newsletters</li>
+                <li>Exclusive offers and promotions</li>
+                <li>Priority customer support</li>
+            </ul>
+            <p style="text-align: center;">
+                <a href="#" class="button">Get Started</a>
+            </p>
+        </div>
+        <div class="footer">
+            <p>Best regards,<br>The Team</p>
+            <p>If you no longer wish to receive these emails, <a href="#">unsubscribe here</a>.</p>
+        </div>
+    </div>
+</body>
+</html>

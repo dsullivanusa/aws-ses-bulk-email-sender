@@ -1,0 +1,658 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bulk Email Management System</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 2.5rem;
+            font-weight: 700;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            opacity: 0.9;
+            font-size: 1.1rem;
+        }
+
+        .main-content {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 0;
+            min-height: 600px;
+        }
+
+        .left-panel, .right-panel {
+            padding: 30px;
+        }
+
+        .left-panel {
+            border-right: 1px solid #e5e7eb;
+        }
+
+        .section-title {
+            font-size: 1.5rem;
+            font-weight: 600;
+            color: #1f2937;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            font-weight: 600;
+            color: #374151;
+            margin-bottom: 8px;
+            font-size: 0.95rem;
+        }
+
+        .form-control {
+            width: 100%;
+            padding: 12px 16px;
+            border: 2px solid #e5e7eb;
+            border-radius: 8px;
+            font-size: 1rem;
+            transition: border-color 0.2s, box-shadow 0.2s;
+        }
+
+        .form-control:focus {
+            outline: none;
+            border-color: #4f46e5;
+            box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
+        }
+
+        textarea.form-control {
+            resize: vertical;
+            min-height: 120px;
+        }
+
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(79, 70, 229, 0.3);
+        }
+
+        .btn-secondary {
+            background: #f3f4f6;
+            color: #374151;
+            border: 2px solid #e5e7eb;
+        }
+
+        .btn-secondary:hover {
+            background: #e5e7eb;
+        }
+
+        .btn-danger {
+            background: #ef4444;
+            color: white;
+        }
+
+        .btn-danger:hover {
+            background: #dc2626;
+        }
+
+        .recipient-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 12px 16px;
+            background: #f9fafb;
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            margin-bottom: 8px;
+        }
+
+        .recipient-email {
+            font-weight: 500;
+            color: #374151;
+        }
+
+        .recipient-count {
+            background: #4f46e5;
+            color: white;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            font-weight: 600;
+        }
+
+        .status-section {
+            margin-top: 30px;
+            padding: 20px;
+            background: #f9fafb;
+            border-radius: 8px;
+            border-left: 4px solid #4f46e5;
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 8px;
+            background: #e5e7eb;
+            border-radius: 4px;
+            overflow: hidden;
+            margin: 10px 0;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #4f46e5 0%, #7c3aed 100%);
+            width: 0%;
+            transition: width 0.3s ease;
+        }
+
+        .alert {
+            padding: 15px 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            font-weight: 500;
+        }
+
+        .alert-success {
+            background: #d1fae5;
+            color: #065f46;
+            border: 1px solid #a7f3d0;
+        }
+
+        .alert-error {
+            background: #fee2e2;
+            color: #991b1b;
+            border: 1px solid #fecaca;
+        }
+
+        .alert-info {
+            background: #dbeafe;
+            color: #1e40af;
+            border: 1px solid #bfdbfe;
+        }
+
+        .config-section {
+            background: #f8fafc;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+
+        .config-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            margin-bottom: 15px;
+        }
+
+        @media (max-width: 768px) {
+            .main-content {
+                grid-template-columns: 1fr;
+            }
+            
+            .left-panel {
+                border-right: none;
+                border-bottom: 1px solid #e5e7eb;
+            }
+
+            .config-row {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        .loading {
+            opacity: 0.6;
+            pointer-events: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📧 Bulk Email System</h1>
+            <p>Professional email campaigns powered by CISA</p>
+        </div>
+
+        <div class="main-content">
+            <div class="left-panel">
+                <h2 class="section-title">
+                    ✉️ Compose Email
+                </h2>
+
+                <div class="config-section">
+                    <h3 style="margin-bottom: 15px; color: #374151;">AWS Configuration</h3>
+                    <div class="config-row">
+                        <div class="form-group">
+                            <label for="apiGatewayUrl">API Gateway URL</label>
+                            <input type="url" id="apiGatewayUrl" class="form-control" 
+                                placeholder="https://your-api.execute-api.region.amazonaws.com/prod">
+                        </div>
+                        <div class="form-group">
+                            <label for="apiKey">API Key (Optional)</label>
+                            <input type="password" id="apiKey" class="form-control" 
+                                placeholder="Your API key if required">
+                        </div>
+                    </div>
+                </div>
+
+                <form id="emailForm">
+                    <div class="form-group">
+                        <label for="senderName">Sender Name</label>
+                        <input type="text" id="senderName" class="form-control" 
+                            placeholder="Your Company Name" required>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="senderEmail">Sender Email</label>
+                        <input type="email" id="senderEmail" class="form-control" 
+                            placeholder="noreply@yourcompany.com" required>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="replyTo">Reply-To Email (Optional)</label>
+                        <input type="email" id="replyTo" class="form-control" 
+                            placeholder="support@yourcompany.com">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="emailSubject">Subject</label>
+                        <input type="text" id="emailSubject" class="form-control" 
+                            placeholder="Your email subject" required>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="emailBody">Message</label>
+                        <textarea id="emailBody" class="form-control" 
+                            placeholder="Your email content here..." required></textarea>
+                    </div>
+
+                    <div class="form-group">
+                        <button type="button" id="sendEmailsBtn" class="btn btn-primary">
+                            🚀 Send Bulk Email
+                        </button>
+                    </div>
+                </form>
+            </div>
+
+            <div class="right-panel">
+                <h2 class="section-title">
+                    👥 Recipients <span id="recipientCount" class="recipient-count">0</span>
+                </h2>
+
+                <div class="form-group">
+                    <label for="recipientEmail">Add Recipient</label>
+                    <div style="display: flex; gap: 10px;">
+                        <input type="email" id="recipientEmail" class="form-control" 
+                            placeholder="recipient@example.com">
+                        <button type="button" id="addRecipientBtn" class="btn btn-secondary">
+                            ➕ Add
+                        </button>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label for="bulkRecipients">Bulk Add (one email per line)</label>
+                    <textarea id="bulkRecipients" class="form-control" 
+                        placeholder="email1@example.com&#10;email2@example.com&#10;email3@example.com"></textarea>
+                    <button type="button" id="addBulkBtn" class="btn btn-secondary" style="margin-top: 10px;">
+                        📋 Add Bulk
+                    </button>
+                </div>
+
+                <div style="margin: 20px 0;">
+                    <button type="button" id="clearAllBtn" class="btn btn-danger">
+                        🗑️ Clear All
+                    </button>
+                </div>
+
+                <div id="recipientsList"></div>
+
+                <div class="status-section">
+                    <h3 style="margin-bottom: 15px; color: #374151;">📊 Sending Status</h3>
+                    <div id="statusDisplay">
+                        <p>Ready to send emails</p>
+                    </div>
+                    <div class="progress-bar">
+                        <div class="progress-fill" id="progressFill"></div>
+                    </div>
+                    <div id="progressText">0% Complete</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="alertContainer" style="position: fixed; top: 20px; right: 20px; z-index: 1000;"></div>
+
+    <script>
+        class BulkEmailApp {
+            constructor() {
+                this.recipients = [];
+                this.isLoading = false;
+                this.initializeEventListeners();
+            }
+
+            initializeEventListeners() {
+                document.getElementById('addRecipientBtn').addEventListener('click', () => this.addRecipient());
+                document.getElementById('addBulkBtn').addEventListener('click', () => this.addBulkRecipients());
+                document.getElementById('clearAllBtn').addEventListener('click', () => this.clearAllRecipients());
+                document.getElementById('sendEmailsBtn').addEventListener('click', () => this.sendEmails());
+                
+                document.getElementById('recipientEmail').addEventListener('keypress', (e) => {
+                    if (e.key === 'Enter') {
+                        this.addRecipient();
+                    }
+                });
+            }
+
+            validateEmail(email) {
+                const re = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+                return re.test(email);
+            }
+
+            addRecipient() {
+                const emailInput = document.getElementById('recipientEmail');
+                const email = emailInput.value.trim();
+
+                if (!email) return;
+
+                if (!this.validateEmail(email)) {
+                    this.showAlert('Please enter a valid email address', 'error');
+                    return;
+                }
+
+                if (this.recipients.includes(email)) {
+                    this.showAlert('Email already exists in the recipient list', 'error');
+                    return;
+                }
+
+                this.recipients.push(email);
+                emailInput.value = '';
+                this.updateRecipientsList();
+                this.showAlert(`Added ${email} to recipients`, 'success');
+            }
+
+            addBulkRecipients() {
+                const bulkInput = document.getElementById('bulkRecipients');
+                const emails = bulkInput.value.split('\n')
+                    .map(email => email.trim())
+                    .filter(email => email);
+
+                let added = 0;
+                let errors = 0;
+
+                emails.forEach(email => {
+                    if (!this.validateEmail(email)) {
+                        errors++;
+                        return;
+                    }
+
+                    if (!this.recipients.includes(email)) {
+                        this.recipients.push(email);
+                        added++;
+                    }
+                });
+
+                bulkInput.value = '';
+                this.updateRecipientsList();
+
+                if (added > 0) {
+                    this.showAlert(`Added ${added} recipient(s)`, 'success');
+                }
+                if (errors > 0) {
+                    this.showAlert(`${errors} invalid email(s) skipped`, 'error');
+                }
+            }
+
+            removeRecipient(email) {
+                this.recipients = this.recipients.filter(r => r !== email);
+                this.updateRecipientsList();
+                this.showAlert(`Removed ${email}`, 'info');
+            }
+
+            clearAllRecipients() {
+                if (this.recipients.length === 0) return;
+                
+                if (confirm(`Are you sure you want to remove all ${this.recipients.length} recipients?`)) {
+                    this.recipients = [];
+                    this.updateRecipientsList();
+                    this.showAlert('All recipients cleared', 'info');
+                }
+            }
+
+            updateRecipientsList() {
+                const container = document.getElementById('recipientsList');
+                const countElement = document.getElementById('recipientCount');
+                
+                countElement.textContent = this.recipients.length;
+
+                if (this.recipients.length === 0) {
+                    container.innerHTML = '<p style="color: #6b7280; font-style: italic;">No recipients added yet</p>';
+                    return;
+                }
+
+                container.innerHTML = this.recipients.map(email => `
+                    <div class="recipient-item">
+                        <span class="recipient-email">${email}</span>
+                        <button class="btn" style="padding: 4px 8px; font-size: 0.8rem; background: #fee2e2; color: #991b1b;" 
+                                onclick="app.removeRecipient('${email}')">
+                            ✕
+                        </button>
+                    </div>
+                `).join('');
+            }
+
+            async sendEmails() {
+                if (this.isLoading) return;
+
+                // Validation
+                const apiGatewayUrl = document.getElementById('apiGatewayUrl').value.trim();
+                const senderName = document.getElementById('senderName').value.trim();
+                const senderEmail = document.getElementById('senderEmail').value.trim();
+                const subject = document.getElementById('emailSubject').value.trim();
+                const body = document.getElementById('emailBody').value.trim();
+
+                if (!apiGatewayUrl || !senderName || !senderEmail || !subject || !body) {
+                    this.showAlert('Please fill in all required fields', 'error');
+                    return;
+                }
+
+                if (this.recipients.length === 0) {
+                    this.showAlert('Please add at least one recipient', 'error');
+                    return;
+                }
+
+                if (!this.validateEmail(senderEmail)) {
+                    this.showAlert('Please enter a valid sender email', 'error');
+                    return;
+                }
+
+                const replyTo = document.getElementById('replyTo').value.trim();
+                if (replyTo && !this.validateEmail(replyTo)) {
+                    this.showAlert('Please enter a valid reply-to email', 'error');
+                    return;
+                }
+
+                if (!confirm(`Are you sure you want to send emails to ${this.recipients.length} recipient(s)?`)) {
+                    return;
+                }
+
+                this.isLoading = true;
+                this.updateLoadingState(true);
+
+                try {
+                    await this.performBulkSend({
+                        apiGatewayUrl,
+                        senderName,
+                        senderEmail,
+                        replyTo: replyTo || senderEmail,
+                        subject,
+                        body,
+                        recipients: this.recipients
+                    });
+                } catch (error) {
+                    console.error('Send failed:', error);
+                    this.showAlert('Failed to send emails: ' + error.message, 'error');
+                    this.updateStatus('Failed to send emails', 0);
+                } finally {
+                    this.isLoading = false;
+                    this.updateLoadingState(false);
+                }
+            }
+
+            async performBulkSend(emailData) {
+                const apiKey = document.getElementById('apiKey').value.trim();
+                
+                // Update status
+                this.updateStatus('Preparing to send emails...', 0);
+
+                const headers = {
+                    'Content-Type': 'application/json',
+                };
+
+                if (apiKey) {
+                    headers['x-api-key'] = apiKey;
+                }
+
+                const payload = {
+                    senderName: emailData.senderName,
+                    senderEmail: emailData.senderEmail,
+                    replyToEmail: emailData.replyTo,
+                    subject: emailData.subject,
+                    body: emailData.body,
+                    recipients: emailData.recipients,
+                    timestamp: new Date().toISOString()
+                };
+
+                try {
+                    this.updateStatus('Sending emails...', 25);
+                    
+                    const response = await fetch(emailData.apiGatewayUrl, {
+                        method: 'POST',
+                        headers: headers,
+                        body: JSON.stringify(payload)
+                    });
+
+                    this.updateStatus('Processing response...', 75);
+
+                    if (!response.ok) {
+                        const errorText = await response.text();
+                        throw new Error(`HTTP ${response.status}: ${errorText}`);
+                    }
+
+                    const result = await response.json();
+                    
+                    this.updateStatus(`Successfully sent emails to ${emailData.recipients.length} recipient(s)`, 100);
+                    this.showAlert(`Successfully sent emails! ${result.message || ''}`, 'success');
+
+                    // Optional: Clear form after successful send
+                    // this.clearForm();
+
+                } catch (error) {
+                    throw error;
+                }
+            }
+
+            clearForm() {
+                document.getElementById('emailSubject').value = '';
+                document.getElementById('emailBody').value = '';
+                this.recipients = [];
+                this.updateRecipientsList();
+            }
+
+            updateLoadingState(loading) {
+                const button = document.getElementById('sendEmailsBtn');
+                const form = document.getElementById('emailForm');
+                
+                if (loading) {
+                    button.textContent = '⏳ Sending...';
+                    form.classList.add('loading');
+                } else {
+                    button.textContent = '🚀 Send Bulk Email';
+                    form.classList.remove('loading');
+                }
+            }
+
+            updateStatus(message, progress = 0) {
+                document.getElementById('statusDisplay').innerHTML = `<p>${message}</p>`;
+                document.getElementById('progressFill').style.width = progress + '%';
+                document.getElementById('progressText').textContent = progress + '% Complete';
+            }
+
+            showAlert(message, type = 'info') {
+                const alertContainer = document.getElementById('alertContainer');
+                const alertId = 'alert-' + Date.now();
+                
+                const alertHTML = `
+                    <div id="${alertId}" class="alert alert-${type}" style="margin-bottom: 10px;">
+                        ${message}
+                    </div>
+                `;
+                
+                alertContainer.insertAdjacentHTML('beforeend', alertHTML);
+                
+                // Auto-remove after 5 seconds
+                setTimeout(() => {
+                    const alertElement = document.getElementById(alertId);
+                    if (alertElement) {
+                        alertElement.remove();
+                    }
+                }, 5000);
+            }
+        }
+
+        // Initialize the app
+        const app = new BulkEmailApp();
+    </script>
+</body>
+</html>
