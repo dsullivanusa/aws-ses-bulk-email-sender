@@ -15,7 +15,7 @@ def create_lambda_deployment_package():
 def deploy_lambda_function():
     """Deploy Lambda function to AWS"""
     
-    lambda_client = boto3.client('lambda', region_name='us-east-1')
+    lambda_client = boto3.client('lambda', region_name='us-gov-west-1')
     
     function_name = 'email-sender-function'
     
@@ -29,7 +29,7 @@ def deploy_lambda_function():
             response = lambda_client.create_function(
                 FunctionName=function_name,
                 Runtime='python3.9',
-                Role='arn:aws:iam::YOUR_ACCOUNT_ID:role/lambda-email-sender-role',  # Replace with your role ARN
+                Role='arn:aws-us-gov:iam::YOUR_ACCOUNT_ID:role/lambda-email-sender-role',  # Replace with your role ARN
                 Handler='lambda_function.lambda_handler',
                 Code={'ZipFile': zip_content},
                 Description='Bulk email sender with DynamoDB integration',

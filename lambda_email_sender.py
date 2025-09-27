@@ -4,8 +4,8 @@ from datetime import datetime
 from decimal import Decimal
 
 # Initialize AWS clients
-ses = boto3.client('ses')
-dynamodb = boto3.resource('dynamodb')
+ses = boto3.client('ses', region_name='us-gov-west-1')
+dynamodb = boto3.resource('dynamodb', region_name='us-gov-west-1')
 contacts_table = dynamodb.Table('EmailContacts')
 
 def lambda_handler(event, context):

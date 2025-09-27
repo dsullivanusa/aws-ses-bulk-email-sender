@@ -42,7 +42,7 @@ def create_lambda_execution_role():
                     "dynamodb:Query",
                     "dynamodb:BatchWriteItem"
                 ],
-                "Resource": "arn:aws:dynamodb:*:*:table/EmailContacts"
+                "Resource": "arn:aws-us-gov:dynamodb:*:*:table/EmailContacts"
             },
             {
                 "Effect": "Allow",
@@ -51,7 +51,7 @@ def create_lambda_execution_role():
                     "logs:CreateLogStream",
                     "logs:PutLogEvents"
                 ],
-                "Resource": "arn:aws:logs:*:*:*"
+                "Resource": "arn:aws-us-gov:logs:*:*:*"
             }
         ]
     }
@@ -125,7 +125,7 @@ def create_deployment_user():
                 "Action": [
                     "iam:PassRole"
                 ],
-                "Resource": "arn:aws:iam::*:role/lambda-email-sender-role"
+                "Resource": "arn:aws-us-gov:iam::*:role/lambda-email-sender-role"
             }
         ]
     }

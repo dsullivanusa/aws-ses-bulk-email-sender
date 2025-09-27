@@ -5,8 +5,8 @@ import zipfile
 def deploy_api_gateway_lambda():
     """Deploy Lambda function for API Gateway"""
     
-    lambda_client = boto3.client('lambda', region_name='us-east-1')
-    apigateway_client = boto3.client('apigateway', region_name='us-east-1')
+    lambda_client = boto3.client('lambda', region_name='us-gov-west-1')
+    apigateway_client = boto3.client('apigateway', region_name='us-gov-west-1')
     
     function_name = 'email-api-function'
     
@@ -23,7 +23,7 @@ def deploy_api_gateway_lambda():
             response = lambda_client.create_function(
                 FunctionName=function_name,
                 Runtime='python3.9',
-                Role='arn:aws:iam::YOUR_ACCOUNT_ID:role/lambda-email-sender-role',
+                Role='arn:aws-us-gov:iam::YOUR_ACCOUNT_ID:role/lambda-email-sender-role',
                 Handler='lambda_function.lambda_handler',
                 Code={'ZipFile': zip_content},
                 Description='API Gateway Lambda for bulk email sender',
@@ -82,7 +82,7 @@ def deploy_api_gateway_lambda():
                 httpMethod=method,
                 type='AWS_PROXY',
                 integrationHttpMethod='POST',
-                uri=f"arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:YOUR_ACCOUNT_ID:function:{function_name}/invocations"
+                uri=f"arn:aws-us-gov:apigateway:us-gov-west-1:lambda:path/2015-03-31/functions/arn:aws-us-gov:lambda:us-gov-west-1:YOUR_ACCOUNT_ID:function:{function_name}/invocations"
             )
         
         # Add methods to /campaign
@@ -101,7 +101,7 @@ def deploy_api_gateway_lambda():
                 httpMethod=method,
                 type='AWS_PROXY',
                 integrationHttpMethod='POST',
-                uri=f"arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:YOUR_ACCOUNT_ID:function:{function_name}/invocations"
+                uri=f"arn:aws-us-gov:apigateway:us-gov-west-1:lambda:path/2015-03-31/functions/arn:aws-us-gov:lambda:us-gov-west-1:YOUR_ACCOUNT_ID:function:{function_name}/invocations"
             )
         
         # Deploy API
@@ -116,10 +116,10 @@ def deploy_api_gateway_lambda():
             StatementId='api-gateway-invoke',
             Action='lambda:InvokeFunction',
             Principal='apigateway.amazonaws.com',
-            SourceArn=f"arn:aws:execute-api:us-east-1:YOUR_ACCOUNT_ID:{api_id}/*/*"
+            SourceArn=f"arn:aws-us-gov:execute-api:us-gov-west-1:YOUR_ACCOUNT_ID:{api_id}/*/*"
         )
         
-        api_url = f"https://{api_id}.execute-api.us-east-1.amazonaws.com/prod"
+        api_url = f"https://{api_id}.execute-api.us-gov-west-1.amazonaws.com/prod"
         print(f"API Gateway URL: {api_url}")
         print(f"Update the API_BASE_URL in web_ui.html to: {api_url}")
         

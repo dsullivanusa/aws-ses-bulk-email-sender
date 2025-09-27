@@ -4,7 +4,7 @@ import json
 def create_dynamodb_table():
     """Create DynamoDB table for email contacts"""
     
-    dynamodb = boto3.resource('dynamodb', region_name='us-east-1')
+    dynamodb = boto3.resource('dynamodb', region_name='us-gov-west-1')
     
     table_name = 'EmailContacts'
     

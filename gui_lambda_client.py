@@ -42,9 +42,9 @@ class LambdaEmailSender:
         
         # Region
         ttk.Label(config_frame, text="AWS Region:").pack(anchor='w', padx=20)
-        self.region_var = tk.StringVar(value="us-east-1")
+        self.region_var = tk.StringVar(value="us-gov-west-1")
         ttk.Combobox(config_frame, textvariable=self.region_var,
-                    values=["us-east-1", "us-west-2", "eu-west-1"]).pack(fill='x', padx=20, pady=5)
+                    values=["us-gov-west-1", "us-gov-east-1"]).pack(fill='x', padx=20, pady=5)
         
         # Access Key
         ttk.Label(config_frame, text="AWS Access Key ID:").pack(anchor='w', padx=20, pady=(10,0))
@@ -358,7 +358,7 @@ class LambdaEmailSender:
             with open('lambda_config.json', 'r') as f:
                 config = json.load(f)
             
-            self.region_var.set(config.get('region', 'us-east-1'))
+            self.region_var.set(config.get('region', 'us-gov-west-1'))
             self.access_key_var.set(config.get('access_key', ''))
             self.secret_key_var.set(config.get('secret_key', ''))
             self.lambda_function_var.set(config.get('lambda_function', 'email-sender-function'))
