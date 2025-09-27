@@ -86,7 +86,65 @@ def create_lambda_role():
     except iam.exceptions.EntityAlreadyExistsException:
         role = iam.get_role(RoleName=role_name)
         print(f"Role already exists: {role_name}")
-        return role['Role']['Arn']
+        role_arn = role['Role']['Arn']
+    
+    # Create custom policy for EC2 network interfaces
+    ec2_policy = {
+        "Version": "2012-10-17",
+        "Statement": [
+            {
+                "Effect": "Allow",
+                "Action": [
+                    "ec2:CreateNetworkInterface",
+                    "ec2:DescribeNetworkInterfaces",
+                    "ec2:DeleteNetworkInterface",
+                    "ec2:AttachNetworkInterface",
+                    "ec2:DetachNetworkInterface"
+                ],
+                "Resource": "*"
+            }
+        ]
+    }
+    
+    # Create and attach custom policy
+    try:
+        iam.create_policy(
+            PolicyName='LambdaVPCNetworkPolicy',
+            PolicyDocument=json.dumps(ec2_policy)
+        )
+    except iam.exceptions.EntityAlreadyExistsException:
+        pass
+    
+    # Attach policies
+    policies = [
+        'arn:aws-us-gov:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole',
+        'arn:aws-us-gov:iam::aws:policy/AmazonDynamoDBFullAccess'
+    ]
+    
+    for policy in policies:
+        try:
+            iam.attach_role_policy(
+                RoleName=role_name,
+                PolicyArn=policy
+            )
+            print(f"Attached policy: {policy}")
+        except iam.exceptions.LimitExceededException:
+            print(f"Policy already attached: {policy}")
+    
+    # Get account ID for custom policy ARN
+    account_id = boto3.client('sts').get_caller_identity()['Account']
+    custom_policy_arn = f'arn:aws-us-gov:iam::{account_id}:policy/LambdaVPCNetworkPolicy'
+    
+    try:
+        iam.attach_role_policy(
+            RoleName=role_name,
+            PolicyArn=custom_policy_arn
+        )
+        print(f"Attached custom policy: {custom_policy_arn}")
+    except iam.exceptions.LimitExceededException:
+        print(f"Custom policy already attached: {custom_policy_arn}")
+    
+    return role_arn if 'role_arn' in locals() else role_response['Role']['Arn']
 
 if __name__ == "__main__":
     role_arn = create_lambda_role()
