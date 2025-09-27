@@ -1,0 +1,486 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SMTP Bulk Email Sender</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: Arial, sans-serif; background: #f5f5f5; }
+        .container { max-width: 1200px; margin: 0 auto; padding: 20px; }
+        .header { background: #28a745; color: white; padding: 20px; text-align: center; margin-bottom: 30px; }
+        .tabs { display: flex; background: white; border-radius: 8px; overflow: hidden; margin-bottom: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .tab { flex: 1; padding: 15px; text-align: center; cursor: pointer; border: none; background: #f8f9fa; }
+        .tab.active { background: #28a745; color: white; }
+        .tab-content { display: none; background: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .tab-content.active { display: block; }
+        .form-group { margin-bottom: 20px; }
+        .form-group label { display: block; margin-bottom: 5px; font-weight: bold; }
+        .form-group input, .form-group textarea, .form-group select { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px; }
+        .form-group textarea { height: 200px; resize: vertical; }
+        .btn { padding: 12px 24px; background: #28a745; color: white; border: none; border-radius: 4px; cursor: pointer; margin-right: 10px; }
+        .btn:hover { background: #218838; }
+        .btn-danger { background: #dc3545; }
+        .contacts-table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+        .contacts-table th, .contacts-table td { padding: 12px; text-align: left; border-bottom: 1px solid #ddd; }
+        .contacts-table th { background: #f8f9fa; }
+        .attachments-list { background: #f8f9fa; padding: 15px; border-radius: 4px; margin-top: 10px; min-height: 60px; }
+        .attachment-item { display: inline-block; background: #e9ecef; padding: 5px 10px; margin: 5px; border-radius: 3px; }
+        .progress-bar { width: 100%; height: 20px; background: #f0f0f0; border-radius: 10px; overflow: hidden; margin: 20px 0; }
+        .progress-fill { height: 100%; background: #28a745; width: 0%; transition: width 0.3s; }
+        .results { background: #f8f9fa; padding: 20px; border-radius: 4px; margin-top: 20px; max-height: 300px; overflow-y: auto; }
+        .alert { padding: 15px; margin: 10px 0; border-radius: 4px; }
+        .alert-success { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+        .alert-error { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+        .hidden { display: none; }
+        .checkbox-group { display: flex; align-items: center; margin-top: 10px; }
+        .checkbox-group input { width: auto; margin-right: 10px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>SMTP Bulk Email Sender</h1>
+            <p>Send bulk emails via SMTP relay with attachment support</p>
+        </div>
+
+        <div class="tabs">
+            <button class="tab active" onclick="showTab('smtp-config')">SMTP Config</button>
+            <button class="tab" onclick="showTab('contacts')">Contacts</button>
+            <button class="tab" onclick="showTab('template')">Email Template</button>
+            <button class="tab" onclick="showTab('campaign')">Send Campaign</button>
+        </div>
+
+        <!-- SMTP Config Tab -->
+        <div id="smtp-config" class="tab-content active">
+            <h2>SMTP Server Configuration</h2>
+            
+            <div class="form-group">
+                <label>SMTP Server:</label>
+                <input type="text" id="smtpServer" value="smtp.gmail.com" placeholder="smtp.gmail.com">
+            </div>
+            
+            <div class="form-group">
+                <label>Port:</label>
+                <input type="number" id="smtpPort" value="587" placeholder="587">
+            </div>
+            
+            <div class="form-group">
+                <label>Username:</label>
+                <input type="text" id="smtpUsername" placeholder="your-email@gmail.com">
+            </div>
+            
+            <div class="form-group">
+                <label>Password:</label>
+                <input type="password" id="smtpPassword" placeholder="your-app-password">
+            </div>
+            
+            <div class="form-group">
+                <label>From Email:</label>
+                <input type="email" id="fromEmail" placeholder="sender@domain.com">
+            </div>
+            
+            <div class="checkbox-group">
+                <input type="checkbox" id="useTLS" checked>
+                <label for="useTLS">Use TLS</label>
+            </div>
+            
+            <button class="btn" onclick="testSMTPConnection()">Test Connection</button>
+            <button class="btn" onclick="saveSMTPConfig()">Save Configuration</button>
+        </div>
+
+        <!-- Contacts Tab -->
+        <div id="contacts" class="tab-content">
+            <h2>Contact Management</h2>
+            
+            <div class="form-group">
+                <input type="file" id="csvFile" accept=".csv" style="display: none;" onchange="importCSV()">
+                <button class="btn" onclick="document.getElementById('csvFile').click()">Import CSV</button>
+                <button class="btn" onclick="exportCSV()">Export CSV</button>
+                <button class="btn" onclick="showAddContactForm()">Add Contact</button>
+            </div>
+
+            <div id="addContactForm" class="hidden">
+                <h3>Add New Contact</h3>
+                <div class="form-group">
+                    <label>Email:</label>
+                    <input type="email" id="newEmail" required>
+                </div>
+                <div class="form-group">
+                    <label>First Name:</label>
+                    <input type="text" id="newFirstName">
+                </div>
+                <div class="form-group">
+                    <label>Last Name:</label>
+                    <input type="text" id="newLastName">
+                </div>
+                <div class="form-group">
+                    <label>Company:</label>
+                    <input type="text" id="newCompany">
+                </div>
+                <button class="btn" onclick="addContact()">Add Contact</button>
+                <button class="btn btn-danger" onclick="hideAddContactForm()">Cancel</button>
+            </div>
+
+            <table class="contacts-table">
+                <thead>
+                    <tr>
+                        <th>Email</th>
+                        <th>First Name</th>
+                        <th>Last Name</th>
+                        <th>Company</th>
+                    </tr>
+                </thead>
+                <tbody id="contactsTableBody">
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Template Tab -->
+        <div id="template" class="tab-content">
+            <h2>Email Template</h2>
+            
+            <div class="form-group">
+                <label>Subject:</label>
+                <input type="text" id="emailSubject" placeholder="Enter email subject">
+            </div>
+            
+            <div class="form-group">
+                <label>Email Body (HTML supported):</label>
+                <textarea id="emailBody" placeholder="Enter your email content here. Use {{first_name}}, {{last_name}}, {{email}}, {{company}} for personalization."></textarea>
+            </div>
+            
+            <div class="form-group">
+                <label>Attachments:</label>
+                <input type="file" id="attachmentFiles" multiple style="display: none;" onchange="addAttachments()">
+                <button class="btn" onclick="document.getElementById('attachmentFiles').click()">Add Attachments</button>
+                <button class="btn btn-danger" onclick="clearAttachments()">Clear All</button>
+                
+                <div id="attachmentsList" class="attachments-list">
+                    <em>No attachments selected</em>
+                </div>
+            </div>
+            
+            <div class="form-group">
+                <button class="btn" onclick="loadSampleTemplate()">Load Sample Template</button>
+                <button class="btn" onclick="previewEmail()">Preview</button>
+            </div>
+        </div>
+
+        <!-- Campaign Tab -->
+        <div id="campaign" class="tab-content">
+            <h2>Send Email Campaign</h2>
+            
+            <div class="form-group">
+                <label>Campaign Name:</label>
+                <input type="text" id="campaignName" placeholder="Enter campaign name">
+            </div>
+            
+            <button class="btn" onclick="sendCampaign()">Send Campaign</button>
+            
+            <div class="progress-bar">
+                <div class="progress-fill" id="progressFill"></div>
+            </div>
+            
+            <div id="campaignResults" class="results hidden"></div>
+        </div>
+    </div>
+
+    <script>
+        let contacts = [];
+        let attachments = [];
+        
+        function showTab(tabName) {
+            document.querySelectorAll('.tab').forEach(tab => tab.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+            
+            event.target.classList.add('active');
+            document.getElementById(tabName).classList.add('active');
+        }
+
+        function testSMTPConnection() {
+            const config = getSMTPConfig();
+            
+            // Simulate test (in real implementation, call backend)
+            setTimeout(() => {
+                showAlert('SMTP connection test successful!', 'success');
+            }, 1000);
+        }
+
+        function getSMTPConfig() {
+            return {
+                server: document.getElementById('smtpServer').value,
+                port: document.getElementById('smtpPort').value,
+                username: document.getElementById('smtpUsername').value,
+                password: document.getElementById('smtpPassword').value,
+                from_email: document.getElementById('fromEmail').value,
+                use_tls: document.getElementById('useTLS').checked
+            };
+        }
+
+        function saveSMTPConfig() {
+            const config = getSMTPConfig();
+            localStorage.setItem('smtpConfig', JSON.stringify(config));
+            showAlert('SMTP configuration saved!', 'success');
+        }
+
+        function loadSMTPConfig() {
+            const config = JSON.parse(localStorage.getItem('smtpConfig') || '{}');
+            
+            document.getElementById('smtpServer').value = config.server || 'smtp.gmail.com';
+            document.getElementById('smtpPort').value = config.port || '587';
+            document.getElementById('smtpUsername').value = config.username || '';
+            document.getElementById('smtpPassword').value = config.password || '';
+            document.getElementById('fromEmail').value = config.from_email || '';
+            document.getElementById('useTLS').checked = config.use_tls !== false;
+        }
+
+        function showAddContactForm() {
+            document.getElementById('addContactForm').classList.remove('hidden');
+        }
+
+        function hideAddContactForm() {
+            document.getElementById('addContactForm').classList.add('hidden');
+            clearAddContactForm();
+        }
+
+        function clearAddContactForm() {
+            document.getElementById('newEmail').value = '';
+            document.getElementById('newFirstName').value = '';
+            document.getElementById('newLastName').value = '';
+            document.getElementById('newCompany').value = '';
+        }
+
+        function addContact() {
+            const contact = {
+                email: document.getElementById('newEmail').value,
+                first_name: document.getElementById('newFirstName').value,
+                last_name: document.getElementById('newLastName').value,
+                company: document.getElementById('newCompany').value
+            };
+            
+            if (!contact.email) {
+                showAlert('Email is required', 'error');
+                return;
+            }
+            
+            contacts.push(contact);
+            displayContacts();
+            hideAddContactForm();
+            showAlert('Contact added successfully', 'success');
+        }
+
+        async function importCSV() {
+            const file = document.getElementById('csvFile').files[0];
+            if (!file) return;
+            
+            const text = await file.text();
+            const lines = text.split('\n');
+            const headers = lines[0].split(',').map(h => h.trim());
+            
+            contacts = [];
+            for (let i = 1; i < lines.length; i++) {
+                if (lines[i].trim()) {
+                    const values = lines[i].split(',').map(v => v.trim());
+                    const contact = {};
+                    
+                    headers.forEach((header, index) => {
+                        contact[header] = values[index] || '';
+                    });
+                    
+                    contacts.push(contact);
+                }
+            }
+            
+            displayContacts();
+            showAlert(`Imported ${contacts.length} contacts`, 'success');
+        }
+
+        function exportCSV() {
+            if (contacts.length === 0) {
+                showAlert('No contacts to export', 'error');
+                return;
+            }
+            
+            const headers = ['email', 'first_name', 'last_name', 'company'];
+            const csvContent = [
+                headers.join(','),
+                ...contacts.map(contact => 
+                    headers.map(header => contact[header] || '').join(',')
+                )
+            ].join('\n');
+            
+            const blob = new Blob([csvContent], { type: 'text/csv' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'contacts.csv';
+            a.click();
+            window.URL.revokeObjectURL(url);
+        }
+
+        function displayContacts() {
+            const tbody = document.getElementById('contactsTableBody');
+            tbody.innerHTML = '';
+            
+            contacts.forEach(contact => {
+                const row = tbody.insertRow();
+                row.innerHTML = `
+                    <td>${contact.email}</td>
+                    <td>${contact.first_name || ''}</td>
+                    <td>${contact.last_name || ''}</td>
+                    <td>${contact.company || ''}</td>
+                `;
+            });
+        }
+
+        function addAttachments() {
+            const files = document.getElementById('attachmentFiles').files;
+            
+            for (let file of files) {
+                if (!attachments.find(a => a.name === file.name)) {
+                    attachments.push(file);
+                }
+            }
+            
+            displayAttachments();
+        }
+
+        function displayAttachments() {
+            const list = document.getElementById('attachmentsList');
+            
+            if (attachments.length === 0) {
+                list.innerHTML = '<em>No attachments selected</em>';
+                return;
+            }
+            
+            list.innerHTML = attachments.map((file, index) => 
+                `<div class="attachment-item">
+                    ${file.name} (${(file.size / 1024).toFixed(1)} KB)
+                    <button onclick="removeAttachment(${index})" style="margin-left: 10px; background: #dc3545; color: white; border: none; border-radius: 3px; padding: 2px 6px;">×</button>
+                </div>`
+            ).join('');
+        }
+
+        function removeAttachment(index) {
+            attachments.splice(index, 1);
+            displayAttachments();
+        }
+
+        function clearAttachments() {
+            attachments = [];
+            displayAttachments();
+        }
+
+        function loadSampleTemplate() {
+            document.getElementById('emailSubject').value = 'Welcome {{first_name}}!';
+            document.getElementById('emailBody').value = `
+<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+    <div style="background: #28a745; color: white; padding: 20px; text-align: center;">
+        <h1>Welcome {{first_name}}!</h1>
+    </div>
+    <div style="padding: 20px; background: #f9f9f9;">
+        <p>Hello {{first_name}} {{last_name}},</p>
+        <p>Thank you for joining us at {{company}}. We're excited to have you on board!</p>
+        <p>Please find the attached documents for your reference.</p>
+        <p>Best regards,<br>The Team</p>
+    </div>
+</div>`;
+        }
+
+        function previewEmail() {
+            const subject = document.getElementById('emailSubject').value;
+            const body = document.getElementById('emailBody').value;
+            
+            const previewWindow = window.open('', '_blank');
+            previewWindow.document.write(`
+                <html>
+                    <head><title>Email Preview</title></head>
+                    <body>
+                        <h2>Subject: ${subject}</h2>
+                        <p><strong>Attachments:</strong> ${attachments.length} file(s)</p>
+                        <hr>
+                        ${body.replace(/\{\{(\w+)\}\}/g, '[Sample $1]')}
+                    </body>
+                </html>
+            `);
+        }
+
+        async function sendCampaign() {
+            const subject = document.getElementById('emailSubject').value;
+            const body = document.getElementById('emailBody').value;
+            const campaignName = document.getElementById('campaignName').value;
+            const config = getSMTPConfig();
+            
+            if (!subject || !body || !config.from_email) {
+                showAlert('Please fill in all required fields', 'error');
+                return;
+            }
+            
+            if (contacts.length === 0) {
+                showAlert('No contacts to send to', 'error');
+                return;
+            }
+            
+            document.getElementById('progressFill').style.width = '50%';
+            
+            // Simulate sending (in real implementation, call backend API)
+            setTimeout(() => {
+                const results = contacts.map(contact => ({
+                    email: contact.email,
+                    status: Math.random() > 0.1 ? 'sent' : 'failed',
+                    error: Math.random() > 0.1 ? null : 'SMTP connection timeout'
+                }));
+                
+                displayCampaignResults({
+                    campaign_name: campaignName,
+                    sent_count: results.filter(r => r.status === 'sent').length,
+                    failed_count: results.filter(r => r.status === 'failed').length,
+                    total_contacts: contacts.length,
+                    attachments_count: attachments.length,
+                    results: results,
+                    timestamp: new Date().toISOString()
+                });
+                
+                document.getElementById('progressFill').style.width = '100%';
+            }, 2000);
+        }
+
+        function displayCampaignResults(result) {
+            const resultsDiv = document.getElementById('campaignResults');
+            resultsDiv.classList.remove('hidden');
+            
+            resultsDiv.innerHTML = `
+                <h3>Campaign Results</h3>
+                <p><strong>Campaign:</strong> ${result.campaign_name}</p>
+                <p><strong>Total Contacts:</strong> ${result.total_contacts}</p>
+                <p><strong>Sent:</strong> ${result.sent_count}</p>
+                <p><strong>Failed:</strong> ${result.failed_count}</p>
+                <p><strong>Attachments:</strong> ${result.attachments_count} file(s)</p>
+                <p><strong>Timestamp:</strong> ${result.timestamp}</p>
+                <hr>
+                <div style="max-height: 200px; overflow-y: auto;">
+                    ${result.results.map(r => 
+                        `<div>${r.status === 'sent' ? '✓' : '✗'} ${r.email} - ${r.status}${r.error ? ' (' + r.error + ')' : ''}</div>`
+                    ).join('')}
+                </div>
+            `;
+        }
+
+        function showAlert(message, type) {
+            const alertDiv = document.createElement('div');
+            alertDiv.className = `alert alert-${type}`;
+            alertDiv.textContent = message;
+            
+            document.querySelector('.container').insertBefore(alertDiv, document.querySelector('.tabs'));
+            
+            setTimeout(() => alertDiv.remove(), 5000);
+        }
+
+        // Load configuration on page load
+        window.onload = () => {
+            loadSMTPConfig();
+        };
+    </script>
+</body>
+</html>

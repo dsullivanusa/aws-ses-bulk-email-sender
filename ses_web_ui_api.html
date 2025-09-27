@@ -1,0 +1,528 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AWS SES API Email Sender</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: Arial, sans-serif; background: #f5f5f5; }
+        .container { max-width: 1200px; margin: 0 auto; padding: 20px; }
+        .header { background: #ff9500; color: white; padding: 20px; text-align: center; margin-bottom: 30px; }
+        .tabs { display: flex; background: white; border-radius: 8px; overflow: hidden; margin-bottom: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .tab { flex: 1; padding: 15px; text-align: center; cursor: pointer; border: none; background: #f8f9fa; }
+        .tab.active { background: #ff9500; color: white; }
+        .tab-content { display: none; background: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .tab-content.active { display: block; }
+        .form-group { margin-bottom: 20px; }
+        .form-group label { display: block; margin-bottom: 5px; font-weight: bold; }
+        .form-group input, .form-group textarea, .form-group select { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px; }
+        .form-group textarea { height: 200px; resize: vertical; }
+        .btn { padding: 12px 24px; background: #ff9500; color: white; border: none; border-radius: 4px; cursor: pointer; margin-right: 10px; }
+        .btn:hover { background: #e6850e; }
+        .btn-success { background: #28a745; }
+        .btn-danger { background: #dc3545; }
+        .contacts-table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+        .contacts-table th, .contacts-table td { padding: 12px; text-align: left; border-bottom: 1px solid #ddd; }
+        .contacts-table th { background: #f8f9fa; }
+        .attachments-list { background: #f8f9fa; padding: 15px; border-radius: 4px; margin-top: 10px; min-height: 60px; }
+        .attachment-item { display: inline-block; background: #e9ecef; padding: 5px 10px; margin: 5px; border-radius: 3px; }
+        .progress-container { margin: 20px 0; }
+        .progress-bar { width: 100%; height: 25px; background: #f0f0f0; border-radius: 12px; overflow: hidden; position: relative; }
+        .progress-fill { height: 100%; background: linear-gradient(90deg, #ff9500, #ffb84d); width: 0%; transition: width 0.3s; }
+        .progress-text { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); font-weight: bold; color: #333; }
+        .status-indicator { display: inline-block; width: 12px; height: 12px; border-radius: 50%; margin-right: 8px; }
+        .status-pending { background: #ffc107; }
+        .status-progress { background: #ff9500; animation: pulse 1s infinite; }
+        .status-completed { background: #28a745; }
+        .status-failed { background: #dc3545; }
+        .results { background: #f8f9fa; padding: 20px; border-radius: 4px; margin-top: 20px; max-height: 300px; overflow-y: auto; }
+        .alert { padding: 15px; margin: 10px 0; border-radius: 4px; }
+        .alert-success { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+        .alert-error { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+        .alert-warning { background: #fff3cd; color: #856404; border: 1px solid #ffeaa7; }
+        .hidden { display: none; }
+        .ses-info { background: #e7f3ff; padding: 15px; border-radius: 4px; margin-bottom: 20px; border-left: 4px solid #ff9500; }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>AWS SES API Email Sender</h1>
+            <p>Serverless email campaigns with SES, attachments, and real-time tracking</p>
+        </div>
+
+        <div class="ses-info">
+            <strong>AWS SES Requirements:</strong> Ensure your sender email is verified in SES console. 
+            If in sandbox mode, recipient emails must also be verified.
+        </div>
+
+        <div class="tabs">
+            <button class="tab active" onclick="showTab('contacts')">Contacts</button>
+            <button class="tab" onclick="showTab('template')">Email Template</button>
+            <button class="tab" onclick="showTab('campaign')">Send Campaign</button>
+            <button class="tab" onclick="showTab('status')">Campaign Status</button>
+        </div>
+
+        <!-- Contacts Tab -->
+        <div id="contacts" class="tab-content active">
+            <h2>Contact Management</h2>
+            
+            <div class="form-group">
+                <button class="btn" onclick="loadContacts()">Load Contacts</button>
+                <button class="btn btn-success" onclick="showAddContactForm()">Add Contact</button>
+                <input type="file" id="csvFile" accept=".csv" style="display: none;" onchange="importCSV()">
+                <button class="btn" onclick="document.getElementById('csvFile').click()">Import CSV</button>
+            </div>
+
+            <div id="addContactForm" class="hidden">
+                <h3>Add New Contact</h3>
+                <div class="form-group">
+                    <label>Email:</label>
+                    <input type="email" id="newEmail" required>
+                </div>
+                <div class="form-group">
+                    <label>First Name:</label>
+                    <input type="text" id="newFirstName">
+                </div>
+                <div class="form-group">
+                    <label>Last Name:</label>
+                    <input type="text" id="newLastName">
+                </div>
+                <div class="form-group">
+                    <label>Company:</label>
+                    <input type="text" id="newCompany">
+                </div>
+                <button class="btn" onclick="addContact()">Add Contact</button>
+                <button class="btn btn-danger" onclick="hideAddContactForm()">Cancel</button>
+            </div>
+
+            <table class="contacts-table">
+                <thead>
+                    <tr>
+                        <th>Email</th>
+                        <th>First Name</th>
+                        <th>Last Name</th>
+                        <th>Company</th>
+                        <th>Last Email Sent</th>
+                        <th>Email Count</th>
+                    </tr>
+                </thead>
+                <tbody id="contactsTableBody">
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Template Tab -->
+        <div id="template" class="tab-content">
+            <h2>Email Template</h2>
+            
+            <div class="form-group">
+                <label>From Email (must be verified in SES):</label>
+                <input type="email" id="fromEmail" placeholder="verified-sender@domain.com">
+            </div>
+            
+            <div class="form-group">
+                <label>Subject:</label>
+                <input type="text" id="emailSubject" placeholder="Enter email subject">
+            </div>
+            
+            <div class="form-group">
+                <label>Email Body (HTML supported):</label>
+                <textarea id="emailBody" placeholder="Enter your email content here. Use {{first_name}}, {{last_name}}, {{email}}, {{company}} for personalization."></textarea>
+            </div>
+            
+            <div class="form-group">
+                <label>Attachments:</label>
+                <input type="file" id="attachmentFiles" multiple style="display: none;" onchange="addAttachments()">
+                <button class="btn" onclick="document.getElementById('attachmentFiles').click()">Add Attachments</button>
+                <button class="btn btn-danger" onclick="clearAttachments()">Clear All</button>
+                
+                <div id="attachmentsList" class="attachments-list">
+                    <em>No attachments selected</em>
+                </div>
+            </div>
+            
+            <div class="form-group">
+                <button class="btn" onclick="loadSampleTemplate()">Load Sample Template</button>
+                <button class="btn" onclick="previewEmail()">Preview</button>
+            </div>
+        </div>
+
+        <!-- Campaign Tab -->
+        <div id="campaign" class="tab-content">
+            <h2>Send SES Email Campaign</h2>
+            
+            <div class="form-group">
+                <label>Campaign Name:</label>
+                <input type="text" id="campaignName" placeholder="Enter campaign name">
+            </div>
+            
+            <button class="btn btn-success" onclick="sendSESCampaign()">Send SES Campaign</button>
+            
+            <div class="progress-container">
+                <div class="progress-bar">
+                    <div class="progress-fill" id="progressFill"></div>
+                    <div class="progress-text" id="progressText">Ready to send</div>
+                </div>
+            </div>
+            
+            <div id="campaignResults" class="results hidden"></div>
+        </div>
+
+        <!-- Status Tab -->
+        <div id="status" class="tab-content">
+            <h2>Campaign Status</h2>
+            
+            <div class="form-group">
+                <label>Campaign ID:</label>
+                <input type="text" id="statusCampaignId" placeholder="Enter campaign ID">
+                <button class="btn" onclick="checkCampaignStatus()">Check Status</button>
+            </div>
+            
+            <div id="statusResults" class="results hidden"></div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE_URL = 'https://your-ses-api-gateway-url.amazonaws.com/prod';
+        let attachments = [];
+        let currentCampaignId = null;
+        
+        function showTab(tabName) {
+            document.querySelectorAll('.tab').forEach(tab => tab.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+            
+            event.target.classList.add('active');
+            document.getElementById(tabName).classList.add('active');
+        }
+
+        async function apiCall(endpoint, method = 'GET', data = null) {
+            const options = {
+                method,
+                headers: { 'Content-Type': 'application/json' }
+            };
+            
+            if (data) {
+                options.body = JSON.stringify(data);
+            }
+            
+            try {
+                const response = await fetch(`${API_BASE_URL}${endpoint}`, options);
+                return await response.json();
+            } catch (error) {
+                showAlert('Error: ' + error.message, 'error');
+                return null;
+            }
+        }
+
+        async function loadContacts() {
+            const result = await apiCall('/contacts');
+            if (result && result.contacts) {
+                displayContacts(result.contacts);
+                showAlert(`Loaded ${result.contacts.length} contacts`, 'success');
+            }
+        }
+
+        function displayContacts(contacts) {
+            const tbody = document.getElementById('contactsTableBody');
+            tbody.innerHTML = '';
+            
+            contacts.forEach(contact => {
+                const row = tbody.insertRow();
+                row.innerHTML = `
+                    <td>${contact.email}</td>
+                    <td>${contact.first_name || ''}</td>
+                    <td>${contact.last_name || ''}</td>
+                    <td>${contact.company || ''}</td>
+                    <td>${contact.last_email_sent || 'Never'}</td>
+                    <td>${contact.email_count || 0}</td>
+                `;
+            });
+        }
+
+        function showAddContactForm() {
+            document.getElementById('addContactForm').classList.remove('hidden');
+        }
+
+        function hideAddContactForm() {
+            document.getElementById('addContactForm').classList.add('hidden');
+            clearAddContactForm();
+        }
+
+        function clearAddContactForm() {
+            document.getElementById('newEmail').value = '';
+            document.getElementById('newFirstName').value = '';
+            document.getElementById('newLastName').value = '';
+            document.getElementById('newCompany').value = '';
+        }
+
+        async function addContact() {
+            const contact = {
+                email: document.getElementById('newEmail').value,
+                first_name: document.getElementById('newFirstName').value,
+                last_name: document.getElementById('newLastName').value,
+                company: document.getElementById('newCompany').value
+            };
+            
+            if (!contact.email) {
+                showAlert('Email is required', 'error');
+                return;
+            }
+            
+            const result = await apiCall('/contacts', 'POST', { contact });
+            if (result) {
+                showAlert('Contact added successfully', 'success');
+                hideAddContactForm();
+                loadContacts();
+            }
+        }
+
+        async function importCSV() {
+            const file = document.getElementById('csvFile').files[0];
+            if (!file) return;
+            
+            const text = await file.text();
+            const lines = text.split('\n');
+            const headers = lines[0].split(',').map(h => h.trim());
+            
+            for (let i = 1; i < lines.length; i++) {
+                if (lines[i].trim()) {
+                    const values = lines[i].split(',').map(v => v.trim());
+                    const contact = {};
+                    
+                    headers.forEach((header, index) => {
+                        contact[header] = values[index] || '';
+                    });
+                    
+                    await apiCall('/contacts', 'POST', { contact });
+                }
+            }
+            
+            showAlert('CSV imported successfully', 'success');
+            loadContacts();
+        }
+
+        function addAttachments() {
+            const files = document.getElementById('attachmentFiles').files;
+            
+            Array.from(files).forEach(file => {
+                if (!attachments.find(a => a.filename === file.name)) {
+                    const reader = new FileReader();
+                    reader.onload = function(e) {
+                        attachments.push({
+                            filename: file.name,
+                            content: e.target.result.split(',')[1], // Remove data:type;base64, prefix
+                            content_type: file.type,
+                            size: file.size
+                        });
+                        displayAttachments();
+                    };
+                    reader.readAsDataURL(file);
+                }
+            });
+        }
+
+        function displayAttachments() {
+            const list = document.getElementById('attachmentsList');
+            
+            if (attachments.length === 0) {
+                list.innerHTML = '<em>No attachments selected</em>';
+                return;
+            }
+            
+            list.innerHTML = attachments.map((file, index) => 
+                `<div class="attachment-item">
+                    ${file.filename} (${(file.size / 1024).toFixed(1)} KB)
+                    <button onclick="removeAttachment(${index})" style="margin-left: 10px; background: #dc3545; color: white; border: none; border-radius: 3px; padding: 2px 6px;">×</button>
+                </div>`
+            ).join('');
+        }
+
+        function removeAttachment(index) {
+            attachments.splice(index, 1);
+            displayAttachments();
+        }
+
+        function clearAttachments() {
+            attachments = [];
+            displayAttachments();
+        }
+
+        function loadSampleTemplate() {
+            document.getElementById('emailSubject').value = 'Welcome {{first_name}}!';
+            document.getElementById('emailBody').value = `
+<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+    <div style="background: #ff9500; color: white; padding: 20px; text-align: center;">
+        <h1>Welcome {{first_name}}!</h1>
+    </div>
+    <div style="padding: 20px; background: #f9f9f9;">
+        <p>Hello {{first_name}} {{last_name}},</p>
+        <p>Thank you for joining us at {{company}}. We're excited to have you on board!</p>
+        <p>Please find the attached documents for your reference.</p>
+        <p>Best regards,<br>The AWS SES Team</p>
+    </div>
+</div>`;
+        }
+
+        function previewEmail() {
+            const subject = document.getElementById('emailSubject').value;
+            const body = document.getElementById('emailBody').value;
+            
+            const previewWindow = window.open('', '_blank');
+            previewWindow.document.write(`
+                <html>
+                    <head><title>SES Email Preview</title></head>
+                    <body>
+                        <h2>Subject: ${subject}</h2>
+                        <p><strong>Attachments:</strong> ${attachments.length} file(s)</p>
+                        <p><strong>Service:</strong> AWS SES</p>
+                        <hr>
+                        ${body.replace(/\{\{(\w+)\}\}/g, '[Sample $1]')}
+                    </body>
+                </html>
+            `);
+        }
+
+        async function sendSESCampaign() {
+            const subject = document.getElementById('emailSubject').value;
+            const body = document.getElementById('emailBody').value;
+            const campaignName = document.getElementById('campaignName').value;
+            const fromEmail = document.getElementById('fromEmail').value;
+            
+            if (!subject || !body || !fromEmail) {
+                showAlert('Please fill in all required fields', 'error');
+                return;
+            }
+            
+            if (!fromEmail.includes('@')) {
+                showAlert('Please enter a valid from email address', 'error');
+                return;
+            }
+            
+            updateProgress(0, 'Preparing SES campaign...');
+            
+            const payload = {
+                subject,
+                body,
+                campaign_name: campaignName,
+                from_email: fromEmail,
+                attachments: attachments
+            };
+            
+            const result = await apiCall('/ses-campaign', 'POST', payload);
+            
+            if (result) {
+                currentCampaignId = result.campaign_id;
+                document.getElementById('statusCampaignId').value = currentCampaignId;
+                
+                updateProgress(100, 'SES campaign completed!');
+                displayCampaignResults(result);
+                
+                // Start monitoring campaign status
+                monitorCampaignProgress(currentCampaignId);
+            }
+        }
+
+        async function monitorCampaignProgress(campaignId) {
+            const checkStatus = async () => {
+                const status = await apiCall(`/campaign-status/${campaignId}`);
+                if (status) {
+                    const progress = status.total_contacts > 0 ? 
+                        ((status.sent_count + status.failed_count) / status.total_contacts) * 100 : 0;
+                    
+                    updateProgress(progress, `SES: Sent ${status.sent_count}, Failed ${status.failed_count}`);
+                    
+                    if (status.status === 'completed') {
+                        updateProgress(100, 'SES campaign completed!');
+                        loadContacts(); // Refresh contacts to show updated counts
+                        return;
+                    }
+                    
+                    if (status.status === 'in_progress') {
+                        setTimeout(checkStatus, 2000); // Check again in 2 seconds
+                    }
+                }
+            };
+            
+            checkStatus();
+        }
+
+        function updateProgress(percentage, text) {
+            document.getElementById('progressFill').style.width = percentage + '%';
+            document.getElementById('progressText').textContent = text;
+        }
+
+        async function checkCampaignStatus() {
+            const campaignId = document.getElementById('statusCampaignId').value;
+            if (!campaignId) {
+                showAlert('Please enter a campaign ID', 'error');
+                return;
+            }
+            
+            const status = await apiCall(`/campaign-status/${campaignId}`);
+            if (status) {
+                displayCampaignStatus(status);
+            }
+        }
+
+        function displayCampaignStatus(status) {
+            const resultsDiv = document.getElementById('statusResults');
+            resultsDiv.classList.remove('hidden');
+            
+            const statusClass = status.status === 'completed' ? 'status-completed' : 
+                               status.status === 'in_progress' ? 'status-progress' : 'status-pending';
+            
+            resultsDiv.innerHTML = `
+                <h3>SES Campaign Status</h3>
+                <p><span class="status-indicator ${statusClass}"></span><strong>Status:</strong> ${status.status}</p>
+                <p><strong>Campaign:</strong> ${status.campaign_name}</p>
+                <p><strong>Total Contacts:</strong> ${status.total_contacts}</p>
+                <p><strong>Sent:</strong> ${status.sent_count}</p>
+                <p><strong>Failed:</strong> ${status.failed_count}</p>
+                <p><strong>Created:</strong> ${status.created_at}</p>
+                <p><strong>Updated:</strong> ${status.updated_at}</p>
+            `;
+        }
+
+        function displayCampaignResults(result) {
+            const resultsDiv = document.getElementById('campaignResults');
+            resultsDiv.classList.remove('hidden');
+            
+            resultsDiv.innerHTML = `
+                <h3>SES Campaign Results</h3>
+                <p><strong>Campaign ID:</strong> ${result.campaign_id}</p>
+                <p><strong>Total Contacts:</strong> ${result.total_contacts}</p>
+                <p><strong>Sent:</strong> ${result.sent_count}</p>
+                <p><strong>Failed:</strong> ${result.failed_count}</p>
+                <p><strong>Attachments:</strong> ${attachments.length} file(s)</p>
+                <p><strong>Service:</strong> AWS SES</p>
+                <p><strong>Timestamp:</strong> ${result.timestamp}</p>
+                <hr>
+                <div style="max-height: 200px; overflow-y: auto;">
+                    ${result.results.map(r => 
+                        `<div>${r.status === 'sent' ? '✓' : '✗'} ${r.email} - ${r.status}</div>`
+                    ).join('')}
+                </div>
+            `;
+        }
+
+        function showAlert(message, type) {
+            const alertDiv = document.createElement('div');
+            alertDiv.className = `alert alert-${type}`;
+            alertDiv.textContent = message;
+            
+            document.querySelector('.container').insertBefore(alertDiv, document.querySelector('.tabs'));
+            
+            setTimeout(() => alertDiv.remove(), 5000);
+        }
+
+        // Load contacts on page load
+        window.onload = () => {
+            loadContacts();
+            showAlert('Remember to verify your sender email in AWS SES console', 'warning');
+        };
+    </script>
+</body>
+</html>
