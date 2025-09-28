@@ -217,21 +217,27 @@ def deploy_vpc_smtp_api():
         )
         
         # Add Lambda permissions for both functions
-        lambda_client.add_permission(
-            FunctionName=smtp_function_name,
-            StatementId='vpc-smtp-api-gateway-invoke',
-            Action='lambda:InvokeFunction',
-            Principal='apigateway.amazonaws.com',
-            SourceArn=f"arn:aws-us-gov:execute-api:us-gov-west-1:YOUR_ACCOUNT_ID:{api_id}/*/*"
-        )
+        try:
+            lambda_client.add_permission(
+                FunctionName=smtp_function_name,
+                StatementId=f'vpc-smtp-api-gateway-invoke-{api_id}',
+                Action='lambda:InvokeFunction',
+                Principal='apigateway.amazonaws.com',
+                SourceArn=f"arn:aws-us-gov:execute-api:us-gov-west-1:YOUR_ACCOUNT_ID:{api_id}/*/*"
+            )
+        except lambda_client.exceptions.ResourceConflictException:
+            print("SMTP Lambda permission already exists")
         
-        lambda_client.add_permission(
-            FunctionName=web_ui_function_name,
-            StatementId='vpc-web-ui-api-gateway-invoke',
-            Action='lambda:InvokeFunction',
-            Principal='apigateway.amazonaws.com',
-            SourceArn=f"arn:aws-us-gov:execute-api:us-gov-west-1:YOUR_ACCOUNT_ID:{api_id}/*/*"
-        )
+        try:
+            lambda_client.add_permission(
+                FunctionName=web_ui_function_name,
+                StatementId=f'vpc-web-ui-api-gateway-invoke-{api_id}',
+                Action='lambda:InvokeFunction',
+                Principal='apigateway.amazonaws.com',
+                SourceArn=f"arn:aws-us-gov:execute-api:us-gov-west-1:YOUR_ACCOUNT_ID:{api_id}/*/*"
+            )
+        except lambda_client.exceptions.ResourceConflictException:
+            print("Web UI Lambda permission already exists")
         
         # Get VPC endpoint DNS
         vpc_endpoints = ec2.describe_vpc_endpoints(Filters=[
