@@ -114,69 +114,73 @@ def deploy_vpc_smtp_api():
             )
             print(f"Web UI Lambda function {web_ui_function_name} updated!")
         
-        # Create private API Gateway
-        api_response = apigateway_client.create_rest_api(
-            name='vpc-smtp-bulk-email-api',
-            description='Private VPC SMTP Bulk Email Sender API',
-            endpointConfiguration={
-                'types': ['PRIVATE'],
-                'vpcEndpointIds': get_vpc_endpoint_ids(ec2, vpc_id)
-            },
-            policy=json.dumps({
-                "Version": "2012-10-17",
-                "Statement": [
-                    {
-                        "Effect": "Allow",
-                        "Principal": "*",
-                        "Action": "execute-api:Invoke",
-                        "Resource": "*",
-                        "Condition": {
-                            "StringEquals": {
-                                "aws:sourceVpce": get_vpc_endpoint_ids(ec2, vpc_id)
+        # Check for existing API Gateway
+        apis = apigateway_client.get_rest_apis()
+        api_id = None
+        for api in apis['items']:
+            if api['name'] == 'vpc-smtp-bulk-email-api':
+                api_id = api['id']
+                print(f"Found existing API Gateway: {api_id}")
+                break
+        
+        if not api_id:
+            # Create new API Gateway if none exists
+            api_response = apigateway_client.create_rest_api(
+                name='vpc-smtp-bulk-email-api',
+                description='Private VPC SMTP Bulk Email Sender API',
+                endpointConfiguration={
+                    'types': ['PRIVATE'],
+                    'vpcEndpointIds': get_vpc_endpoint_ids(ec2, vpc_id)
+                },
+                policy=json.dumps({
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": "*",
+                            "Action": "execute-api:Invoke",
+                            "Resource": "*",
+                            "Condition": {
+                                "StringEquals": {
+                                    "aws:sourceVpce": get_vpc_endpoint_ids(ec2, vpc_id)
+                                }
                             }
                         }
-                    }
-                ]
-            })
-        )
-        
-        api_id = api_response['id']
-        print(f"Private SMTP API Gateway created: {api_id}")
+                    ]
+                })
+            )
+            api_id = api_response['id']
+            print(f"Created new API Gateway: {api_id}")
+        else:
+            print(f"Using existing API Gateway: {api_id}")
         
         # Get root resource
         resources = apigateway_client.get_resources(restApiId=api_id)
         root_id = resources['items'][0]['id']
         
-        # Create resources
-        web_ui_resource = apigateway_client.create_resource(
-            restApiId=api_id,
-            parentId=root_id,
-            pathPart='web'
-        )
+        # Get or create resources
+        def get_or_create_resource(parent_id, path_part):
+            for resource in resources['items']:
+                if resource.get('parentId') == parent_id and resource.get('pathPart') == path_part:
+                    print(f"Found existing resource: {path_part}")
+                    return resource
+            try:
+                return apigateway_client.create_resource(
+                    restApiId=api_id,
+                    parentId=parent_id,
+                    pathPart=path_part
+                )
+            except Exception as e:
+                print(f"Resource {path_part} may already exist: {e}")
+                for resource in resources['items']:
+                    if resource.get('pathPart') == path_part:
+                        return resource
         
-        contacts_resource = apigateway_client.create_resource(
-            restApiId=api_id,
-            parentId=root_id,
-            pathPart='contacts'
-        )
-        
-        smtp_campaign_resource = apigateway_client.create_resource(
-            restApiId=api_id,
-            parentId=root_id,
-            pathPart='smtp-campaign'
-        )
-        
-        campaign_status_resource = apigateway_client.create_resource(
-            restApiId=api_id,
-            parentId=root_id,
-            pathPart='campaign-status'
-        )
-        
-        campaign_id_resource = apigateway_client.create_resource(
-            restApiId=api_id,
-            parentId=campaign_status_resource['id'],
-            pathPart='{campaign_id}'
-        )
+        web_ui_resource = get_or_create_resource(root_id, 'web')
+        contacts_resource = get_or_create_resource(root_id, 'contacts')
+        smtp_campaign_resource = get_or_create_resource(root_id, 'smtp-campaign')
+        campaign_status_resource = get_or_create_resource(root_id, 'campaign-status')
+        campaign_id_resource = get_or_create_resource(campaign_status_resource['id'], '{campaign_id}')
         
         # Add methods and integrations
         resources_methods = [

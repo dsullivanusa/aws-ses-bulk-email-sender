@@ -69,9 +69,35 @@ def lambda_handler(event, context):
         <div id="contacts" class="tab-content active">
             <h2>Contact Management</h2>
             <button class="btn" onclick="loadContacts()">Load Contacts</button>
+            <button class="btn btn-success" onclick="showAddContactForm()">Add Contact</button>
+            <input type="file" id="csvFile" accept=".csv" style="display: none;" onchange="importCSV()">
+            <button class="btn" onclick="document.getElementById('csvFile').click()">Import CSV</button>
+            
+            <div id="addContactForm" class="hidden" style="margin: 20px 0; padding: 20px; background: #f8f9fa; border-radius: 4px;">
+                <h3>Add New Contact</h3>
+                <div class="form-group">
+                    <label>Email:</label>
+                    <input type="email" id="newEmail" required>
+                </div>
+                <div class="form-group">
+                    <label>First Name:</label>
+                    <input type="text" id="newFirstName">
+                </div>
+                <div class="form-group">
+                    <label>Last Name:</label>
+                    <input type="text" id="newLastName">
+                </div>
+                <div class="form-group">
+                    <label>Company:</label>
+                    <input type="text" id="newCompany">
+                </div>
+                <button class="btn" onclick="addContact()">Add Contact</button>
+                <button class="btn btn-danger" onclick="hideAddContactForm()">Cancel</button>
+            </div>
+            
             <table class="contacts-table">
                 <thead>
-                    <tr><th>Email</th><th>First Name</th><th>Last Name</th><th>Company</th></tr>
+                    <tr><th>Email</th><th>First Name</th><th>Last Name</th><th>Company</th><th>Actions</th></tr>
                 </thead>
                 <tbody id="contactsTableBody"></tbody>
             </table>
@@ -80,20 +106,16 @@ def lambda_handler(event, context):
         <div id="smtp-config" class="tab-content">
             <h2>SMTP Configuration</h2>
             <div class="form-group">
-                <label>SMTP Server:</label>
-                <input type="text" id="smtpServer" value="smtp.gmail.com">
+                <label>SMTP Relay IP Address:</label>
+                <input type="text" id="smtpServer" value="192.168.1.100" placeholder="192.168.1.100">
             </div>
             <div class="form-group">
-                <label>Username:</label>
-                <input type="text" id="smtpUsername">
-            </div>
-            <div class="form-group">
-                <label>Password:</label>
-                <input type="password" id="smtpPassword">
+                <label>SMTP Port:</label>
+                <input type="number" id="smtpPort" value="25" placeholder="25">
             </div>
             <div class="form-group">
                 <label>From Email:</label>
-                <input type="email" id="fromEmail">
+                <input type="email" id="fromEmail" placeholder="sender@domain.com">
             </div>
             <button class="btn" onclick="saveSMTPConfig()">Save Configuration</button>
         </div>
@@ -162,15 +184,23 @@ def lambda_handler(event, context):
             tbody.innerHTML = '';
             contacts.forEach(contact => {{
                 const row = tbody.insertRow();
-                row.innerHTML = `<td>${{contact.email}}</td><td>${{contact.first_name || ''}}</td><td>${{contact.last_name || ''}}</td><td>${{contact.company || ''}}</td>`;
+                row.innerHTML = `
+                    <td>${{contact.email}}</td>
+                    <td>${{contact.first_name || ''}}</td>
+                    <td>${{contact.last_name || ''}}</td>
+                    <td>${{contact.company || ''}}</td>
+                    <td>
+                        <button class="btn" style="padding: 5px 10px; margin: 2px;" onclick="editContact('${{contact.email}}')">Edit</button>
+                        <button class="btn btn-danger" style="padding: 5px 10px; margin: 2px;" onclick="deleteContact('${{contact.email}}')">Delete</button>
+                    </td>
+                `;
             }});
         }}
 
         function saveSMTPConfig() {{
             const config = {{
                 smtp_server: document.getElementById('smtpServer').value,
-                smtp_username: document.getElementById('smtpUsername').value,
-                smtp_password: document.getElementById('smtpPassword').value,
+                smtp_port: document.getElementById('smtpPort').value,
                 from_email: document.getElementById('fromEmail').value
             }};
             localStorage.setItem('smtpConfig', JSON.stringify(config));
@@ -180,6 +210,96 @@ def lambda_handler(event, context):
         function loadSampleTemplate() {{
             document.getElementById('emailSubject').value = 'Welcome {{{{first_name}}}}!';
             document.getElementById('emailBody').value = 'Hello {{{{first_name}}}}, welcome to our service!';
+        }}
+
+        function showAddContactForm() {{
+            document.getElementById('addContactForm').classList.remove('hidden');
+        }}
+
+        function hideAddContactForm() {{
+            document.getElementById('addContactForm').classList.add('hidden');
+            document.getElementById('newEmail').readOnly = false;
+            clearAddContactForm();
+        }}
+
+        function clearAddContactForm() {{
+            document.getElementById('newEmail').value = '';
+            document.getElementById('newFirstName').value = '';
+            document.getElementById('newLastName').value = '';
+            document.getElementById('newCompany').value = '';
+        }}
+
+        async function editContact(email) {{
+            const result = await apiCall(`/contacts?email=${{encodeURIComponent(email)}}`);
+            if (result && result.contact) {{
+                const contact = result.contact;
+                document.getElementById('newEmail').value = contact.email;
+                document.getElementById('newFirstName').value = contact.first_name || '';
+                document.getElementById('newLastName').value = contact.last_name || '';
+                document.getElementById('newCompany').value = contact.company || '';
+                document.getElementById('newEmail').readOnly = true;
+                showAddContactForm();
+            }}
+        }}
+
+        async function deleteContact(email) {{
+            if (confirm(`Are you sure you want to delete contact: ${{email}}?`)) {{
+                const result = await apiCall(`/contacts?email=${{encodeURIComponent(email)}}`, 'DELETE');
+                if (result) {{
+                    showAlert('Contact deleted successfully', 'success');
+                    loadContacts();
+                }}
+            }}
+        }}
+            document.getElementById('newFirstName').value = '';
+            document.getElementById('newLastName').value = '';
+            document.getElementById('newCompany').value = '';
+        }}
+
+        async function addContact() {{
+            const contact = {{
+                email: document.getElementById('newEmail').value,
+                first_name: document.getElementById('newFirstName').value,
+                last_name: document.getElementById('newLastName').value,
+                company: document.getElementById('newCompany').value
+            }};
+            
+            if (!contact.email) {{
+                showAlert('Email is required', 'error');
+                return;
+            }}
+            
+            const result = await apiCall('/contacts', 'POST', {{ contact }});
+            if (result) {{
+                showAlert('Contact added successfully', 'success');
+                hideAddContactForm();
+                loadContacts();
+            }}
+        }}
+
+        async function importCSV() {{
+            const file = document.getElementById('csvFile').files[0];
+            if (!file) return;
+            
+            const text = await file.text();
+            const lines = text.split('\\n');
+            const headers = lines[0].split(',').map(h => h.trim());
+            
+            for (let i = 1; i < lines.length; i++) {{
+                if (lines[i].trim()) {{
+                    const values = lines[i].split(',').map(v => v.trim());
+                    const contact = {{}};
+                    
+                    headers.forEach((header, index) => {{
+                        contact[header] = values[index] || '';
+                    }});
+                    
+                    await apiCall('/contacts', 'POST', {{ contact }});
+                }}
+            }}
+            
+            showAlert('CSV imported successfully', 'success');
+            loadContacts();
         }}
 
         async function sendCampaign() {{
