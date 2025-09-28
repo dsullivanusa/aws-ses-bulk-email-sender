@@ -114,6 +114,12 @@ def deploy_vpc_smtp_api():
         root_id = resources['items'][0]['id']
         
         # Create resources
+        web_ui_resource = apigateway_client.create_resource(
+            restApiId=api_id,
+            parentId=root_id,
+            pathPart='web'
+        )
+        
         contacts_resource = apigateway_client.create_resource(
             restApiId=api_id,
             parentId=root_id,
@@ -140,6 +146,7 @@ def deploy_vpc_smtp_api():
         
         # Add methods and integrations
         resources_methods = [
+            (web_ui_resource['id'], ['GET', 'OPTIONS']),
             (contacts_resource['id'], ['GET', 'POST', 'OPTIONS']),
             (smtp_campaign_resource['id'], ['POST', 'OPTIONS']),
             (campaign_id_resource['id'], ['GET', 'OPTIONS'])
