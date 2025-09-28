@@ -36,8 +36,6 @@ def lambda_handler(event, context):
         .contacts-table {{ width: 100%; border-collapse: collapse; margin-top: 20px; }}
         .contacts-table th, .contacts-table td {{ padding: 12px; text-align: left; border-bottom: 1px solid #ddd; }}
         .contacts-table th {{ background: #f8f9fa; }}
-        .attachments-list {{ background: #f8f9fa; padding: 15px; border-radius: 4px; margin-top: 10px; min-height: 60px; }}
-        .attachment-item {{ display: inline-block; background: #e9ecef; padding: 5px 10px; margin: 5px; border-radius: 3px; }}
         .progress-container {{ margin: 20px 0; }}
         .progress-bar {{ width: 100%; height: 25px; background: #f0f0f0; border-radius: 12px; overflow: hidden; position: relative; }}
         .progress-fill {{ height: 100%; background: linear-gradient(90deg, #6f42c1, #8e5ec7); width: 0%; transition: width 0.3s; }}
@@ -229,6 +227,27 @@ def lambda_handler(event, context):
             document.getElementById('newCompany').value = '';
         }}
 
+        async function addContact() {{
+            const contact = {{
+                email: document.getElementById('newEmail').value,
+                first_name: document.getElementById('newFirstName').value,
+                last_name: document.getElementById('newLastName').value,
+                company: document.getElementById('newCompany').value
+            }};
+            
+            if (!contact.email) {{
+                showAlert('Email is required', 'error');
+                return;
+            }}
+            
+            const result = await apiCall('/contacts', 'POST', {{ contact }});
+            if (result) {{
+                showAlert('Contact added successfully', 'success');
+                hideAddContactForm();
+                loadContacts();
+            }}
+        }}
+
         async function editContact(email) {{
             const result = await apiCall(`/contacts?email=${{encodeURIComponent(email)}}`);
             if (result && result.contact) {{
@@ -249,31 +268,6 @@ def lambda_handler(event, context):
                     showAlert('Contact deleted successfully', 'success');
                     loadContacts();
                 }}
-            }}
-        }}
-            document.getElementById('newFirstName').value = '';
-            document.getElementById('newLastName').value = '';
-            document.getElementById('newCompany').value = '';
-        }}
-
-        async function addContact() {{
-            const contact = {{
-                email: document.getElementById('newEmail').value,
-                first_name: document.getElementById('newFirstName').value,
-                last_name: document.getElementById('newLastName').value,
-                company: document.getElementById('newCompany').value
-            }};
-            
-            if (!contact.email) {{
-                showAlert('Email is required', 'error');
-                return;
-            }}
-            
-            const result = await apiCall('/contacts', 'POST', {{ contact }});
-            if (result) {{
-                showAlert('Contact added successfully', 'success');
-                hideAddContactForm();
-                loadContacts();
             }}
         }}
 
