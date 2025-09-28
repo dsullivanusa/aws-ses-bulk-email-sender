@@ -4,8 +4,8 @@ import base64
 def lambda_handler(event, context):
     """Serve the VPC SMTP web UI HTML file"""
     
-    # Get the API Gateway URL from environment or construct it
-    api_id = context.invoked_function_arn.split(':')[6].split('-')[0]  # Extract from ARN
+    # Get the API Gateway URL from the request context
+    api_id = event.get('requestContext', {}).get('apiId', 'UNKNOWN')
     api_url = f"https://{api_id}.execute-api.us-gov-west-1.amazonaws.com/prod"
     
     html_content = f"""<!DOCTYPE html>
@@ -13,7 +13,7 @@ def lambda_handler(event, context):
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>VPC SMTP API Email Sender</title>
+    <title>SMTP Bulk Email Sender</title>
     <style>
         * {{ margin: 0; padding: 0; box-sizing: border-box; }}
         body {{ font-family: Arial, sans-serif; background: #f5f5f5; }}
@@ -51,8 +51,8 @@ def lambda_handler(event, context):
 <body>
     <div class="container">
         <div class="header">
-            <h1>🔒 VPC SMTP API Email Sender</h1>
-            <p>Secure SMTP email campaigns via private VPC</p>
+            <h1>📧 SMTP Bulk Email Sender</h1>
+            <p>Secure Email Campaigns</p>
         </div>
 
         <div class="vpc-info">

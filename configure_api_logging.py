@@ -119,7 +119,7 @@ def configure_api_logging():
         "xrayTraceId": "$context.xrayTraceId"
     })
     
-    # Update stage with logging and X-Ray tracing
+    # Update stage with logging
     try:
         apigateway.update_stage(
             restApiId=api_id,
@@ -149,7 +149,36 @@ def configure_api_logging():
                     'op': 'replace',
                     'path': '/*/*/metrics/enabled',
                     'value': 'true'
-                },
+                }
+            ]
+        )
+        print("Updated stage with logging")
+    except Exception as e:
+        print(f"Stage update error: {e}")
+    
+    # Enable X-Ray tracing separately
+    try:
+        apigateway.put_rest_api(
+            restApiId=api_id,
+            mode='overwrite',
+            body=json.dumps({
+                "swagger": "2.0",
+                "info": {"title": "vpc-smtp-bulk-email-api"},
+                "x-amazon-apigateway-request-validators": {},
+                "x-amazon-apigateway-gateway-responses": {},
+                "x-amazon-apigateway-policy": {},
+                "paths": {},
+                "x-amazon-apigateway-binary-media-types": ["*/*"]
+            }),
+            parameters={
+                'endpointConfigurationTypes': 'PRIVATE'
+            }
+        )
+        
+        # Update API to enable X-Ray
+        apigateway.update_rest_api(
+            restApiId=api_id,
+            patchOperations=[
                 {
                     'op': 'replace',
                     'path': '/tracingConfig/mode',
@@ -157,9 +186,9 @@ def configure_api_logging():
                 }
             ]
         )
-        print("Updated stage with logging and X-Ray tracing")
+        print("Enabled X-Ray tracing")
     except Exception as e:
-        print(f"Stage update error: {e}")
+        print(f"X-Ray tracing error: {e}")
     
     print(f"API Gateway logging configured for {api_id}")
     print(f"Log group: {log_group_name}")
