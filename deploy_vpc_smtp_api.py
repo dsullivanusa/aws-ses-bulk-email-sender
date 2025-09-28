@@ -260,7 +260,8 @@ def deploy_vpc_smtp_api():
             'api_id': api_id,
             'api_url': api_url,
             'vpc_id': vpc_id,
-            'function_name': function_name
+            'smtp_function_name': smtp_function_name,
+            'web_ui_function_name': web_ui_function_name
         }
         
     except Exception as e:
