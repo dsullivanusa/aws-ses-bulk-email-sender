@@ -12,7 +12,7 @@ def deploy_vpc_smtp_api():
     function_name = 'vpc-smtp-email-api-function'
     
     # Get VPC configuration
-    vpcs = ec2.describe_vpcs(Filters=[{'Name': 'tag:Name', 'Values': ['SES']}])
+    vpcs = ec2.describe_vpcs(Filters=[{'Name': 'tag:SES', 'Values': ['ses-email-vpc']}])
     if not vpcs['Vpcs']:
         print("VPC not found. Run vpc_infrastructure.py first.")
         return None
@@ -21,7 +21,7 @@ def deploy_vpc_smtp_api():
     
     subnets = ec2.describe_subnets(Filters=[
         {'Name': 'vpc-id', 'Values': [vpc_id]},
-        {'Name': 'tag:Name', 'Values': ['SES']}
+        {'Name': 'tag:SES', 'Values': ['ses-private-subnet']}
     ])
     subnet_ids = [subnet['SubnetId'] for subnet in subnets['Subnets']]
     
