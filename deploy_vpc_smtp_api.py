@@ -1,6 +1,7 @@
 import boto3
 import json
 import zipfile
+import time
 
 def deploy_vpc_smtp_api():
     """Deploy SMTP Lambda and private API Gateway in VPC"""
@@ -9,7 +10,8 @@ def deploy_vpc_smtp_api():
     apigateway_client = boto3.client('apigateway', region_name='us-gov-west-1')
     ec2 = boto3.client('ec2', region_name='us-gov-west-1')
     
-    function_name = 'vpc-smtp-email-api-function'
+    smtp_function_name = 'vpc-smtp-email-api-function'
+    web_ui_function_name = 'vpc-smtp-web-ui-function'
     
     # Get VPC configuration
     vpcs = ec2.describe_vpcs(Filters=[{'Name': 'tag:SES', 'Values': ['ses-email-vpc']}])
@@ -31,18 +33,22 @@ def deploy_vpc_smtp_api():
     ])
     sg_ids = [sg['GroupId'] for sg in security_groups['SecurityGroups']]
     
-    # Create deployment package
+    # Create deployment packages
     with zipfile.ZipFile('vpc_smtp_lambda_function.zip', 'w') as zip_file:
         zip_file.write('vpc_smtp_lambda_function.py', 'lambda_function.py')
+    
+    with zipfile.ZipFile('web_ui_lambda.zip', 'w') as zip_file:
+        zip_file.write('web_ui_lambda.py', 'lambda_function.py')
     
     try:
         # Deploy Lambda function in VPC
         with open('vpc_smtp_lambda_function.zip', 'rb') as zip_file:
             zip_content = zip_file.read()
         
+        # Deploy SMTP Lambda function
         try:
             response = lambda_client.create_function(
-                FunctionName=function_name,
+                FunctionName=smtp_function_name,
                 Runtime='python3.9',
                 Role='arn:aws-us-gov:iam::YOUR_ACCOUNT_ID:role/lambda-email-sender-role',
                 Handler='lambda_function.lambda_handler',
@@ -63,22 +69,50 @@ def deploy_vpc_smtp_api():
                     }
                 }
             )
-            print(f"Lambda function {function_name} created in VPC!")
+            print(f"SMTP Lambda function {smtp_function_name} created in VPC!")
             
         except lambda_client.exceptions.ResourceConflictException:
             response = lambda_client.update_function_code(
-                FunctionName=function_name,
+                FunctionName=smtp_function_name,
                 ZipFile=zip_content
             )
             
+            # Wait for function to be ready before updating configuration
+            print("Waiting for Lambda function to be ready...")
+            time.sleep(10)
+            
             lambda_client.update_function_configuration(
-                FunctionName=function_name,
+                FunctionName=smtp_function_name,
                 VpcConfig={
                     'SubnetIds': subnet_ids,
                     'SecurityGroupIds': sg_ids
                 }
             )
-            print(f"Lambda function {function_name} updated in VPC!")
+            print(f"SMTP Lambda function {smtp_function_name} updated in VPC!")
+        
+        # Deploy Web UI Lambda function
+        with open('web_ui_lambda.zip', 'rb') as zip_file:
+            web_ui_zip_content = zip_file.read()
+        
+        try:
+            lambda_client.create_function(
+                FunctionName=web_ui_function_name,
+                Runtime='python3.9',
+                Role='arn:aws-us-gov:iam::YOUR_ACCOUNT_ID:role/lambda-email-sender-role',
+                Handler='lambda_function.lambda_handler',
+                Code={'ZipFile': web_ui_zip_content},
+                Description='Web UI Lambda for VPC SMTP API',
+                Timeout=30,
+                MemorySize=128
+            )
+            print(f"Web UI Lambda function {web_ui_function_name} created!")
+            
+        except lambda_client.exceptions.ResourceConflictException:
+            lambda_client.update_function_code(
+                FunctionName=web_ui_function_name,
+                ZipFile=web_ui_zip_content
+            )
+            print(f"Web UI Lambda function {web_ui_function_name} updated!")
         
         # Create private API Gateway
         api_response = apigateway_client.create_rest_api(
@@ -161,13 +195,19 @@ def deploy_vpc_smtp_api():
                     authorizationType='NONE'
                 )
                 
+                # Use different Lambda functions for different endpoints
+                if resource_id == web_ui_resource['id']:
+                    function_to_use = web_ui_function_name
+                else:
+                    function_to_use = smtp_function_name
+                
                 apigateway_client.put_integration(
                     restApiId=api_id,
                     resourceId=resource_id,
                     httpMethod=method,
                     type='AWS_PROXY',
                     integrationHttpMethod='POST',
-                    uri=f"arn:aws-us-gov:apigateway:us-gov-west-1:lambda:path/2015-03-31/functions/arn:aws-us-gov:lambda:us-gov-west-1:YOUR_ACCOUNT_ID:function:{function_name}/invocations"
+                    uri=f"arn:aws-us-gov:apigateway:us-gov-west-1:lambda:path/2015-03-31/functions/arn:aws-us-gov:lambda:us-gov-west-1:YOUR_ACCOUNT_ID:function:{function_to_use}/invocations"
                 )
         
         # Deploy API
@@ -176,10 +216,18 @@ def deploy_vpc_smtp_api():
             stageName='prod'
         )
         
-        # Add Lambda permission
+        # Add Lambda permissions for both functions
         lambda_client.add_permission(
-            FunctionName=function_name,
+            FunctionName=smtp_function_name,
             StatementId='vpc-smtp-api-gateway-invoke',
+            Action='lambda:InvokeFunction',
+            Principal='apigateway.amazonaws.com',
+            SourceArn=f"arn:aws-us-gov:execute-api:us-gov-west-1:YOUR_ACCOUNT_ID:{api_id}/*/*"
+        )
+        
+        lambda_client.add_permission(
+            FunctionName=web_ui_function_name,
+            StatementId='vpc-web-ui-api-gateway-invoke',
             Action='lambda:InvokeFunction',
             Principal='apigateway.amazonaws.com',
             SourceArn=f"arn:aws-us-gov:execute-api:us-gov-west-1:YOUR_ACCOUNT_ID:{api_id}/*/*"
@@ -198,6 +246,7 @@ def deploy_vpc_smtp_api():
             api_url = f"https://{api_id}.execute-api.us-gov-west-1.amazonaws.com/prod"
         
         print(f"VPC SMTP API Gateway URL: {api_url}")
+        print(f"Web UI URL: {api_url}/web")
         print(f"VPC ID: {vpc_id}")
         print("SMTP API is accessible only from within the VPC")
         
