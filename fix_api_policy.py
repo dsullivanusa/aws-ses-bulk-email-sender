@@ -30,7 +30,18 @@ def fix_api_policy():
     ])
     vpc_endpoint_id = vpc_endpoints['VpcEndpoints'][0]['VpcEndpointId']
     
-    # Update policy to allow VPC access
+    # Define allowed IP address blocks only
+    allowed_ip_blocks = [
+        "10.0.0.0/16",      # VPC CIDR
+        "192.168.1.0/24",   # Office network
+        "203.0.113.0/24",   # Additional network
+        "198.51.100.0/24",  # Another network
+        "172.16.0.0/12",    # Private network range
+        "10.1.0.0/16",      # Additional VPC
+        "10.2.0.0/16"       # Another VPC
+    ]
+    
+    # Update policy to allow only IP address blocks
     policy = {
         "Version": "2012-10-17",
         "Statement": [
@@ -40,8 +51,8 @@ def fix_api_policy():
                 "Action": "execute-api:Invoke",
                 "Resource": f"arn:aws-us-gov:execute-api:us-gov-west-1:*:{api_id}/*",
                 "Condition": {
-                    "StringEquals": {
-                        "aws:sourceVpce": vpc_endpoint_id
+                    "IpAddress": {
+                        "aws:sourceIp": allowed_ip_blocks
                     }
                 }
             }
@@ -50,7 +61,7 @@ def fix_api_policy():
     
     apigateway.update_rest_api(
         restApiId=api_id,
-        patchOps=[
+        patchOperations=[
             {
                 'op': 'replace',
                 'path': '/policy',
@@ -60,6 +71,7 @@ def fix_api_policy():
     )
     
     print(f"Updated API Gateway policy for {api_id}")
+    print(f"Allowed IP blocks: {', '.join(allowed_ip_blocks)}")
     print(f"Access URL: https://{api_id}.execute-api.us-gov-west-1.amazonaws.com/prod/web")
 
 if __name__ == "__main__":
