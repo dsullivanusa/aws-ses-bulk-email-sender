@@ -283,10 +283,10 @@ if __name__ == "__main__":
     print("Ensure VPC infrastructure is created first!")
     
     # Uncomment after updating account ID and creating VPC
-    # result = deploy_vpc_smtp_api()
+    result = deploy_vpc_smtp_api()
     
-    # if result:
-    #     print("\nVPC SMTP API deployed successfully!")
-    #     print("Access is restricted to VPC endpoints only")
-    # else:
-    #     print("Failed to deploy VPC SMTP API")
+    if result:
+        print("\nVPC SMTP API deployed successfully!")
+        print("Access is restricted to VPC endpoints only")
+    else:
+        print("Failed to deploy VPC SMTP API")
