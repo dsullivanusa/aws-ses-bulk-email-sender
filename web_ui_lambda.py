@@ -106,15 +106,41 @@ def lambda_handler(event, context):
         </div>
 
         <div id="smtp-config" class="tab-content">
-            <h2>SMTP Configuration</h2>
+            <h2>Email Configuration</h2>
             <div class="form-group">
-                <label>SMTP Relay IP Address:</label>
-                <input type="text" id="smtpServer" value="192.168.1.100" placeholder="192.168.1.100">
+                <label>Email Service:</label>
+                <select id="emailService" onchange="toggleEmailConfig()">
+                    <option value="smtp">SMTP Relay</option>
+                    <option value="ses">AWS SES</option>
+                </select>
             </div>
-            <div class="form-group">
-                <label>SMTP Port:</label>
-                <input type="number" id="smtpPort" value="25" placeholder="25">
+            
+            <div id="smtpConfig">
+                <div class="form-group">
+                    <label>SMTP Relay IP Address:</label>
+                    <input type="text" id="smtpServer" value="192.168.1.100" placeholder="192.168.1.100">
+                </div>
+                <div class="form-group">
+                    <label>SMTP Port:</label>
+                    <input type="number" id="smtpPort" value="25" placeholder="25">
+                </div>
             </div>
+            
+            <div id="sesConfig" class="hidden">
+                <div class="form-group">
+                    <label>AWS Region:</label>
+                    <input type="text" id="awsRegion" value="us-gov-west-1" placeholder="us-gov-west-1">
+                </div>
+                <div class="form-group">
+                    <label>AWS Access Key ID:</label>
+                    <input type="text" id="awsAccessKey" placeholder="Your AWS Access Key">
+                </div>
+                <div class="form-group">
+                    <label>AWS Secret Access Key:</label>
+                    <input type="password" id="awsSecretKey" placeholder="Your AWS Secret Key">
+                </div>
+            </div>
+            
             <div class="form-group">
                 <label>From Email:</label>
                 <input type="email" id="fromEmail" placeholder="sender@domain.com">
@@ -232,16 +258,39 @@ def lambda_handler(event, context):
             }}
         }}
 
+        function toggleEmailConfig() {{
+            const service = document.getElementById('emailService').value;
+            const smtpConfig = document.getElementById('smtpConfig');
+            const sesConfig = document.getElementById('sesConfig');
+            
+            if (service === 'ses') {{
+                smtpConfig.classList.add('hidden');
+                sesConfig.classList.remove('hidden');
+            }} else {{
+                smtpConfig.classList.remove('hidden');
+                sesConfig.classList.add('hidden');
+            }}
+        }}
+
         async function saveSMTPConfig() {{
+            const service = document.getElementById('emailService').value;
             const config = {{
-                smtp_server: document.getElementById('smtpServer').value,
-                smtp_port: document.getElementById('smtpPort').value,
+                email_service: service,
                 from_email: document.getElementById('fromEmail').value
             }};
             
-            const result = await apiCall('/smtp-config', 'POST', {{ config }});
+            if (service === 'smtp') {{
+                config.smtp_server = document.getElementById('smtpServer').value;
+                config.smtp_port = document.getElementById('smtpPort').value;
+            }} else if (service === 'ses') {{
+                config.aws_region = document.getElementById('awsRegion').value;
+                config.aws_access_key = document.getElementById('awsAccessKey').value;
+                config.aws_secret_key = document.getElementById('awsSecretKey').value;
+            }}
+            
+            const result = await apiCall('/smtp-config', 'POST', config);
             if (result) {{
-                showAlert('SMTP configuration saved to database', 'success');
+                showAlert('Email configuration saved to database', 'success');
             }}
         }}
         
@@ -249,9 +298,19 @@ def lambda_handler(event, context):
             const result = await apiCall('/smtp-config');
             if (result && result.config) {{
                 const config = result.config;
-                document.getElementById('smtpServer').value = config.smtp_server || '192.168.1.100';
-                document.getElementById('smtpPort').value = config.smtp_port || '25';
+                document.getElementById('emailService').value = config.email_service || 'smtp';
                 document.getElementById('fromEmail').value = config.from_email || '';
+                
+                if (config.email_service === 'ses') {{
+                    document.getElementById('awsRegion').value = config.aws_region || 'us-gov-west-1';
+                    document.getElementById('awsAccessKey').value = config.aws_access_key || '';
+                    document.getElementById('awsSecretKey').value = config.aws_secret_key || '';
+                }} else {{
+                    document.getElementById('smtpServer').value = config.smtp_server || '192.168.1.100';
+                    document.getElementById('smtpPort').value = config.smtp_port || '25';
+                }}
+                
+                toggleEmailConfig();
             }}
         }}
 

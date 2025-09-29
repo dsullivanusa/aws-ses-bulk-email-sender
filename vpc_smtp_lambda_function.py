@@ -128,8 +128,12 @@ def send_smtp_campaign(body, headers):
     # Send emails via SMTP
     for contact in contacts:
         try:
-            success = send_smtp_email(
-                smtp_config,
+            # Get email config from DynamoDB
+            config_response = smtp_config_table.get_item(Key={'config_id': 'default'})
+            email_config = config_response.get('Item', {}) if 'Item' in config_response else {}
+            
+            success = send_email(
+                email_config,
                 body['from_email'],
                 contact['email'],
                 personalize_content(body['subject'], contact),
@@ -188,6 +192,60 @@ def send_smtp_campaign(body, headers):
         })
     }
 
+def send_email(email_config, from_email, to_email, subject, body, attachments=None):
+    """Send email via SMTP or SES"""
+    if email_config.get('email_service') == 'ses':
+        return send_ses_email(email_config, from_email, to_email, subject, body, attachments)
+    else:
+        return send_smtp_email(email_config, from_email, to_email, subject, body, attachments)
+
+def send_ses_email(ses_config, from_email, to_email, subject, body, attachments=None):
+    """Send email via AWS SES"""
+    try:
+        ses_client = boto3.client(
+            'ses',
+            region_name=ses_config.get('aws_region', 'us-gov-west-1'),
+            aws_access_key_id=ses_config.get('aws_access_key'),
+            aws_secret_access_key=ses_config.get('aws_secret_key')
+        )
+        
+        if attachments:
+            # Use raw email for attachments
+            msg = MIMEMultipart()
+            msg['From'] = from_email
+            msg['To'] = to_email
+            msg['Subject'] = subject
+            msg.attach(MIMEText(body, 'html'))
+            
+            for attachment in attachments:
+                part = MIMEBase('application', 'octet-stream')
+                part.set_payload(attachment['content'])
+                encoders.encode_base64(part)
+                part.add_header('Content-Disposition', f'attachment; filename={attachment["filename"]}')
+                msg.attach(part)
+            
+            ses_client.send_raw_email(
+                Source=from_email,
+                Destinations=[to_email],
+                RawMessage={'Data': msg.as_string()}
+            )
+        else:
+            # Simple email without attachments
+            ses_client.send_email(
+                Source=from_email,
+                Destination={'ToAddresses': [to_email]},
+                Message={
+                    'Subject': {'Data': subject},
+                    'Body': {'Html': {'Data': body}}
+                }
+            )
+        
+        return True
+        
+    except Exception as e:
+        print(f"SES Error: {str(e)}")
+        return False
+
 def send_smtp_email(smtp_config, from_email, to_email, subject, body, attachments=None):
     """Send single SMTP email with attachments"""
     try:
@@ -207,10 +265,11 @@ def send_smtp_email(smtp_config, from_email, to_email, subject, body, attachment
                 msg.attach(part)
         
         context = ssl.create_default_context()
-        with smtplib.SMTP(smtp_config['server'], smtp_config['port']) as server:
-            if smtp_config['use_tls']:
+        with smtplib.SMTP(smtp_config['smtp_server'], smtp_config['smtp_port']) as server:
+            if smtp_config.get('use_tls', False):
                 server.starttls(context=context)
-            server.login(smtp_config['username'], smtp_config['password'])
+            if smtp_config.get('username') and smtp_config.get('password'):
+                server.login(smtp_config['username'], smtp_config['password'])
             server.send_message(msg)
         
         return True
@@ -336,17 +395,28 @@ def get_smtp_config(headers):
         return {'statusCode': 500, 'headers': headers, 'body': json.dumps({'error': str(e)})}
 
 def save_smtp_config(body, headers):
-    """Save SMTP configuration to DynamoDB"""
+    """Save email configuration to DynamoDB"""
     try:
-        smtp_config_table.put_item(
-            Item={
-                'config_id': 'default',
+        config_item = {
+            'config_id': 'default',
+            'email_service': body.get('email_service', 'smtp'),
+            'from_email': body.get('from_email', ''),
+            'updated_at': datetime.now().isoformat()
+        }
+        
+        if body.get('email_service') == 'ses':
+            config_item.update({
+                'aws_region': body.get('aws_region', 'us-gov-west-1'),
+                'aws_access_key': body.get('aws_access_key', ''),
+                'aws_secret_key': body.get('aws_secret_key', '')
+            })
+        else:
+            config_item.update({
                 'smtp_server': body.get('smtp_server', '192.168.1.100'),
-                'smtp_port': body.get('smtp_port', 25),
-                'from_email': body.get('from_email', ''),
-                'updated_at': datetime.now().isoformat()
-            }
-        )
+                'smtp_port': body.get('smtp_port', 25)
+            })
+        
+        smtp_config_table.put_item(Item=config_item)
         return {'statusCode': 200, 'headers': headers, 'body': json.dumps({'success': True})}
     except Exception as e:
         return {'statusCode': 500, 'headers': headers, 'body': json.dumps({'error': str(e)})}
