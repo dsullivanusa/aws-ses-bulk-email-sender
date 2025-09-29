@@ -5,22 +5,28 @@ def create_smtp_config_table():
     dynamodb = boto3.client('dynamodb', region_name='us-gov-west-1')
     
     try:
-        dynamodb.create_table(
-            TableName='SMTPConfig',
-            KeySchema=[
-                {'AttributeName': 'config_id', 'KeyType': 'HASH'}
-            ],
-            AttributeDefinitions=[
-                {'AttributeName': 'config_id', 'AttributeType': 'S'}
-            ],
-            BillingMode='PAY_PER_REQUEST'
-        )
-        print("SMTPConfig table created successfully!")
-        
-        # Wait for table to be active
-        print("Waiting for table to be active...")
-        waiter = dynamodb.get_waiter('table_exists')
-        waiter.wait(TableName='SMTPConfig')
+        # Check if table exists
+        try:
+            dynamodb.describe_table(TableName='SMTPConfig')
+            print("SMTPConfig table already exists!")
+        except dynamodb.exceptions.ResourceNotFoundException:
+            # Create table if it doesn't exist
+            dynamodb.create_table(
+                TableName='SMTPConfig',
+                KeySchema=[
+                    {'AttributeName': 'config_id', 'KeyType': 'HASH'}
+                ],
+                AttributeDefinitions=[
+                    {'AttributeName': 'config_id', 'AttributeType': 'S'}
+                ],
+                BillingMode='PAY_PER_REQUEST'
+            )
+            print("SMTPConfig table created successfully!")
+            
+            # Wait for table to be active
+            print("Waiting for table to be active...")
+            waiter = dynamodb.get_waiter('table_exists')
+            waiter.wait(TableName='SMTPConfig')
         
         # Add default config
         dynamodb.put_item(
