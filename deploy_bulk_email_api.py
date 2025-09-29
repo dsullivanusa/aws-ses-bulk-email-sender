@@ -98,8 +98,8 @@ def deploy_bulk_email_api():
                         "Action": "execute-api:Invoke",
                         "Resource": "*",
                         "Condition": {
-                            "StringEquals": {
-                                "aws:sourceVpce": "vpce-REPLACE-WITH-YOUR-VPC-ENDPOINT-ID"
+                            "IpAddress": {
+                                "aws:sourceIp": ["10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16"]
                             }
                         }
                     }
@@ -190,10 +190,10 @@ def deploy_bulk_email_api():
         print(f"API Gateway ID: {api_id}")
         print(f"Private API URL: {api_url}")
         print(f"\\nIMPORTANT: This is a PRIVATE API Gateway")
-        print(f"1. Create VPC Endpoint for API Gateway in your VPC")
-        print(f"2. Update the resource policy with your VPC Endpoint ID")
-        print(f"3. Access via VPC Endpoint DNS name or Load Balancer")
-        print(f"4. Replace 'vpce-REPLACE-WITH-YOUR-VPC-ENDPOINT-ID' in the policy")
+        print(f"1. Only accessible from private IP ranges (10.x, 172.16-31.x, 192.168.x)")
+        print(f"2. Update IP ranges in resource policy as needed")
+        print(f"3. Access via Load Balancer or VPC resources")
+        print(f"4. Modify sourceIp condition for your specific IP ranges")
         
     except Exception as e:
         print(f"API Gateway error: {e}")
