@@ -166,11 +166,6 @@ def send_smtp_email(smtp_config, to_email, subject, body):
         
         # Connect to SMTP server
         with smtplib.SMTP(smtp_config['smtp_server'], int(smtp_config['smtp_port'])) as server:
-            if smtp_config.get('use_tls', False):
-                server.starttls()
-            if smtp_config.get('username') and smtp_config.get('password'):
-                server.login(smtp_config['username'], smtp_config['password'])
-            
             server.send_message(msg)
         
         return True
@@ -255,9 +250,7 @@ def save_smtp_config(body):
                 'smtp_server': body.get('smtp_server', '192.168.1.100'),
                 'smtp_port': body.get('smtp_port', 25),
                 'from_email': body.get('from_email', ''),
-                'username': body.get('username', ''),
-                'password': body.get('password', ''),
-                'use_tls': body.get('use_tls', False),
+                'use_tls': False,
                 'updated_at': datetime.now().isoformat()
             }
         )
@@ -278,9 +271,6 @@ def get_smtp_config():
         
         if 'Item' in response:
             config = response['Item']
-            # Don't return password in response
-            if 'password' in config:
-                config['password'] = '***'
             return {
                 'statusCode': 200,
                 'body': json.dumps({'config': config})

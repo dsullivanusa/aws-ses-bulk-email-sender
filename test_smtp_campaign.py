@@ -11,10 +11,7 @@ def test_smtp_campaign(function_url):
         "action": "save_smtp_config",
         "smtp_server": "192.168.1.100",
         "smtp_port": 25,
-        "from_email": "sender@domain.com",
-        "username": "",
-        "password": "",
-        "use_tls": False
+        "from_email": "sender@domain.com"
     }
     
     response = requests.post(function_url, json=smtp_config)
