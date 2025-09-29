@@ -72,7 +72,7 @@ def serve_web_ui(event):
     html_content = f"""<!DOCTYPE html>
 <html>
 <head>
-    <title>JCDC Bulk Email Sender</title>
+    <title>CISA Email Campaign Management System</title>
     <style>
         body {{ font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; }}
         .container {{ max-width: 1200px; margin: 20px auto; background: white; padding: 40px; border-radius: 15px; box-shadow: 0 20px 40px rgba(0,0,0,0.1); }}
@@ -108,8 +108,8 @@ def serve_web_ui(event):
 <body>
     <div class="container">
         <div class="header">
-            <h1>📧 JCDC Bulk Email Sender</h1>
-            <div class="subtitle">Professional Email Campaign Management System</div>
+            <h1>CISA Email Campaign Management System</h1>
+            <div class="subtitle">Cybersecurity and Infrastructure Security Agency</div>
         </div>
         
         <div class="tabs">
@@ -441,6 +441,7 @@ def serve_web_ui(event):
 def save_email_config(body, headers):
     """Save email configuration"""
     try:
+        print(f"Saving config: {body}")
         email_config_table.put_item(
             Item={
                 'config_id': 'default',
@@ -455,9 +456,11 @@ def save_email_config(body, headers):
                 'updated_at': datetime.now().isoformat()
             }
         )
+        print("Config saved successfully")
         return {'statusCode': 200, 'headers': headers, 'body': json.dumps({'success': True})}
     except Exception as e:
-        return {'statusCode': 500, 'headers': headers, 'body': json.dumps({'error': str(e)})}
+        print(f"Config save error: {str(e)}")
+        return {'statusCode': 500, 'headers': headers, 'body': json.dumps({'error': str(e)})
 
 def get_email_config(headers):
     """Get email configuration"""
