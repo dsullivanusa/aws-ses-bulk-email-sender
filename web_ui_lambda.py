@@ -53,9 +53,7 @@ def lambda_handler(event, context):
             <p>Secure Email Campaigns</p>
         </div>
 
-        <div class="vpc-info">
-            <strong>🛡️ VPC Security:</strong> Connected to private API Gateway: {api_url}
-        </div>
+
 
         <div class="tabs">
             <button class="tab active" onclick="showTab('contacts')">Contacts</button>
