@@ -96,15 +96,13 @@ def deploy_smtp_lambda():
     try:
         response = lambda_client.create_function_url_config(
             FunctionName=function_name,
-            Config={
-                'AuthType': 'NONE',
-                'Cors': {
-                    'AllowCredentials': False,
-                    'AllowHeaders': ['*'],
-                    'AllowMethods': ['*'],
-                    'AllowOrigins': ['*'],
-                    'MaxAge': 86400
-                }
+            AuthType='NONE',
+            Cors={
+                'AllowCredentials': False,
+                'AllowHeaders': ['*'],
+                'AllowMethods': ['*'],
+                'AllowOrigins': ['*'],
+                'MaxAge': 86400
             }
         )
         function_url = response['FunctionUrl']
