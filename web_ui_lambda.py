@@ -35,7 +35,7 @@ def lambda_handler(event, context):
         .btn-danger {{ background: #dc3545; }}
         .contacts-table {{ width: 100%; border-collapse: collapse; margin-top: 20px; }}
         .contacts-table th, .contacts-table td {{ padding: 12px; text-align: left; border-bottom: 1px solid #ddd; }}
-        .contacts-table th {{ background: #f8f9fa; }}
+        .contacts-table th {{ background: #f8f9fa; position: sticky; top: 0; z-index: 10; }}
         .progress-container {{ margin: 20px 0; }}
         .progress-bar {{ width: 100%; height: 25px; background: #f0f0f0; border-radius: 12px; overflow: hidden; position: relative; }}
         .progress-fill {{ height: 100%; background: linear-gradient(90deg, #6f42c1, #8e5ec7); width: 0%; transition: width 0.3s; }}
@@ -69,6 +69,10 @@ def lambda_handler(event, context):
             <input type="file" id="csvFile" accept=".csv" style="display: none;" onchange="importCSV()">
             <button class="btn" onclick="document.getElementById('csvFile').click()">Import CSV</button>
             
+            <div class="form-group" style="margin: 20px 0;">
+                <input type="text" id="searchContacts" placeholder="Search contacts..." oninput="filterContacts()" style="width: 300px;">
+            </div>
+            
             <div id="addContactForm" class="hidden" style="margin: 20px 0; padding: 20px; background: #f8f9fa; border-radius: 4px;">
                 <h3>Add New Contact</h3>
                 <div class="form-group">
@@ -91,12 +95,14 @@ def lambda_handler(event, context):
                 <button class="btn btn-danger" onclick="hideAddContactForm()">Cancel</button>
             </div>
             
-            <table class="contacts-table">
-                <thead>
-                    <tr><th>Email</th><th>First Name</th><th>Last Name</th><th>Company</th><th>Actions</th></tr>
-                </thead>
-                <tbody id="contactsTableBody"></tbody>
-            </table>
+            <div style="max-height: 400px; overflow-y: auto; border: 1px solid #ddd; border-radius: 4px;">
+                <table class="contacts-table">
+                    <thead>
+                        <tr><th>Email</th><th>First Name</th><th>Last Name</th><th>Company</th><th>Actions</th></tr>
+                    </thead>
+                    <tbody id="contactsTableBody"></tbody>
+                </table>
+            </div>
         </div>
 
         <div id="smtp-config" class="tab-content">
@@ -147,6 +153,7 @@ def lambda_handler(event, context):
 
     <script>
         const API_BASE_URL = '{api_url}';
+        let allContacts = [];
         
         function showTab(tabName) {{
             document.querySelectorAll('.tab').forEach(tab => tab.classList.remove('active'));
@@ -171,8 +178,20 @@ def lambda_handler(event, context):
         async function loadContacts() {{
             const result = await apiCall('/contacts');
             if (result && result.contacts) {{
-                displayContacts(result.contacts);
+                allContacts = result.contacts;
+                displayContacts(allContacts);
             }}
+        }}
+
+        function filterContacts() {{
+            const searchTerm = document.getElementById('searchContacts').value.toLowerCase();
+            const filtered = allContacts.filter(contact => 
+                (contact.email || '').toLowerCase().includes(searchTerm) ||
+                (contact.first_name || '').toLowerCase().includes(searchTerm) ||
+                (contact.last_name || '').toLowerCase().includes(searchTerm) ||
+                (contact.company || '').toLowerCase().includes(searchTerm)
+            );
+            displayContacts(filtered);
         }}
 
         function displayContacts(contacts) {{
@@ -181,26 +200,59 @@ def lambda_handler(event, context):
             contacts.forEach(contact => {{
                 const row = tbody.insertRow();
                 row.innerHTML = `
-                    <td>${{contact.email}}</td>
-                    <td>${{contact.first_name || ''}}</td>
-                    <td>${{contact.last_name || ''}}</td>
-                    <td>${{contact.company || ''}}</td>
-                    <td>
-                        <button class="btn" style="padding: 5px 10px; margin: 2px;" onclick="editContact('${{contact.email}}')">Edit</button>
-                        <button class="btn btn-danger" style="padding: 5px 10px; margin: 2px;" onclick="deleteContact('${{contact.email}}')">Delete</button>
-                    </td>
+                    <td contenteditable="true" onblur="saveContactEdit('${{contact.email}}', 'email', this.textContent)">${{contact.email}}</td>
+                    <td contenteditable="true" onblur="saveContactEdit('${{contact.email}}', 'first_name', this.textContent)">${{contact.first_name || ''}}</td>
+                    <td contenteditable="true" onblur="saveContactEdit('${{contact.email}}', 'last_name', this.textContent)">${{contact.last_name || ''}}</td>
+                    <td contenteditable="true" onblur="saveContactEdit('${{contact.email}}', 'company', this.textContent)">${{contact.company || ''}}</td>
+                    <td><button class="btn btn-danger" onclick="deleteContact('${{contact.email}}')">Delete</button></td>
                 `;
             }});
         }}
 
-        function saveSMTPConfig() {{
+        async function saveContactEdit(originalEmail, field, newValue) {{
+            const updateData = {{ email: originalEmail, [field]: newValue }};
+            const result = await apiCall('/contacts', 'PUT', updateData);
+            if (result && result.success) {{
+                showAlert('Contact updated successfully', 'success');
+            }} else {{
+                showAlert('Failed to update contact', 'error');
+                loadContacts(); // Reload to revert changes
+            }}
+        }}
+
+        async function deleteContact(email) {{
+            if (confirm('Are you sure you want to delete this contact?')) {{
+                const result = await apiCall(`/contacts?email=${{encodeURIComponent(email)}}`, 'DELETE');
+                if (result && result.success) {{
+                    showAlert('Contact deleted successfully', 'success');
+                    loadContacts();
+                }} else {{
+                    showAlert('Failed to delete contact', 'error');
+                }}
+            }}
+        }}
+
+        async function saveSMTPConfig() {{
             const config = {{
                 smtp_server: document.getElementById('smtpServer').value,
                 smtp_port: document.getElementById('smtpPort').value,
                 from_email: document.getElementById('fromEmail').value
             }};
-            localStorage.setItem('smtpConfig', JSON.stringify(config));
-            showAlert('Configuration saved', 'success');
+            
+            const result = await apiCall('/smtp-config', 'POST', {{ config }});
+            if (result) {{
+                showAlert('SMTP configuration saved to database', 'success');
+            }}
+        }}
+        
+        async function loadSMTPConfig() {{
+            const result = await apiCall('/smtp-config');
+            if (result && result.config) {{
+                const config = result.config;
+                document.getElementById('smtpServer').value = config.smtp_server || '192.168.1.100';
+                document.getElementById('smtpPort').value = config.smtp_port || '25';
+                document.getElementById('fromEmail').value = config.from_email || '';
+            }}
         }}
 
         function loadSampleTemplate() {{
@@ -238,24 +290,31 @@ def lambda_handler(event, context):
                 return;
             }}
             
-            const result = await apiCall('/contacts', 'POST', {{ contact }});
+            const method = document.getElementById('newEmail').readOnly ? 'PUT' : 'POST';
+            const result = await apiCall('/contacts', method, {{ contact }});
             if (result) {{
-                showAlert('Contact added successfully', 'success');
+                const action = method === 'PUT' ? 'updated' : 'added';
+                showAlert(`Contact ${{action}} successfully`, 'success');
                 hideAddContactForm();
                 loadContacts();
             }}
         }}
 
         async function editContact(email) {{
-            const result = await apiCall(`/contacts?email=${{encodeURIComponent(email)}}`);
-            if (result && result.contact) {{
-                const contact = result.contact;
-                document.getElementById('newEmail').value = contact.email;
-                document.getElementById('newFirstName').value = contact.first_name || '';
-                document.getElementById('newLastName').value = contact.last_name || '';
-                document.getElementById('newCompany').value = contact.company || '';
-                document.getElementById('newEmail').readOnly = true;
-                showAddContactForm();
+            // Get all contacts and find the one to edit
+            const result = await apiCall('/contacts');
+            if (result && result.contacts) {{
+                const contact = result.contacts.find(c => c.email === email);
+                if (contact) {{
+                    document.getElementById('newEmail').value = contact.email;
+                    document.getElementById('newFirstName').value = contact.first_name || '';
+                    document.getElementById('newLastName').value = contact.last_name || '';
+                    document.getElementById('newCompany').value = contact.company || '';
+                    document.getElementById('newEmail').readOnly = true;
+                    showAddContactForm();
+                }} else {{
+                    showAlert('Contact not found', 'error');
+                }}
             }}
         }}
 
@@ -295,7 +354,10 @@ def lambda_handler(event, context):
         }}
 
         async function sendCampaign() {{
-            const config = JSON.parse(localStorage.getItem('smtpConfig') || '{{}}');
+            // Get SMTP config from database
+            const configResult = await apiCall('/smtp-config');
+            const config = configResult && configResult.config ? configResult.config : {{}};
+            
             const payload = {{
                 subject: document.getElementById('emailSubject').value,
                 body: document.getElementById('emailBody').value,
@@ -321,6 +383,7 @@ def lambda_handler(event, context):
 
         window.onload = () => {{
             loadContacts();
+            loadSMTPConfig();
             showAlert('Connected to VPC SMTP API', 'success');
         }};
     </script>
