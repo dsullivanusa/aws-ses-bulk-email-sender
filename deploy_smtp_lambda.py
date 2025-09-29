@@ -1,12 +1,13 @@
 import boto3
 import zipfile
 import json
+import time
 
 def deploy_smtp_lambda():
     """Deploy SMTP bulk email Lambda function"""
     
     lambda_client = boto3.client('lambda', region_name='us-gov-west-1')
-    iam_client = boto3.client('iam', region_name='us-gov-west-1')
+    iam_client = boto3.client('iam')
     
     # Create execution role
     role_name = 'smtp-bulk-email-lambda-role'
@@ -22,6 +23,7 @@ def deploy_smtp_lambda():
         ]
     }
     
+    role_created = False
     try:
         iam_client.create_role(
             RoleName=role_name,
@@ -29,6 +31,7 @@ def deploy_smtp_lambda():
             Description='Role for SMTP bulk email Lambda function'
         )
         print(f"Created IAM role: {role_name}")
+        role_created = True
     except iam_client.exceptions.EntityAlreadyExistsException:
         print(f"IAM role {role_name} already exists")
     
@@ -44,6 +47,11 @@ def deploy_smtp_lambda():
             print(f"Attached policy: {policy}")
         except Exception as e:
             print(f"Policy attachment error: {e}")
+    
+    # Wait for role propagation if newly created
+    if role_created:
+        print("Waiting for role propagation...")
+        time.sleep(10)
     
     # Get role ARN
     role_response = iam_client.get_role(RoleName=role_name)
