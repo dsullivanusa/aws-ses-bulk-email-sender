@@ -84,9 +84,27 @@ def deploy_bulk_email_api():
     api_name = 'bulk-email-api'
     
     try:
+        # Create private API Gateway
         api_response = apigateway_client.create_rest_api(
             name=api_name,
-            description='Bulk Email API with Web UI'
+            description='Private Bulk Email API with Web UI',
+            endpointConfiguration={'types': ['PRIVATE']},
+            policy=json.dumps({
+                "Version": "2012-10-17",
+                "Statement": [
+                    {
+                        "Effect": "Allow",
+                        "Principal": "*",
+                        "Action": "execute-api:Invoke",
+                        "Resource": "*",
+                        "Condition": {
+                            "StringEquals": {
+                                "aws:sourceVpce": "vpce-REPLACE-WITH-YOUR-VPC-ENDPOINT-ID"
+                            }
+                        }
+                    }
+                ]
+            })
         )
         api_id = api_response['id']
         print(f"Created API Gateway: {api_id}")
@@ -168,10 +186,14 @@ def deploy_bulk_email_api():
         
         api_url = f"https://{api_id}.execute-api.us-gov-west-1.amazonaws.com/prod"
         
-        print(f"\\nDeployment Complete!")
-        print(f"API Gateway URL: {api_url}")
-        print(f"Web UI: {api_url}")
-        print(f"Use this URL with your Load Balancer")
+        print(f"\\nPrivate API Gateway Deployment Complete!")
+        print(f"API Gateway ID: {api_id}")
+        print(f"Private API URL: {api_url}")
+        print(f"\\nIMPORTANT: This is a PRIVATE API Gateway")
+        print(f"1. Create VPC Endpoint for API Gateway in your VPC")
+        print(f"2. Update the resource policy with your VPC Endpoint ID")
+        print(f"3. Access via VPC Endpoint DNS name or Load Balancer")
+        print(f"4. Replace 'vpce-REPLACE-WITH-YOUR-VPC-ENDPOINT-ID' in the policy")
         
     except Exception as e:
         print(f"API Gateway error: {e}")
