@@ -84,90 +84,99 @@ def deploy_bulk_email_api():
     api_name = 'bulk-email-api'
     
     try:
-        # Create private API Gateway
-        api_response = apigateway_client.create_rest_api(
-            name=api_name,
-            description='Private Bulk Email API with Web UI',
-            endpointConfiguration={'types': ['PRIVATE']},
-            policy=json.dumps({
-                "Version": "2012-10-17",
-                "Statement": [
-                    {
-                        "Effect": "Allow",
-                        "Principal": "*",
-                        "Action": "execute-api:Invoke",
-                        "Resource": "*",
-                        "Condition": {
-                            "IpAddress": {
-                                "aws:sourceIp": ["10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16"]
+        # Check if API Gateway already exists
+        apis = apigateway_client.get_rest_apis()['items']
+        existing_api = next((api for api in apis if api['name'] == api_name), None)
+        
+        if existing_api:
+            api_id = existing_api['id']
+            print(f"Using existing API Gateway: {api_id}")
+        else:
+            # Create private API Gateway
+            api_response = apigateway_client.create_rest_api(
+                name=api_name,
+                description='Private Bulk Email API with Web UI',
+                endpointConfiguration={'types': ['PRIVATE']},
+                policy=json.dumps({
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": "*",
+                            "Action": "execute-api:Invoke",
+                            "Resource": "*",
+                            "Condition": {
+                                "IpAddress": {
+                                    "aws:sourceIp": ["10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16"]
+                                }
                             }
                         }
-                    }
-                ]
-            })
-        )
-        api_id = api_response['id']
-        print(f"Created API Gateway: {api_id}")
-        
-        # Get root resource
-        resources = apigateway_client.get_resources(restApiId=api_id)
-        root_id = resources['items'][0]['id']
-        
-        # Create resources and methods
-        resources_to_create = [
-            ('config', ['GET', 'POST']),
-            ('contacts', ['GET', 'POST', 'PUT', 'DELETE']),
-            ('campaign', ['POST']),
-        ]
-        
-        for resource_name, methods in resources_to_create:
-            # Create resource
-            resource_response = apigateway_client.create_resource(
-                restApiId=api_id,
-                parentId=root_id,
-                pathPart=resource_name
+                    ]
+                })
             )
-            resource_id = resource_response['id']
+            api_id = api_response['id']
+            print(f"Created API Gateway: {api_id}")
+        
+        if not existing_api:
+            # Get root resource
+            resources = apigateway_client.get_resources(restApiId=api_id)
+            root_id = resources['items'][0]['id']
             
-            # Create methods
-            for method in methods:
-                apigateway_client.put_method(
+            # Create resources and methods
+            resources_to_create = [
+                ('config', ['GET', 'POST']),
+                ('contacts', ['GET', 'POST', 'PUT', 'DELETE']),
+                ('campaign', ['POST']),
+            ]
+            
+            for resource_name, methods in resources_to_create:
+                # Create resource
+                resource_response = apigateway_client.create_resource(
                     restApiId=api_id,
-                    resourceId=resource_id,
-                    httpMethod=method,
-                    authorizationType='NONE'
+                    parentId=root_id,
+                    pathPart=resource_name
                 )
+                resource_id = resource_response['id']
                 
-                # Set up integration
-                lambda_arn = f"arn:aws-us-gov:lambda:us-gov-west-1:{role_arn.split(':')[4]}:function:{function_name}"
-                
-                apigateway_client.put_integration(
-                    restApiId=api_id,
-                    resourceId=resource_id,
-                    httpMethod=method,
-                    type='AWS_PROXY',
-                    integrationHttpMethod='POST',
-                    uri=f"arn:aws-us-gov:apigateway:us-gov-west-1:lambda:path/2015-03-31/functions/{lambda_arn}/invocations"
-                )
-        
-        # Add GET method to root for web UI
-        apigateway_client.put_method(
-            restApiId=api_id,
-            resourceId=root_id,
-            httpMethod='GET',
-            authorizationType='NONE'
-        )
-        
-        lambda_arn = f"arn:aws-us-gov:lambda:us-gov-west-1:{role_arn.split(':')[4]}:function:{function_name}"
-        
-        apigateway_client.put_integration(
-            restApiId=api_id,
-            resourceId=root_id,
-            httpMethod='GET',
-            type='AWS_PROXY',
-            integrationHttpMethod='POST',
-            uri=f"arn:aws-us-gov:apigateway:us-gov-west-1:lambda:path/2015-03-31/functions/{lambda_arn}/invocations"
-        )
+                # Create methods
+                for method in methods:
+                    apigateway_client.put_method(
+                        restApiId=api_id,
+                        resourceId=resource_id,
+                        httpMethod=method,
+                        authorizationType='NONE'
+                    )
+                    
+                    # Set up integration
+                    lambda_arn = f"arn:aws-us-gov:lambda:us-gov-west-1:{role_arn.split(':')[4]}:function:{function_name}"
+                    
+                    apigateway_client.put_integration(
+                        restApiId=api_id,
+                        resourceId=resource_id,
+                        httpMethod=method,
+                        type='AWS_PROXY',
+                        integrationHttpMethod='POST',
+                        uri=f"arn:aws-us-gov:apigateway:us-gov-west-1:lambda:path/2015-03-31/functions/{lambda_arn}/invocations"
+                    )
+            
+            # Add GET method to root for web UI
+            apigateway_client.put_method(
+                restApiId=api_id,
+                resourceId=root_id,
+                httpMethod='GET',
+                authorizationType='NONE'
+            )
+            
+            lambda_arn = f"arn:aws-us-gov:lambda:us-gov-west-1:{role_arn.split(':')[4]}:function:{function_name}"
+            
+            apigateway_client.put_integration(
+                restApiId=api_id,
+                resourceId=root_id,
+                httpMethod='GET',
+                type='AWS_PROXY',
+                integrationHttpMethod='POST',
+                uri=f"arn:aws-us-gov:apigateway:us-gov-west-1:lambda:path/2015-03-31/functions/{lambda_arn}/invocations"
+            )
         
         # Deploy API
         apigateway_client.create_deployment(
@@ -179,7 +188,7 @@ def deploy_bulk_email_api():
         apigateway_client.update_stage(
             restApiId=api_id,
             stageName='prod',
-            patchOps=[
+            patchOperations=[
                 {
                     'op': 'replace',
                     'path': '/accessLogSettings/destinationArn',
@@ -203,14 +212,17 @@ def deploy_bulk_email_api():
             ]
         )
         
-        # Add Lambda permissions
-        lambda_client.add_permission(
-            FunctionName=function_name,
-            StatementId='api-gateway-invoke',
-            Action='lambda:InvokeFunction',
-            Principal='apigateway.amazonaws.com',
-            SourceArn=f"arn:aws-us-gov:execute-api:us-gov-west-1:{role_arn.split(':')[4]}:{api_id}/*/*"
-        )
+        # Add Lambda permissions (skip if already exists)
+        try:
+            lambda_client.add_permission(
+                FunctionName=function_name,
+                StatementId='api-gateway-invoke',
+                Action='lambda:InvokeFunction',
+                Principal='apigateway.amazonaws.com',
+                SourceArn=f"arn:aws-us-gov:execute-api:us-gov-west-1:{role_arn.split(':')[4]}:{api_id}/*/*"
+            )
+        except lambda_client.exceptions.ResourceConflictException:
+            print("Lambda permission already exists")
         
         api_url = f"https://{api_id}.execute-api.us-gov-west-1.amazonaws.com/prod"
         
