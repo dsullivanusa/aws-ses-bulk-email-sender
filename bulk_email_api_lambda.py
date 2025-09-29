@@ -72,31 +72,45 @@ def serve_web_ui(event):
     html_content = f"""<!DOCTYPE html>
 <html>
 <head>
-    <title>Bulk Email Sender</title>
+    <title>JCDC Bulk Email Sender</title>
     <style>
-        body {{ font-family: Arial, sans-serif; margin: 20px; background: #f5f5f5; }}
-        .container {{ max-width: 1000px; margin: 0 auto; background: white; padding: 30px; border-radius: 8px; }}
-        .tabs {{ display: flex; margin-bottom: 20px; }}
-        .tab {{ padding: 10px 20px; background: #ddd; cursor: pointer; margin-right: 5px; }}
-        .tab.active {{ background: #007cba; color: white; }}
+        body {{ font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; }}
+        .container {{ max-width: 1200px; margin: 20px auto; background: white; padding: 40px; border-radius: 15px; box-shadow: 0 20px 40px rgba(0,0,0,0.1); }}
+        .header {{ text-align: center; margin-bottom: 30px; }}
+        .header h1 {{ color: #2c3e50; margin: 0; font-size: 2.5em; font-weight: 300; }}
+        .header .subtitle {{ color: #7f8c8d; font-size: 1.1em; margin-top: 10px; }}
+        .tabs {{ display: flex; margin-bottom: 30px; background: #ecf0f1; border-radius: 10px; padding: 5px; }}
+        .tab {{ flex: 1; padding: 15px 20px; background: transparent; cursor: pointer; text-align: center; border-radius: 8px; transition: all 0.3s; font-weight: 500; }}
+        .tab:hover {{ background: rgba(52, 152, 219, 0.1); }}
+        .tab.active {{ background: linear-gradient(135deg, #3498db, #2980b9); color: white; box-shadow: 0 4px 15px rgba(52, 152, 219, 0.3); }}
         .tab-content {{ display: none; }}
         .tab-content.active {{ display: block; }}
-        .form-group {{ margin: 15px 0; }}
-        label {{ display: block; margin-bottom: 5px; font-weight: bold; }}
-        input, textarea, select {{ width: 100%; padding: 8px; margin-bottom: 10px; border: 1px solid #ddd; }}
-        button {{ padding: 10px 20px; background: #007cba; color: white; border: none; cursor: pointer; margin: 5px; }}
-        .btn-success {{ background: #28a745; }}
-        .btn-danger {{ background: #dc3545; }}
-        table {{ width: 100%; border-collapse: collapse; margin: 20px 0; }}
-        th, td {{ padding: 10px; text-align: left; border-bottom: 1px solid #ddd; }}
-        th {{ background: #f8f9fa; }}
-        .result {{ margin: 20px 0; padding: 15px; background: #f0f0f0; border-radius: 4px; }}
+        .form-group {{ margin: 20px 0; }}
+        label {{ display: block; margin-bottom: 8px; font-weight: 600; color: #2c3e50; }}
+        input, textarea, select {{ width: 100%; padding: 12px; margin-bottom: 15px; border: 2px solid #ecf0f1; border-radius: 8px; font-size: 14px; transition: border-color 0.3s; }}
+        input:focus, textarea:focus, select:focus {{ outline: none; border-color: #3498db; box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.1); }}
+        button {{ padding: 12px 25px; background: linear-gradient(135deg, #3498db, #2980b9); color: white; border: none; border-radius: 8px; cursor: pointer; margin: 8px 5px; font-weight: 500; transition: all 0.3s; }}
+        button:hover {{ transform: translateY(-2px); box-shadow: 0 5px 15px rgba(52, 152, 219, 0.4); }}
+        .btn-success {{ background: linear-gradient(135deg, #27ae60, #229954); }}
+        .btn-success:hover {{ box-shadow: 0 5px 15px rgba(39, 174, 96, 0.4); }}
+        .btn-danger {{ background: linear-gradient(135deg, #e74c3c, #c0392b); }}
+        .btn-danger:hover {{ box-shadow: 0 5px 15px rgba(231, 76, 60, 0.4); }}
+        table {{ width: 100%; border-collapse: collapse; margin: 25px 0; border-radius: 10px; overflow: hidden; box-shadow: 0 5px 15px rgba(0,0,0,0.1); }}
+        th, td {{ padding: 15px; text-align: left; }}
+        th {{ background: linear-gradient(135deg, #34495e, #2c3e50); color: white; font-weight: 600; }}
+        td {{ border-bottom: 1px solid #ecf0f1; }}
+        tr:hover {{ background: #f8f9fa; }}
+        .result {{ margin: 25px 0; padding: 20px; background: linear-gradient(135deg, #f8f9fa, #e9ecef); border-radius: 10px; border-left: 5px solid #3498db; }}
         .hidden {{ display: none; }}
+        .card {{ background: white; border-radius: 10px; padding: 25px; margin: 20px 0; box-shadow: 0 5px 15px rgba(0,0,0,0.08); }}
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>📧 Bulk Email Sender</h1>
+        <div class="header">
+            <h1>📧 JCDC Bulk Email Sender</h1>
+            <div class="subtitle">Professional Email Campaign Management System</div>
+        </div>
         
         <div class="tabs">
             <div class="tab active" onclick="showTab('config')">Email Config</div>
@@ -384,8 +398,35 @@ def serve_web_ui(event):
             resultDiv.classList.remove('hidden');
         }}
         
+        async function loadConfig() {{
+            try {{
+                const response = await fetch(`${{API_URL}}/config`);
+                if (response.ok) {{
+                    const result = await response.json();
+                    const config = result.config;
+                    
+                    document.getElementById('emailService').value = config.email_service || 'ses';
+                    document.getElementById('fromEmail').value = config.from_email || '';
+                    document.getElementById('emailsPerMinute').value = config.emails_per_minute || 60;
+                    
+                    if (config.email_service === 'ses') {{
+                        document.getElementById('awsRegion').value = config.aws_region || 'us-gov-west-1';
+                        document.getElementById('awsAccessKey').value = config.aws_access_key || '';
+                    }} else {{
+                        document.getElementById('smtpServer').value = config.smtp_server || '192.168.1.100';
+                        document.getElementById('smtpPort').value = config.smtp_port || 25;
+                    }}
+                    
+                    toggleEmailService();
+                }}
+            }} catch (e) {{
+                console.log('No existing config found');
+            }}
+        }}
+        
         window.onload = () => {{
             loadContacts();
+            loadConfig();
         }};
     </script>
 </body>

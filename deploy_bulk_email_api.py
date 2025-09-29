@@ -175,6 +175,34 @@ def deploy_bulk_email_api():
             stageName='prod'
         )
         
+        # Enable logging
+        apigateway_client.update_stage(
+            restApiId=api_id,
+            stageName='prod',
+            patchOps=[
+                {
+                    'op': 'replace',
+                    'path': '/accessLogSettings/destinationArn',
+                    'value': f'arn:aws-us-gov:logs:us-gov-west-1:{role_arn.split(":")[4]}:log-group:API-Gateway-Execution-Logs_{api_id}/prod'
+                },
+                {
+                    'op': 'replace',
+                    'path': '/accessLogSettings/format',
+                    'value': '{"requestId":"$requestId","ip":"$ip","caller":"$caller","user":"$user","requestTime":"$requestTime","httpMethod":"$httpMethod","resourcePath":"$resourcePath","protocol":"$protocol","status":"$status","error":"$error.message","responseLength":"$responseLength","requestLength":"$requestLength","integrationError":"$integrationError","integrationStatus":"$integrationStatus","integrationLatency":"$integrationLatency","responseLatency":"$responseLatency","userAgent":"$context.identity.userAgent","sourceIp":"$context.identity.sourceIp","requestHeaders":"$input.params().header","queryString":"$input.params().querystring","pathParameters":"$input.params().path","stage":"$context.stage","apiId":"$context.apiId"}'
+                },
+                {
+                    'op': 'replace',
+                    'path': '/*/*/logging/loglevel',
+                    'value': 'INFO'
+                },
+                {
+                    'op': 'replace',
+                    'path': '/*/*/logging/dataTrace',
+                    'value': 'true'
+                }
+            ]
+        )
+        
         # Add Lambda permissions
         lambda_client.add_permission(
             FunctionName=function_name,
