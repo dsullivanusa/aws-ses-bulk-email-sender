@@ -14,7 +14,7 @@ def update_lambda_functions():
         print(f"- {name}")
     
     # Update web UI Lambda
-    web_ui_functions = [name for name in function_names if 'web' in name.lower() or 'ui' in name.lower()]
+    web_ui_functions = [name for name in function_names if 'vpc-smtp-web-ui' in name]
     if web_ui_functions:
         with zipfile.ZipFile('web_ui_lambda.zip', 'w') as zip_file:
             zip_file.write('web_ui_lambda.py')
@@ -28,7 +28,7 @@ def update_lambda_functions():
         os.remove('web_ui_lambda.zip')
     
     # Update VPC SMTP Lambda
-    smtp_functions = [name for name in function_names if 'smtp' in name.lower() or 'vpc' in name.lower()]
+    smtp_functions = [name for name in function_names if 'vpc-smtp-email' in name]
     if smtp_functions:
         with zipfile.ZipFile('vpc_smtp_lambda.zip', 'w') as zip_file:
             zip_file.write('vpc_smtp_lambda_function.py')
