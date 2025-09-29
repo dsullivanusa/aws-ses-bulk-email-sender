@@ -1,4 +1,5 @@
 import boto3
+import time
 
 def create_smtp_config_table():
     dynamodb = boto3.client('dynamodb', region_name='us-gov-west-1')
@@ -15,6 +16,11 @@ def create_smtp_config_table():
             BillingMode='PAY_PER_REQUEST'
         )
         print("SMTPConfig table created successfully!")
+        
+        # Wait for table to be active
+        print("Waiting for table to be active...")
+        waiter = dynamodb.get_waiter('table_exists')
+        waiter.wait(TableName='SMTPConfig')
         
         # Add default config
         dynamodb.put_item(
