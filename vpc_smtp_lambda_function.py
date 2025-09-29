@@ -15,6 +15,7 @@ from decimal import Decimal
 dynamodb = boto3.resource('dynamodb', region_name='us-gov-west-1')
 contacts_table = dynamodb.Table('EmailContacts')
 campaigns_table = dynamodb.Table('EmailCampaigns')
+smtp_config_table = dynamodb.Table('SMTPConfig')
 
 def lambda_handler(event, context):
     """VPC API Gateway Lambda handler for SMTP email operations"""
@@ -46,6 +47,14 @@ def lambda_handler(event, context):
             return get_contacts(headers)
         elif path == '/contacts' and method == 'POST':
             return add_contact(body, headers)
+        elif path == '/contacts' and method == 'PUT':
+            return update_contact(body, headers)
+        elif path == '/contacts' and method == 'DELETE':
+            return delete_contact(event, headers)
+        elif path == '/smtp-config' and method == 'GET':
+            return get_smtp_config(headers)
+        elif path == '/smtp-config' and method == 'POST':
+            return save_smtp_config(body, headers)
         else:
             return {'statusCode': 404, 'headers': headers, 'body': json.dumps({'error': 'Not found'})}
             
@@ -247,7 +256,7 @@ def get_contacts(headers):
 
 def add_contact(body, headers):
     """Add new contact to DynamoDB"""
-    contact = body['contact']
+    contact = body.get('contact', body)
     
     contacts_table.put_item(
         Item={
@@ -261,7 +270,45 @@ def add_contact(body, headers):
         }
     )
     
-    return {'statusCode': 200, 'headers': headers, 'body': json.dumps({'message': 'Contact added successfully'})}
+    return {'statusCode': 200, 'headers': headers, 'body': json.dumps({'success': True})}
+
+def update_contact(body, headers):
+    """Update existing contact in DynamoDB"""
+    try:
+        email = body['email']
+        update_expr = "SET "
+        expr_values = {}
+        
+        if 'first_name' in body:
+            update_expr += "first_name = :fn, "
+            expr_values[':fn'] = body['first_name']
+        if 'last_name' in body:
+            update_expr += "last_name = :ln, "
+            expr_values[':ln'] = body['last_name']
+        if 'company' in body:
+            update_expr += "company = :co, "
+            expr_values[':co'] = body['company']
+        
+        update_expr = update_expr.rstrip(', ')
+        
+        contacts_table.update_item(
+            Key={'email': email},
+            UpdateExpression=update_expr,
+            ExpressionAttributeValues=expr_values
+        )
+        
+        return {'statusCode': 200, 'headers': headers, 'body': json.dumps({'success': True})}
+    except Exception as e:
+        return {'statusCode': 500, 'headers': headers, 'body': json.dumps({'error': str(e)})}
+
+def delete_contact(event, headers):
+    """Delete contact from DynamoDB"""
+    try:
+        email = event['queryStringParameters']['email']
+        contacts_table.delete_item(Key={'email': email})
+        return {'statusCode': 200, 'headers': headers, 'body': json.dumps({'success': True})}
+    except Exception as e:
+        return {'statusCode': 500, 'headers': headers, 'body': json.dumps({'error': str(e)})
 
 def update_contact_email_sent(email, campaign_name):
     """Update contact with last email sent timestamp"""
@@ -274,6 +321,35 @@ def update_contact_email_sent(email, campaign_name):
             ':inc': 1
         }
     )
+
+def get_smtp_config(headers):
+    """Get SMTP configuration from DynamoDB"""
+    try:
+        response = smtp_config_table.get_item(Key={'config_id': 'default'})
+        
+        if 'Item' in response:
+            config = response['Item']
+            return {'statusCode': 200, 'headers': headers, 'body': json.dumps({'config': config})}
+        else:
+            return {'statusCode': 404, 'headers': headers, 'body': json.dumps({'error': 'Config not found'})}
+    except Exception as e:
+        return {'statusCode': 500, 'headers': headers, 'body': json.dumps({'error': str(e)})}
+
+def save_smtp_config(body, headers):
+    """Save SMTP configuration to DynamoDB"""
+    try:
+        smtp_config_table.put_item(
+            Item={
+                'config_id': 'default',
+                'smtp_server': body.get('smtp_server', '192.168.1.100'),
+                'smtp_port': body.get('smtp_port', 25),
+                'from_email': body.get('from_email', ''),
+                'updated_at': datetime.now().isoformat()
+            }
+        )
+        return {'statusCode': 200, 'headers': headers, 'body': json.dumps({'success': True})}
+    except Exception as e:
+        return {'statusCode': 500, 'headers': headers, 'body': json.dumps({'error': str(e)})}
 
 def personalize_content(content, contact):
     """Replace placeholders with contact data"""
