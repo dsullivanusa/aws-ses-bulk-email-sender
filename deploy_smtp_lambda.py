@@ -92,31 +92,11 @@ def deploy_smtp_lambda():
             )
             print(f"Updated Lambda function: {function_name}")
     
-    # Create Function URL for Load Balancer
-    try:
-        response = lambda_client.create_function_url_config(
-            FunctionName=function_name,
-            AuthType='NONE',
-            Cors={
-                'AllowCredentials': False,
-                'AllowHeaders': ['*'],
-                'AllowMethods': ['*'],
-                'AllowOrigins': ['*'],
-                'MaxAge': 86400
-            }
-        )
-        function_url = response['FunctionUrl']
-        print(f"Function URL created: {function_url}")
-        
-    except lambda_client.exceptions.ResourceConflictException:
-        response = lambda_client.get_function_url_config(FunctionName=function_name)
-        function_url = response['FunctionUrl']
-        print(f"Function URL exists: {function_url}")
-    
-    print(f"\\nDeployment complete!")
+    print(f"\nDeployment complete!")
     print(f"Function Name: {function_name}")
-    print(f"Function URL: {function_url}")
-    print(f"Use this URL with your Load Balancer")
+    print(f"Lambda ARN: {role_arn.replace('role', 'function').replace(role_name, function_name)}")
+    print(f"Create API Gateway manually and point to this Lambda function")
+    print(f"Use API Gateway URL with your Load Balancer")
 
 if __name__ == "__main__":
     deploy_smtp_lambda()

@@ -28,6 +28,10 @@ def lambda_handler(event, context):
         else:
             body = event.get('body', {})
         
+        # Check if this is a web UI request (GET with no body)
+        if event.get('httpMethod') == 'GET' and not body:
+            return serve_web_ui()
+        
         action = body.get('action')
         
         if action == 'send_campaign':
@@ -285,6 +289,115 @@ def get_smtp_config():
             'statusCode': 500,
             'body': json.dumps({'error': str(e)})
         }
+
+def serve_web_ui():
+    """Serve simple web UI for SMTP bulk email"""
+    html_content = """
+<!DOCTYPE html>
+<html>
+<head>
+    <title>SMTP Bulk Email Sender</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 40px; }
+        .form-group { margin: 15px 0; }
+        label { display: block; margin-bottom: 5px; font-weight: bold; }
+        input, textarea { width: 100%; padding: 8px; margin-bottom: 10px; }
+        button { padding: 10px 20px; background: #007cba; color: white; border: none; cursor: pointer; }
+        .result { margin: 20px 0; padding: 10px; background: #f0f0f0; }
+    </style>
+</head>
+<body>
+    <h1>SMTP Bulk Email Sender</h1>
+    
+    <h2>SMTP Configuration</h2>
+    <div class="form-group">
+        <label>SMTP Server:</label>
+        <input type="text" id="smtpServer" value="192.168.1.100">
+    </div>
+    <div class="form-group">
+        <label>SMTP Port:</label>
+        <input type="number" id="smtpPort" value="25">
+    </div>
+    <div class="form-group">
+        <label>From Email:</label>
+        <input type="email" id="fromEmail" placeholder="sender@domain.com">
+    </div>
+    <button onclick="saveSMTPConfig()">Save SMTP Config</button>
+    
+    <h2>Send Campaign</h2>
+    <div class="form-group">
+        <label>Campaign Name:</label>
+        <input type="text" id="campaignName" placeholder="My Campaign">
+    </div>
+    <div class="form-group">
+        <label>Subject:</label>
+        <input type="text" id="subject" placeholder="Hello {{first_name}}">
+    </div>
+    <div class="form-group">
+        <label>Email Body:</label>
+        <textarea id="body" rows="5" placeholder="Dear {{first_name}}, ..."></textarea>
+    </div>
+    <div class="form-group">
+        <label>Emails per minute:</label>
+        <input type="number" id="emailsPerMinute" value="60">
+    </div>
+    <button onclick="sendCampaign()">Send Campaign</button>
+    
+    <div id="result" class="result" style="display:none;"></div>
+    
+    <script>
+        async function saveSMTPConfig() {
+            const config = {
+                action: 'save_smtp_config',
+                smtp_server: document.getElementById('smtpServer').value,
+                smtp_port: parseInt(document.getElementById('smtpPort').value),
+                from_email: document.getElementById('fromEmail').value
+            };
+            
+            const response = await fetch(window.location.href, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(config)
+            });
+            
+            const result = await response.json();
+            showResult('SMTP Config: ' + JSON.stringify(result));
+        }
+        
+        async function sendCampaign() {
+            const campaign = {
+                action: 'send_campaign',
+                campaign_name: document.getElementById('campaignName').value,
+                subject: document.getElementById('subject').value,
+                body: document.getElementById('body').value,
+                emails_per_minute: parseInt(document.getElementById('emailsPerMinute').value)
+            };
+            
+            const response = await fetch(window.location.href, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(campaign)
+            });
+            
+            const result = await response.json();
+            showResult('Campaign: ' + JSON.stringify(result));
+        }
+        
+        function showResult(message) {
+            const resultDiv = document.getElementById('result');
+            resultDiv.textContent = message;
+            resultDiv.style.display = 'block';
+        }
+    </script>
+</body>
+</html>
+    """
+    
+    return {
+        'statusCode': 200,
+        'headers': {'Content-Type': 'text/html'},
+        'body': html_content
+    }
 
 def personalize_content(content, contact):
     """Replace placeholders with contact data"""
