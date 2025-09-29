@@ -57,7 +57,7 @@ def lambda_handler(event, context):
 
         <div class="tabs">
             <button class="tab active" onclick="showTab('contacts')">Contacts</button>
-            <button class="tab" onclick="showTab('smtp-config')">SMTP Config</button>
+            <button class="tab" onclick="showTab('smtp-config')">SES Config</button>
             <button class="tab" onclick="showTab('template')">Email Template</button>
             <button class="tab" onclick="showTab('campaign')">Send Campaign</button>
         </div>
@@ -106,46 +106,24 @@ def lambda_handler(event, context):
         </div>
 
         <div id="smtp-config" class="tab-content">
-            <h2>Email Configuration</h2>
+            <h2>AWS SES Configuration</h2>
             <div class="form-group">
-                <label>Email Service:</label>
-                <select id="emailService" onchange="toggleEmailConfig()">
-                    <option value="smtp">SMTP Relay</option>
-                    <option value="ses">AWS SES</option>
-                </select>
+                <label>AWS Region:</label>
+                <input type="text" id="awsRegion" value="us-gov-west-1" placeholder="us-gov-west-1">
             </div>
-            
-            <div id="smtpConfig">
-                <div class="form-group">
-                    <label>SMTP Relay IP Address:</label>
-                    <input type="text" id="smtpServer" value="192.168.1.100" placeholder="192.168.1.100">
-                </div>
-                <div class="form-group">
-                    <label>SMTP Port:</label>
-                    <input type="number" id="smtpPort" value="25" placeholder="25">
-                </div>
-            </div>
-            
-            <div id="sesConfig" class="hidden">
-                <div class="form-group">
-                    <label>AWS Region:</label>
-                    <input type="text" id="awsRegion" value="us-gov-west-1" placeholder="us-gov-west-1">
-                </div>
-                <div class="form-group">
-                    <label>AWS Access Key ID:</label>
-                    <input type="text" id="awsAccessKey" placeholder="Your AWS Access Key">
-                </div>
-                <div class="form-group">
-                    <label>AWS Secret Access Key:</label>
-                    <input type="password" id="awsSecretKey" placeholder="Your AWS Secret Key">
-                </div>
-            </div>
-            
             <div class="form-group">
-                <label>From Email:</label>
+                <label>AWS Access Key ID:</label>
+                <input type="text" id="awsAccessKey" placeholder="Your AWS Access Key">
+            </div>
+            <div class="form-group">
+                <label>AWS Secret Access Key:</label>
+                <input type="password" id="awsSecretKey" placeholder="Your AWS Secret Key">
+            </div>
+            <div class="form-group">
+                <label>From Email (must be verified in SES):</label>
                 <input type="email" id="fromEmail" placeholder="sender@domain.com">
             </div>
-            <button class="btn" onclick="saveSMTPConfig()">Save Configuration</button>
+            <button class="btn" onclick="saveSESConfig()">Save SES Configuration</button>
         </div>
 
         <div id="template" class="tab-content">
@@ -258,59 +236,31 @@ def lambda_handler(event, context):
             }}
         }}
 
-        function toggleEmailConfig() {{
-            const service = document.getElementById('emailService').value;
-            const smtpConfig = document.getElementById('smtpConfig');
-            const sesConfig = document.getElementById('sesConfig');
-            
-            if (service === 'ses') {{
-                smtpConfig.classList.add('hidden');
-                sesConfig.classList.remove('hidden');
-            }} else {{
-                smtpConfig.classList.remove('hidden');
-                sesConfig.classList.add('hidden');
-            }}
-        }}
-
-        async function saveSMTPConfig() {{
-            const service = document.getElementById('emailService').value;
+        async function saveSESConfig() {{
             const config = {{
-                email_service: service,
+                email_service: 'ses',
+                aws_region: document.getElementById('awsRegion').value,
+                aws_access_key: document.getElementById('awsAccessKey').value,
+                aws_secret_key: document.getElementById('awsSecretKey').value,
                 from_email: document.getElementById('fromEmail').value
             }};
             
-            if (service === 'smtp') {{
-                config.smtp_server = document.getElementById('smtpServer').value;
-                config.smtp_port = document.getElementById('smtpPort').value;
-            }} else if (service === 'ses') {{
-                config.aws_region = document.getElementById('awsRegion').value;
-                config.aws_access_key = document.getElementById('awsAccessKey').value;
-                config.aws_secret_key = document.getElementById('awsSecretKey').value;
-            }}
-            
-            const result = await apiCall('/smtp-config', 'POST', config);
-            if (result) {{
-                showAlert('Email configuration saved to database', 'success');
+            const result = await apiCall('/ses-config', 'POST', config);
+            if (result && result.success) {{
+                showAlert('SES configuration saved successfully', 'success');
+            }} else {{
+                showAlert('Failed to save SES configuration', 'error');
             }}
         }}
         
-        async function loadSMTPConfig() {{
-            const result = await apiCall('/smtp-config');
+        async function loadSESConfig() {{
+            const result = await apiCall('/ses-config');
             if (result && result.config) {{
                 const config = result.config;
-                document.getElementById('emailService').value = config.email_service || 'smtp';
+                document.getElementById('awsRegion').value = config.aws_region || 'us-gov-west-1';
+                document.getElementById('awsAccessKey').value = config.aws_access_key || '';
+                document.getElementById('awsSecretKey').value = config.aws_secret_key || '';
                 document.getElementById('fromEmail').value = config.from_email || '';
-                
-                if (config.email_service === 'ses') {{
-                    document.getElementById('awsRegion').value = config.aws_region || 'us-gov-west-1';
-                    document.getElementById('awsAccessKey').value = config.aws_access_key || '';
-                    document.getElementById('awsSecretKey').value = config.aws_secret_key || '';
-                }} else {{
-                    document.getElementById('smtpServer').value = config.smtp_server || '192.168.1.100';
-                    document.getElementById('smtpPort').value = config.smtp_port || '25';
-                }}
-                
-                toggleEmailConfig();
             }}
         }}
 
@@ -442,8 +392,8 @@ def lambda_handler(event, context):
 
         window.onload = () => {{
             loadContacts();
-            loadSMTPConfig();
-            showAlert('Connected to VPC SMTP API', 'success');
+            loadSESConfig();
+            showAlert('Connected to AWS SES API', 'success');
         }};
     </script>
 </body>

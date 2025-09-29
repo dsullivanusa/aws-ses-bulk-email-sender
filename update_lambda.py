@@ -17,7 +17,7 @@ def update_lambda_functions():
     web_ui_functions = [name for name in function_names if 'vpc-smtp-web-ui' in name]
     if web_ui_functions:
         with zipfile.ZipFile('web_ui_lambda.zip', 'w') as zip_file:
-            zip_file.write('web_ui_lambda.py')
+            zip_file.write('web_ui_lambda.py', 'lambda_function.py')
         
         with open('web_ui_lambda.zip', 'rb') as zip_file:
             lambda_client.update_function_code(
@@ -41,7 +41,7 @@ def update_lambda_functions():
     
     if smtp_functions:
         with zipfile.ZipFile('vpc_smtp_lambda.zip', 'w') as zip_file:
-            zip_file.write('vpc_smtp_lambda_function.py')
+            zip_file.write('vpc_smtp_lambda_function.py', 'lambda_function.py')
         
         with open('vpc_smtp_lambda.zip', 'rb') as zip_file:
             lambda_client.update_function_code(

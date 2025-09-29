@@ -51,10 +51,10 @@ def lambda_handler(event, context):
             return update_contact(body, headers)
         elif path == '/contacts' and method == 'DELETE':
             return delete_contact(event, headers)
-        elif path == '/smtp-config' and method == 'GET':
-            return get_smtp_config(headers)
-        elif path == '/smtp-config' and method == 'POST':
-            return save_smtp_config(body, headers)
+        elif path == '/ses-config' and method == 'GET':
+            return get_ses_config(headers)
+        elif path == '/ses-config' and method == 'POST':
+            return save_ses_config(body, headers)
         else:
             return {'statusCode': 404, 'headers': headers, 'body': json.dumps({'error': 'Not found'})}
             
@@ -128,12 +128,12 @@ def send_smtp_campaign(body, headers):
     # Send emails via SMTP
     for contact in contacts:
         try:
-            # Get email config from DynamoDB
+            # Get SES config from DynamoDB
             config_response = smtp_config_table.get_item(Key={'config_id': 'default'})
-            email_config = config_response.get('Item', {}) if 'Item' in config_response else {}
+            ses_config = config_response.get('Item', {}) if 'Item' in config_response else {}
             
-            success = send_email(
-                email_config,
+            success = send_ses_email(
+                ses_config,
                 body['from_email'],
                 contact['email'],
                 personalize_content(body['subject'], contact),
@@ -381,8 +381,8 @@ def update_contact_email_sent(email, campaign_name):
         }
     )
 
-def get_smtp_config(headers):
-    """Get SMTP configuration from DynamoDB"""
+def get_ses_config(headers):
+    """Get SES configuration from DynamoDB"""
     try:
         response = smtp_config_table.get_item(Key={'config_id': 'default'})
         
@@ -394,27 +394,18 @@ def get_smtp_config(headers):
     except Exception as e:
         return {'statusCode': 500, 'headers': headers, 'body': json.dumps({'error': str(e)})}
 
-def save_smtp_config(body, headers):
-    """Save email configuration to DynamoDB"""
+def save_ses_config(body, headers):
+    """Save SES configuration to DynamoDB"""
     try:
         config_item = {
             'config_id': 'default',
-            'email_service': body.get('email_service', 'smtp'),
+            'email_service': 'ses',
+            'aws_region': body.get('aws_region', 'us-gov-west-1'),
+            'aws_access_key': body.get('aws_access_key', ''),
+            'aws_secret_key': body.get('aws_secret_key', ''),
             'from_email': body.get('from_email', ''),
             'updated_at': datetime.now().isoformat()
         }
-        
-        if body.get('email_service') == 'ses':
-            config_item.update({
-                'aws_region': body.get('aws_region', 'us-gov-west-1'),
-                'aws_access_key': body.get('aws_access_key', ''),
-                'aws_secret_key': body.get('aws_secret_key', '')
-            })
-        else:
-            config_item.update({
-                'smtp_server': body.get('smtp_server', '192.168.1.100'),
-                'smtp_port': body.get('smtp_port', 25)
-            })
         
         smtp_config_table.put_item(Item=config_item)
         return {'statusCode': 200, 'headers': headers, 'body': json.dumps({'success': True})}
