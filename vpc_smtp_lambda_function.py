@@ -308,7 +308,7 @@ def delete_contact(event, headers):
         contacts_table.delete_item(Key={'email': email})
         return {'statusCode': 200, 'headers': headers, 'body': json.dumps({'success': True})}
     except Exception as e:
-        return {'statusCode': 500, 'headers': headers, 'body': json.dumps({'error': str(e)})
+        return {'statusCode': 500, 'headers': headers, 'body': json.dumps({'error': str(e)})}
 
 def update_contact_email_sent(email, campaign_name):
     """Update contact with last email sent timestamp"""
