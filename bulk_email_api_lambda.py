@@ -75,6 +75,11 @@ def serve_web_ui(event):
 <html>
 <head>
     <title>CISA Email Campaign Management System</title>
+    
+    <!-- Quill.js Rich Text Editor -->
+    <link href="https://cdn.quilljs.com/1.3.6/quill.snow.css" rel="stylesheet">
+    <script src="https://cdn.quilljs.com/1.3.6/quill.min.js"></script>
+    
     <style>
         /* Modern CSS Variables for Consistent Theming */
         :root {{
@@ -382,6 +387,31 @@ def serve_web_ui(event):
             font-size: 0.9em;
             font-weight: bold;
         }}
+        
+        /* Quill Editor Styling */
+        .ql-editor {{
+            min-height: 200px;
+            font-size: 16px;
+            line-height: 1.6;
+        }}
+        .ql-toolbar {{
+            border-top: 1px solid #e5e7eb;
+            border-left: 1px solid #e5e7eb;
+            border-right: 1px solid #e5e7eb;
+            border-radius: 8px 8px 0 0;
+            background: #f9fafb;
+        }}
+        .ql-container {{
+            border-bottom: 1px solid #e5e7eb;
+            border-left: 1px solid #e5e7eb;
+            border-right: 1px solid #e5e7eb;
+            border-radius: 0 0 8px 8px;
+            background: white;
+        }}
+        .ql-editor.ql-blank::before {{
+            color: #9ca3af;
+            font-style: normal;
+        }}
         .card {{ 
             background: white; 
             border-radius: var(--border-radius); 
@@ -657,10 +687,13 @@ def serve_web_ui(event):
             </div>
             <div class="form-group">
                 <label>Email Body:</label>
-                <textarea id="body" rows="8" placeholder="Dear {{{{first_name}}}} {{{{last_name}}}},\\n\\nYour message here..."></textarea>
+                <div id="emailBodyEditor"></div>
                 <small>Available placeholders: {{{{first_name}}}}, {{{{last_name}}}}, {{{{email}}}}, {{{{title}}}}, {{{{entity_type}}}}, {{{{state}}}}, {{{{agency_name}}}}, {{{{sector}}}}, {{{{subsection}}}}, {{{{phone}}}}, {{{{ms_isac_member}}}}, {{{{soc_call}}}}, {{{{fusion_center}}}}, {{{{k12}}}}, {{{{water_wastewater}}}}, {{{{weekly_rollup}}}}, {{{{alternate_email}}}}, {{{{region}}}}, {{{{group}}}}</small>
             </div>
+            <div style="display: flex; gap: 15px; margin-top: 20px;">
             <button class="btn-success" onclick="sendCampaign()">Send Campaign</button>
+                <button onclick="clearCampaignForm()">Clear Form</button>
+            </div>
             
             <div id="campaignResult" class="result hidden"></div>
         </div>
@@ -749,6 +782,48 @@ def serve_web_ui(event):
         }}
         
         let allContacts = [];
+        let quillEditor = null;
+        
+        // Initialize Quill Editor
+        document.addEventListener('DOMContentLoaded', function() {{
+            // Initialize Quill editor
+            quillEditor = new Quill('#emailBodyEditor', {{
+                theme: 'snow',
+                placeholder: 'Dear {{{{first_name}}}} {{{{last_name}}}},\\n\\nYour message here...',
+                modules: {{
+                    toolbar: [
+                        [{{ 'header': [1, 2, 3, false] }}],
+                        ['bold', 'italic', 'underline', 'strike'],
+                        [{{ 'color': [] }}, {{ 'background': [] }}],
+                        [{{ 'list': 'ordered'}}, {{ 'list': 'bullet' }}],
+                        [{{ 'indent': '-1'}}, {{ 'indent': '+1' }}],
+                        [{{ 'align': [] }}],
+                        ['link', 'blockquote', 'code-block'],
+                        ['clean']
+                    ]
+                }}
+            });
+            
+            // Set initial content with placeholder example
+            const initialContent = `
+                <p>Dear {{{{first_name}}}} {{{{last_name}}}},</p>
+                <p><br></p>
+                <p>I hope this message finds you well. As the {{{{title}}}} for {{{{agency_name}}}}, we wanted to reach out regarding...</p>
+                <p><br></p>
+                <p>Best regards,<br>CISA Team</p>
+            `;
+            quillEditor.root.innerHTML = initialContent;
+        }});
+        
+        function clearCampaignForm() {{
+            document.getElementById('campaignName').value = '';
+            document.getElementById('subject').value = '';
+            if (quillEditor) {{
+                quillEditor.setContents([]);
+            }}
+            document.getElementById('targetGroup').value = '';
+            loadContactsForCampaign();
+        }};
         
         async function loadContacts() {{
             const button = event?.target || document.querySelector('button[onclick="loadContacts()"]');
@@ -1167,10 +1242,13 @@ def serve_web_ui(event):
                 throw new Error('No contacts found for the selected group. Please add contacts or select a different group.');
             }}
             
+            // Get content from Quill editor
+            const emailBody = quillEditor ? quillEditor.root.innerHTML : '';
+            
             const campaign = {{
                 campaign_name: document.getElementById('campaignName').value,
                 subject: document.getElementById('subject').value,
-                body: document.getElementById('body').value,
+                body: emailBody,
                 target_group: targetGroup || null
             }};
                 
