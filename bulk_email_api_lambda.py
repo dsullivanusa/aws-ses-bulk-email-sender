@@ -443,9 +443,9 @@ def serve_web_ui(event):
                     <input type="text" id="awsRegion" value="us-gov-west-1">
                 </div>
                 <div class="form-group">
-                    <label>AWS Secrets Manager Secret Name:</label>
+                    <label>AWS Secrets Manager Secret Name (Optional):</label>
                     <input type="text" id="awsSecretName" placeholder="email-api-credentials">
-                    <small style="color: #666; font-size: 0.9em;">Secret should contain aws_access_key_id and aws_secret_access_key fields</small>
+                    <small style="color: #666; font-size: 0.9em;">Leave empty to use Lambda's IAM role (recommended). Only provide if using specific credentials.</small>
                 </div>
             </div>
             
@@ -1055,7 +1055,7 @@ def delete_contact(event, headers):
         return {'statusCode': 500, 'headers': headers, 'body': json.dumps({'error': str(e)})}
 
 def send_campaign(body, headers):
-    """Send email campaign by queuing contacts to SQS"""
+    """Send email campaign by saving to DynamoDB and queuing contacts to SQS"""
     try:
         # Get email configuration
         config_response = email_config_table.get_item(Key={'config_id': 'default'})
@@ -1073,11 +1073,20 @@ def send_campaign(body, headers):
         
         campaign_id = f"campaign_{int(datetime.now().timestamp())}"
         
-        # Initialize campaign
+        # Save complete campaign data to DynamoDB
+        print(f"Saving campaign {campaign_id} to DynamoDB")
         campaigns_table.put_item(
             Item={
                 'campaign_id': campaign_id,
                 'campaign_name': body.get('campaign_name', 'Bulk Campaign'),
+                'subject': body.get('subject', ''),
+                'body': body.get('body', ''),
+                'from_email': config.get('from_email', ''),
+                'email_service': config.get('email_service', 'ses'),
+                'aws_region': config.get('aws_region', 'us-gov-west-1'),
+                'aws_secret_name': config.get('aws_secret_name', ''),
+                'smtp_server': config.get('smtp_server', ''),
+                'smtp_port': int(config.get('smtp_port', 25)) if config.get('smtp_port') else 25,
                 'status': 'queued',
                 'total_contacts': len(contacts),
                 'queued_count': 0,
@@ -1086,6 +1095,7 @@ def send_campaign(body, headers):
                 'created_at': datetime.now().isoformat()
             }
         )
+        print(f"Campaign {campaign_id} saved to DynamoDB")
         
         # Get SQS queue URL
         queue_name = 'bulk-email-queue'
@@ -1098,31 +1108,16 @@ def send_campaign(body, headers):
         queued_count = 0
         failed_to_queue = 0
         
-        # Queue all contacts to SQS
+        # Queue contact email addresses to SQS (minimal payload)
         print(f"Queuing {len(contacts)} contacts to SQS for campaign {campaign_id}")
         
         for contact in contacts:
             try:
-                # Prepare message with all campaign details
+                # Minimal message: only campaign_id and contact email
+                # Worker Lambda will retrieve campaign details from DynamoDB
                 message_body = {
                     'campaign_id': campaign_id,
-                    'campaign_name': body.get('campaign_name', 'Bulk Campaign'),
-                    'subject': body['subject'],
-                    'body': body['body'],
-                    'contact': {
-                        'email': contact.get('email'),
-                        'first_name': contact.get('first_name', ''),
-                        'last_name': contact.get('last_name', ''),
-                        'company': contact.get('company', ''),
-                    },
-                    'config': {
-                        'email_service': config.get('email_service'),
-                        'from_email': config.get('from_email'),
-                        'aws_region': config.get('aws_region'),
-                        'aws_secret_name': config.get('aws_secret_name'),
-                        'smtp_server': config.get('smtp_server'),
-                        'smtp_port': config.get('smtp_port'),
-                    }
+                    'contact_email': contact.get('email')
                 }
                 
                 # Send message to SQS
@@ -1134,7 +1129,7 @@ def send_campaign(body, headers):
                             'StringValue': campaign_id,
                             'DataType': 'String'
                         },
-                        'email': {
+                        'contact_email': {
                             'StringValue': contact.get('email', 'unknown'),
                             'DataType': 'String'
                         }

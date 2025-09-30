@@ -16,7 +16,7 @@ def create_email_queue():
         # Check if queue already exists
         try:
             response = sqs_client.get_queue_url(QueueName=queue_name)
-            print(f"✓ Queue '{queue_name}' already exists")
+            print(f"Queue '{queue_name}' already exists")
             print(f"  Queue URL: {response['QueueUrl']}")
             return response['QueueUrl']
         except sqs_client.exceptions.QueueDoesNotExist:
@@ -52,7 +52,7 @@ def create_email_queue():
         )
         
         queue_url = response['QueueUrl']
-        print(f"✓ Queue created successfully!")
+        print(f"Queue created successfully!")
         print(f"  Queue URL: {queue_url}")
         
         # Get queue ARN
@@ -66,7 +66,7 @@ def create_email_queue():
         return queue_url
         
     except Exception as e:
-        print(f"✗ Error creating queue: {e}")
+        print(f"Error creating queue: {e}")
         return None
 
 def create_dead_letter_queue():
@@ -79,7 +79,7 @@ def create_dead_letter_queue():
         # Check if DLQ already exists
         try:
             response = sqs_client.get_queue_url(QueueName=dlq_name)
-            print(f"✓ Dead Letter Queue '{dlq_name}' already exists")
+            print(f"Dead Letter Queue '{dlq_name}' already exists")
             print(f"  DLQ URL: {response['QueueUrl']}")
             return response['QueueUrl']
         except sqs_client.exceptions.QueueDoesNotExist:
@@ -101,13 +101,13 @@ def create_dead_letter_queue():
         )
         
         dlq_url = response['QueueUrl']
-        print(f"✓ Dead Letter Queue created successfully!")
+        print(f"Dead Letter Queue created successfully!")
         print(f"  DLQ URL: {dlq_url}")
         
         return dlq_url
         
     except Exception as e:
-        print(f"✗ Error creating DLQ: {e}")
+        print(f"Error creating DLQ: {e}")
         return None
 
 def configure_dead_letter_queue(queue_url, dlq_url):
@@ -134,11 +134,11 @@ def configure_dead_letter_queue(queue_url, dlq_url):
             }
         )
         
-        print(f"✓ Configured Dead Letter Queue")
+        print(f"Configured Dead Letter Queue")
         print(f"  Messages will move to DLQ after 3 failed processing attempts")
         
     except Exception as e:
-        print(f"✗ Error configuring DLQ: {e}")
+        print(f"Error configuring DLQ: {e}")
 
 def display_queue_info(queue_url):
     """Display queue information and statistics"""
@@ -167,7 +167,7 @@ def display_queue_info(queue_url):
         print(f"{'='*70}\n")
         
     except Exception as e:
-        print(f"✗ Error getting queue info: {e}")
+        print(f"Error getting queue info: {e}")
 
 def main():
     """Main function"""
@@ -190,7 +190,7 @@ def main():
     if queue_url:
         display_queue_info(queue_url)
     
-    print("\n✅ SQS Queue Setup Complete!")
+    print("\nSQS Queue Setup Complete!")
     print("\nNext Steps:")
     print("1. Update Lambda IAM role with SQS permissions")
     print("2. Create a Lambda function to process messages from the queue")
