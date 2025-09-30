@@ -76,9 +76,6 @@ def serve_web_ui(event):
 <head>
     <title>CISA Email Campaign Management System</title>
     
-    <!-- Quill.js Rich Text Editor -->
-    <link href="https://cdn.quilljs.com/1.3.6/quill.snow.css" rel="stylesheet">
-    <script src="https://cdn.quilljs.com/1.3.6/quill.min.js"></script>
     
     <style>
         /* Modern CSS Variables for Consistent Theming */
@@ -488,8 +485,6 @@ def serve_web_ui(event):
         
         <div id="config" class="tab-content active">
             <h2>Email Configuration</h2>
-            <button onclick="alert('JavaScript is working!')" style="background: #28a745; color: white; padding: 10px; border: none; border-radius: 4px; cursor: pointer; margin-bottom: 20px;">Test JavaScript</button>
-            <button onclick="alert('Testing inline tab switch'); document.querySelectorAll('.tab').forEach(t => t.classList.remove('active')); document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active')); document.querySelectorAll('.tab')[1].classList.add('active'); document.getElementById('contacts').classList.add('active'); alert('Inline tab switch complete');" style="background: #007bff; color: white; padding: 10px; border: none; border-radius: 4px; cursor: pointer; margin-bottom: 20px;">Test Inline Tab Switch</button>
             <div class="form-group">
                 <label>Email Service:</label>
                 <select id="emailService" onchange="toggleEmailService()">
@@ -694,7 +689,7 @@ def serve_web_ui(event):
             </div>
             <div class="form-group">
                 <label>Email Body:</label>
-                <div id="emailBodyEditor"></div>
+                <textarea id="body" rows="8" placeholder="Dear {{first_name}} {{last_name}},\\n\\nYour message here..." style="width: 100%; min-height: 200px; padding: 10px; border: 1px solid #ccc; border-radius: 4px;"></textarea>
                 <small>Available placeholders: {{{{first_name}}}}, {{{{last_name}}}}, {{{{email}}}}, {{{{title}}}}, {{{{entity_type}}}}, {{{{state}}}}, {{{{agency_name}}}}, {{{{sector}}}}, {{{{subsection}}}}, {{{{phone}}}}, {{{{ms_isac_member}}}}, {{{{soc_call}}}}, {{{{fusion_center}}}}, {{{{k12}}}}, {{{{water_wastewater}}}}, {{{{weekly_rollup}}}}, {{{{alternate_email}}}}, {{{{region}}}}, {{{{group}}}}</small>
             </div>
             <div style="display: flex; gap: 15px; margin-top: 20px;">
@@ -815,62 +810,14 @@ def serve_web_ui(event):
         }}
         
         let allContacts = [];
-        let quillEditor = null;
         
-        // Initialize Quill Editor
-        document.addEventListener('DOMContentLoaded', function() {{
-            alert('DOM loaded, checking for Quill...');
-            
-            // Check if Quill is available
-            if (typeof Quill === 'undefined') {{
-                alert('Quill not loaded, using fallback textarea');
-                // Create fallback textarea
-                const editorDiv = document.getElementById('emailBodyEditor');
-                editorDiv.innerHTML = '<textarea id="body" rows="8" placeholder="Dear {{{{first_name}}}} {{{{last_name}}}},\\n\\nYour message here..." style="width: 100%; min-height: 200px; padding: 10px; border: 1px solid #ccc; border-radius: 4px;"></textarea>';
-                return;
-            }}
-            
-            try {{
-                // Initialize Quill editor
-                quillEditor = new Quill('#emailBodyEditor', {{
-                theme: 'snow',
-                placeholder: 'Dear {{{{first_name}}}} {{{{last_name}}}},\\n\\nYour message here...',
-                modules: {{
-                    toolbar: [
-                        [{{'header': [1, 2, 3, false]}}],
-                        ['bold', 'italic', 'underline', 'strike'],
-                        [{{'color': []}}, {{'background': []}}],
-                        [{{'list': 'ordered'}}, {{'list': 'bullet'}}],
-                        [{{'indent': '-1'}}, {{'indent': '+1'}}],
-                        [{{'align': []}}],
-                        ['link', 'blockquote', 'code-block'],
-                        ['clean']
-                    ]
-                }}}}
-            }});
-            
-            // Set initial content with placeholder example
-                const initialContent = '<p>Dear {{{{first_name}}}} {{{{last_name}}}},</p><p><br></p><p>I hope this message finds you well. As the {{{{title}}}} for {{{{agency_name}}}}, we wanted to reach out regarding...</p><p><br></p><p>Best regards,<br>CISA Team</p>';
-                quillEditor.root.innerHTML = initialContent;
-                alert('Quill editor initialized successfully');
-            }} catch (error) {{
-                alert('Error initializing Quill editor: ' + error.message);
-            }}
-        }});
         
         function clearCampaignForm() {{
             document.getElementById('campaignName').value = '';
             document.getElementById('subject').value = '';
-            if (quillEditor) {{
-                quillEditor.setContents([]);
-            }} else {{
-                const textarea = document.getElementById('body');
-                if (textarea) {{
-                    textarea.value = '';
-                }}
-            }}
+            document.getElementById('body').value = '';
             document.getElementById('targetGroup').value = '';
-            loadContactsForCampaign();
+            document.getElementById('contactCount').textContent = '0';
         }};
         
         async function loadContacts() {{
@@ -1290,16 +1237,8 @@ def serve_web_ui(event):
                 throw new Error('No contacts found for the selected group. Please add contacts or select a different group.');
             }}
             
-            // Get content from Quill editor or fallback textarea
-            let emailBody = '';
-            if (quillEditor) {{
-                emailBody = quillEditor.root.innerHTML;
-            }} else {{
-                const textarea = document.getElementById('body');
-                if (textarea) {{
-                    emailBody = textarea.value;
-                }}
-            }}
+            // Get content from textarea
+            const emailBody = document.getElementById('body').value;
             
             const campaign = {{
                 campaign_name: document.getElementById('campaignName').value,
