@@ -482,13 +482,14 @@ def serve_web_ui(event):
         
         <div class="tabs">
             <div class="tab active" onclick="showTab('config', this)">Email Config</div>
-            <div class="tab" onclick="alert('Contacts clicked!'); alert('About to call showTab'); alert('testFunction exists: ' + (typeof testFunction === 'function')); testFunction(); showTab('contacts', this); alert('After showTab call')">Contacts</div>
-            <div class="tab" onclick="alert('Campaign clicked!'); alert('About to call showTab'); alert('testFunction exists: ' + (typeof testFunction === 'function')); testFunction(); showTab('campaign', this); alert('After showTab call')">Send Campaign</div>
+            <div class="tab" onclick="alert('Contacts clicked!'); alert('About to call showTab'); alert('testFunction exists: ' + (typeof testFunction === 'function')); testFunction(); alert('After testFunction'); showTab('contacts', this); alert('After showTab call')">Contacts</div>
+            <div class="tab" onclick="alert('Campaign clicked!'); alert('About to call showTab'); alert('testFunction exists: ' + (typeof testFunction === 'function')); testFunction(); alert('After testFunction'); showTab('campaign', this); alert('After showTab call')">Send Campaign</div>
         </div>
         
         <div id="config" class="tab-content active">
             <h2>Email Configuration</h2>
             <button onclick="alert('JavaScript is working!')" style="background: #28a745; color: white; padding: 10px; border: none; border-radius: 4px; cursor: pointer; margin-bottom: 20px;">Test JavaScript</button>
+            <button onclick="alert('Testing inline tab switch'); document.querySelectorAll('.tab').forEach(t => t.classList.remove('active')); document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active')); document.querySelectorAll('.tab')[1].classList.add('active'); document.getElementById('contacts').classList.add('active'); alert('Inline tab switch complete');" style="background: #007bff; color: white; padding: 10px; border: none; border-radius: 4px; cursor: pointer; margin-bottom: 20px;">Test Inline Tab Switch</button>
             <div class="form-group">
                 <label>Email Service:</label>
                 <select id="emailService" onchange="toggleEmailService()">
