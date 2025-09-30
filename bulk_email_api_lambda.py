@@ -792,26 +792,20 @@ def serve_web_ui(event):
                 placeholder: 'Dear {{{{first_name}}}} {{{{last_name}}}},\\n\\nYour message here...',
                 modules: {{
                     toolbar: [
-                        [{{ 'header': [1, 2, 3, false] }}],
+                        [{{'header': [1, 2, 3, false]}}],
                         ['bold', 'italic', 'underline', 'strike'],
-                        [{{ 'color': [] }}, {{ 'background': [] }}],
-                        [{{ 'list': 'ordered'}}, {{ 'list': 'bullet' }}],
-                        [{{ 'indent': '-1'}}, {{ 'indent': '+1' }}],
-                        [{{ 'align': [] }}],
+                        [{{'color': []}}, {{'background': []}}],
+                        [{{'list': 'ordered'}}, {{'list': 'bullet'}}],
+                        [{{'indent': '-1'}}, {{'indent': '+1'}}],
+                        [{{'align': []}}],
                         ['link', 'blockquote', 'code-block'],
                         ['clean']
                     ]
-                }}
-            });
+                }}}}
+            }});
             
             // Set initial content with placeholder example
-            const initialContent = `
-                <p>Dear {{{{first_name}}}} {{{{last_name}}}},</p>
-                <p><br></p>
-                <p>I hope this message finds you well. As the {{{{title}}}} for {{{{agency_name}}}}, we wanted to reach out regarding...</p>
-                <p><br></p>
-                <p>Best regards,<br>CISA Team</p>
-            `;
+            const initialContent = '<p>Dear {{{{first_name}}}} {{{{last_name}}}},</p><p><br></p><p>I hope this message finds you well. As the {{{{title}}}} for {{{{agency_name}}}}, we wanted to reach out regarding...</p><p><br></p><p>Best regards,<br>CISA Team</p>';
             quillEditor.root.innerHTML = initialContent;
         }});
         
