@@ -16,6 +16,7 @@ dynamodb = boto3.resource('dynamodb', region_name='us-gov-west-1')
 contacts_table = dynamodb.Table('EmailContacts')
 campaigns_table = dynamodb.Table('EmailCampaigns')
 email_config_table = dynamodb.Table('EmailConfig')
+secrets_client = boto3.client('secretsmanager', region_name='us-gov-west-1')
 
 def lambda_handler(event, context):
     """Bulk Email API with Web UI"""
@@ -74,35 +75,342 @@ def serve_web_ui(event):
 <head>
     <title>CISA Email Campaign Management System</title>
     <style>
-        body {{ font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; }}
-        .container {{ max-width: 1200px; margin: 20px auto; background: white; padding: 40px; border-radius: 15px; box-shadow: 0 20px 40px rgba(0,0,0,0.1); }}
-        .header {{ text-align: center; margin-bottom: 30px; }}
-        .header h1 {{ color: #2c3e50; margin: 0; font-size: 2.5em; font-weight: 300; }}
-        .header .subtitle {{ color: #7f8c8d; font-size: 1.1em; margin-top: 10px; }}
-        .tabs {{ display: flex; margin-bottom: 30px; background: #ecf0f1; border-radius: 10px; padding: 5px; }}
-        .tab {{ flex: 1; padding: 15px 20px; background: transparent; cursor: pointer; text-align: center; border-radius: 8px; transition: all 0.3s; font-weight: 500; }}
-        .tab:hover {{ background: rgba(52, 152, 219, 0.1); }}
-        .tab.active {{ background: linear-gradient(135deg, #3498db, #2980b9); color: white; box-shadow: 0 4px 15px rgba(52, 152, 219, 0.3); }}
-        .tab-content {{ display: none; }}
-        .tab-content.active {{ display: block; }}
-        .form-group {{ margin: 20px 0; }}
-        label {{ display: block; margin-bottom: 8px; font-weight: 600; color: #2c3e50; }}
-        input, textarea, select {{ width: 100%; padding: 12px; margin-bottom: 15px; border: 2px solid #ecf0f1; border-radius: 8px; font-size: 14px; transition: border-color 0.3s; }}
-        input:focus, textarea:focus, select:focus {{ outline: none; border-color: #3498db; box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.1); }}
-        button {{ padding: 12px 25px; background: linear-gradient(135deg, #3498db, #2980b9); color: white; border: none; border-radius: 8px; cursor: pointer; margin: 8px 5px; font-weight: 500; transition: all 0.3s; }}
-        button:hover {{ transform: translateY(-2px); box-shadow: 0 5px 15px rgba(52, 152, 219, 0.4); }}
-        .btn-success {{ background: linear-gradient(135deg, #27ae60, #229954); }}
-        .btn-success:hover {{ box-shadow: 0 5px 15px rgba(39, 174, 96, 0.4); }}
-        .btn-danger {{ background: linear-gradient(135deg, #e74c3c, #c0392b); }}
-        .btn-danger:hover {{ box-shadow: 0 5px 15px rgba(231, 76, 60, 0.4); }}
-        table {{ width: 100%; border-collapse: collapse; margin: 25px 0; border-radius: 10px; overflow: hidden; box-shadow: 0 5px 15px rgba(0,0,0,0.1); }}
-        th, td {{ padding: 15px; text-align: left; }}
-        th {{ background: linear-gradient(135deg, #34495e, #2c3e50); color: white; font-weight: 600; }}
-        td {{ border-bottom: 1px solid #ecf0f1; }}
-        tr:hover {{ background: #f8f9fa; }}
-        .result {{ margin: 25px 0; padding: 20px; background: linear-gradient(135deg, #f8f9fa, #e9ecef); border-radius: 10px; border-left: 5px solid #3498db; }}
-        .hidden {{ display: none; }}
-        .card {{ background: white; border-radius: 10px; padding: 25px; margin: 20px 0; box-shadow: 0 5px 15px rgba(0,0,0,0.08); }}
+        /* Modern CSS Variables for Consistent Theming */
+        :root {{
+            --primary-color: #6366f1;
+            --primary-dark: #4f46e5;
+            --primary-light: #a5b4fc;
+            --secondary-color: #f59e0b;
+            --success-color: #10b981;
+            --danger-color: #ef4444;
+            --warning-color: #f59e0b;
+            --info-color: #3b82f6;
+            --dark-color: #1f2937;
+            --light-color: #f8fafc;
+            --gray-50: #f9fafb;
+            --gray-100: #f3f4f6;
+            --gray-200: #e5e7eb;
+            --gray-300: #d1d5db;
+            --gray-400: #9ca3af;
+            --gray-500: #6b7280;
+            --gray-600: #4b5563;
+            --gray-700: #374151;
+            --gray-800: #1f2937;
+            --gray-900: #111827;
+            --border-radius: 12px;
+            --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+            --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+            --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+        }}
+        
+        /* Reset and Base Styles */
+        * {{ box-sizing: border-box; }}
+        body {{ 
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; 
+            margin: 0; 
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%);
+            min-height: 100vh;
+            color: var(--gray-800);
+            line-height: 1.6;
+        }}
+        
+        /* Container and Layout */
+        .container {{ 
+            max-width: 1200px; 
+            margin: 20px auto; 
+            background: white; 
+            padding: 40px; 
+            border-radius: 20px; 
+            box-shadow: var(--shadow-xl);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }}
+        
+        /* Header Styling */
+        .header {{ 
+            text-align: center; 
+            margin-bottom: 40px; 
+            padding-bottom: 30px;
+            border-bottom: 2px solid var(--gray-100);
+        }}
+        .header h1 {{ 
+            color: var(--gray-900); 
+            margin: 0; 
+            font-size: 2.8rem; 
+            font-weight: 700;
+            background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }}
+        .header .subtitle {{ 
+            color: var(--gray-600); 
+            font-size: 1.2rem; 
+            margin-top: 15px; 
+            font-weight: 500;
+        }}
+        
+        /* Modern Tab System */
+        .tabs {{ 
+            display: flex; 
+            margin-bottom: 40px; 
+            background: var(--gray-50); 
+            border-radius: var(--border-radius); 
+            padding: 8px; 
+            gap: 4px;
+        }}
+        .tab {{ 
+            flex: 1; 
+            padding: 16px 24px; 
+            background: transparent; 
+            cursor: pointer; 
+            text-align: center; 
+            border-radius: 8px; 
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); 
+            font-weight: 600; 
+            color: var(--gray-600);
+            position: relative;
+            overflow: hidden;
+        }}
+        .tab:hover {{ 
+            background: rgba(99, 102, 241, 0.1); 
+            color: var(--primary-color);
+            transform: translateY(-1px);
+        }}
+        .tab.active {{ 
+            background: linear-gradient(135deg, var(--primary-color), var(--primary-dark)); 
+            color: white; 
+            box-shadow: var(--shadow-lg);
+            transform: translateY(-2px);
+        }}
+        .tab.active::before {{
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(135deg, rgba(255,255,255,0.2), rgba(255,255,255,0.1));
+            border-radius: 8px;
+        }}
+        
+        /* Tab Content */
+        .tab-content {{ 
+            display: none; 
+            animation: fadeIn 0.3s ease-in-out;
+        }}
+        .tab-content.active {{ 
+            display: block; 
+        }}
+        @keyframes fadeIn {{
+            from {{ opacity: 0; transform: translateY(10px); }}
+            to {{ opacity: 1; transform: translateY(0); }}
+        }}
+        
+        /* Form Styling */
+        .form-group {{ 
+            margin: 24px 0; 
+        }}
+        label {{ 
+            display: block; 
+            margin-bottom: 8px; 
+            font-weight: 600; 
+            color: var(--gray-700);
+            font-size: 0.95rem;
+        }}
+        input, textarea, select {{ 
+            width: 100%; 
+            padding: 14px 16px; 
+            margin-bottom: 16px; 
+            border: 2px solid var(--gray-200); 
+            border-radius: var(--border-radius); 
+            font-size: 15px; 
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            background: white;
+            color: var(--gray-800);
+        }}
+        input:focus, textarea:focus, select:focus {{ 
+            outline: none; 
+            border-color: var(--primary-color); 
+            box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+            transform: translateY(-1px);
+        }}
+        input:hover, textarea:hover, select:hover {{
+            border-color: var(--gray-300);
+        }}
+        small {{
+            color: var(--gray-500);
+            font-size: 0.875rem;
+            margin-top: 4px;
+            display: block;
+        }}
+        
+        /* Modern Button System */
+        button {{ 
+            padding: 14px 28px; 
+            background: linear-gradient(135deg, var(--primary-color), var(--primary-dark)); 
+            color: white; 
+            border: none; 
+            border-radius: var(--border-radius); 
+            cursor: pointer; 
+            margin: 8px 6px; 
+            font-weight: 600; 
+            font-size: 15px;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+            overflow: hidden;
+            box-shadow: var(--shadow-md);
+        }}
+        button::before {{
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+            transition: left 0.5s;
+        }}
+        button:hover::before {{
+            left: 100%;
+        }}
+        button:hover {{ 
+            transform: translateY(-2px); 
+            box-shadow: var(--shadow-xl);
+        }}
+        button:active {{
+            transform: translateY(0);
+        }}
+        
+        .btn-success {{ 
+            background: linear-gradient(135deg, var(--success-color), #059669); 
+        }}
+        .btn-success:hover {{ 
+            box-shadow: 0 10px 25px rgba(16, 185, 129, 0.4); 
+        }}
+        .btn-danger {{ 
+            background: linear-gradient(135deg, var(--danger-color), #dc2626); 
+        }}
+        .btn-danger:hover {{ 
+            box-shadow: 0 10px 25px rgba(239, 68, 68, 0.4); 
+        }}
+        
+        /* Table Styling */
+        table {{ 
+            width: 100%; 
+            border-collapse: collapse; 
+            margin: 30px 0; 
+            border-radius: var(--border-radius); 
+            overflow: hidden; 
+            box-shadow: var(--shadow-lg);
+            background: white;
+        }}
+        th, td {{ 
+            padding: 16px 20px; 
+            text-align: left; 
+        }}
+        th {{ 
+            background: linear-gradient(135deg, var(--gray-800), var(--gray-900)); 
+            color: white; 
+            font-weight: 600;
+            font-size: 0.9rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }}
+        td {{ 
+            border-bottom: 1px solid var(--gray-100); 
+            color: var(--gray-700);
+        }}
+        tr:hover {{ 
+            background: var(--gray-50); 
+            transform: scale(1.01);
+            transition: all 0.2s ease;
+        }}
+        tr:last-child td {{
+            border-bottom: none;
+        }}
+        
+        /* Result and Card Styling */
+        .result {{ 
+            margin: 30px 0; 
+            padding: 24px; 
+            background: linear-gradient(135deg, var(--gray-50), white); 
+            border-radius: var(--border-radius); 
+            border-left: 4px solid var(--primary-color);
+            box-shadow: var(--shadow-md);
+        }}
+        .result h3 {{
+            margin-top: 0;
+            color: var(--gray-800);
+            font-weight: 600;
+        }
+        .result pre {{
+            background: var(--gray-100);
+            padding: 16px;
+            border-radius: 8px;
+            overflow-x: auto;
+            font-family: 'Monaco', 'Menlo', monospace;
+            font-size: 13px;
+            color: var(--gray-700);
+        }}
+        .hidden {{ 
+            display: none; 
+        }}
+        .card {{ 
+            background: white; 
+            border-radius: var(--border-radius); 
+            padding: 30px; 
+            margin: 24px 0; 
+            box-shadow: var(--shadow-lg);
+            border: 1px solid var(--gray-100);
+        }}
+        
+        /* Responsive Design */
+        @media (max-width: 768px) {{
+            .container {{
+                margin: 10px;
+                padding: 20px;
+                border-radius: 16px;
+            }}
+            .header h1 {{
+                font-size: 2.2rem;
+            }}
+            .tabs {{
+                flex-direction: column;
+                gap: 8px;
+            }}
+            .tab {{
+                padding: 12px 16px;
+            }}
+            button {{
+                width: 100%;
+                margin: 8px 0;
+            }}
+        }}
+        
+        /* Loading and Animation States */
+        .loading {{
+            opacity: 0.7;
+            pointer-events: none;
+        }}
+        .loading::after {{
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 20px;
+            height: 20px;
+            margin: -10px 0 0 -10px;
+            border: 2px solid #f3f3f3;
+            border-top: 2px solid var(--primary-color);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }}
+        @keyframes spin {{
+            0% {{ transform: rotate(0deg); }}
+            100% {{ transform: rotate(360deg); }}
+        }}
     </style>
 </head>
 <body>
@@ -113,9 +421,9 @@ def serve_web_ui(event):
         </div>
         
         <div class="tabs">
-            <div class="tab active" onclick="showTab('config')">Email Config</div>
-            <div class="tab" onclick="showTab('contacts')">Contacts</div>
-            <div class="tab" onclick="showTab('campaign')">Send Campaign</div>
+            <div class="tab active" onclick="showTab('config')">⚙️ Email Config</div>
+            <div class="tab" onclick="showTab('contacts')">👥 Contacts</div>
+            <div class="tab" onclick="showTab('campaign')">📧 Send Campaign</div>
         </div>
         
         <div id="config" class="tab-content active">
@@ -134,12 +442,9 @@ def serve_web_ui(event):
                     <input type="text" id="awsRegion" value="us-gov-west-1">
                 </div>
                 <div class="form-group">
-                    <label>AWS Access Key:</label>
-                    <input type="text" id="awsAccessKey">
-                </div>
-                <div class="form-group">
-                    <label>AWS Secret Key:</label>
-                    <input type="password" id="awsSecretKey">
+                    <label>AWS Secrets Manager Secret Name:</label>
+                    <input type="text" id="awsSecretName" placeholder="email-api-credentials">
+                    <small style="color: #666; font-size: 0.9em;">Secret should contain aws_access_key_id and aws_secret_access_key fields</small>
                 </div>
             </div>
             
@@ -162,15 +467,15 @@ def serve_web_ui(event):
                 <label>Emails per minute:</label>
                 <input type="number" id="emailsPerMinute" value="60">
             </div>
-            <button onclick="saveConfig()">Save Configuration</button>
+            <button onclick="saveConfig()">💾 Save Configuration</button>
         </div>
         
         <div id="contacts" class="tab-content">
             <h2>Contact Management</h2>
-            <button onclick="loadContacts()">Load Contacts</button>
-            <button class="btn-success" onclick="showAddContact()">Add Contact</button>
+            <button onclick="loadContacts()">🔄 Load Contacts</button>
+            <button class="btn-success" onclick="showAddContact()">➕ Add Contact</button>
             <input type="file" id="csvFile" accept=".csv" style="display: none;" onchange="uploadCSV()">
-            <button onclick="document.getElementById('csvFile').click()">Upload CSV</button>
+            <button onclick="document.getElementById('csvFile').click()">📁 Upload CSV</button>
             
             <div id="addContactForm" class="hidden">
                 <h3>Add Contact</h3>
@@ -178,8 +483,8 @@ def serve_web_ui(event):
                 <input type="text" id="newFirstName" placeholder="First Name">
                 <input type="text" id="newLastName" placeholder="Last Name">
                 <input type="text" id="newCompany" placeholder="Company">
-                <button onclick="addContact()">Add</button>
-                <button onclick="hideAddContact()">Cancel</button>
+                <button class="btn-success" onclick="addContact()">✅ Add</button>
+                <button onclick="hideAddContact()">❌ Cancel</button>
             </div>
             
             <div class="result">
@@ -209,7 +514,7 @@ def serve_web_ui(event):
                 <label>Email Body:</label>
                 <textarea id="body" rows="8" placeholder="Dear {{{{first_name}}}} {{{{last_name}}}},\\n\\nYour message here..."></textarea>
             </div>
-            <button class="btn-success" onclick="sendCampaign()">Send Campaign</button>
+            <button class="btn-success" onclick="sendCampaign()">🚀 Send Campaign</button>
             
             <div id="campaignResult" class="result hidden"></div>
         </div>
@@ -240,6 +545,15 @@ def serve_web_ui(event):
         }}
         
         async function saveConfig() {{
+            const button = event.target;
+            const originalText = button.textContent;
+            
+            try {{
+                // Show loading state
+                button.textContent = 'Saving...';
+                button.classList.add('loading');
+                button.disabled = true;
+                
             const service = document.getElementById('emailService').value;
             const config = {{
                 email_service: service,
@@ -249,8 +563,7 @@ def serve_web_ui(event):
             
             if (service === 'ses') {{
                 config.aws_region = document.getElementById('awsRegion').value;
-                config.aws_access_key = document.getElementById('awsAccessKey').value;
-                config.aws_secret_key = document.getElementById('awsSecretKey').value;
+                    config.aws_secret_name = document.getElementById('awsSecretName').value;
             }} else {{
                 config.smtp_server = document.getElementById('smtpServer').value;
                 config.smtp_port = parseInt(document.getElementById('smtpPort').value);
@@ -263,16 +576,49 @@ def serve_web_ui(event):
             }});
             
             const result = await response.json();
-            alert(result.success ? 'Configuration saved!' : 'Error: ' + result.error);
+                
+                if (result.success) {{
+                    button.textContent = '✓ Saved!';
+                    button.style.background = 'linear-gradient(135deg, var(--success-color), #059669)';
+                    setTimeout(() => {{
+                        button.textContent = originalText;
+                        button.style.background = '';
+                    }}, 2000);
+                }} else {{
+                    throw new Error(result.error);
+                }}
+                
+            }} catch (error) {{
+                button.textContent = '✗ Error';
+                button.style.background = 'linear-gradient(135deg, var(--danger-color), #dc2626)';
+                setTimeout(() => {{
+                    button.textContent = originalText;
+                    button.style.background = '';
+                }}, 2000);
+                alert('Error: ' + error.message);
+            }} finally {{
+                button.classList.remove('loading');
+                button.disabled = false;
+            }}
         }}
         
         async function loadContacts() {{
+            const button = event?.target || document.querySelector('button[onclick="loadContacts()"]');
+            const originalText = button?.textContent || 'Load Contacts';
+            
+            try {{
+                if (button) {{
+                    button.textContent = 'Loading...';
+                    button.disabled = true;
+                }}
+                
             const response = await fetch(`${{API_URL}}/contacts`);
             const result = await response.json();
             
             const tbody = document.getElementById('contactsBody');
             tbody.innerHTML = '';
             
+                if (result.contacts && result.contacts.length > 0) {{
             result.contacts.forEach(contact => {{
                 const row = tbody.insertRow();
                 row.innerHTML = `
@@ -280,9 +626,35 @@ def serve_web_ui(event):
                     <td>${{contact.first_name || ''}}</td>
                     <td>${{contact.last_name || ''}}</td>
                     <td>${{contact.company || ''}}</td>
-                    <td><button class="btn-danger" onclick="deleteContact('${{contact.email}}')">Delete</button></td>
+                            <td><button class="btn-danger" onclick="deleteContact('${{contact.email}}')">🗑️ Delete</button></td>
                 `;
             }});
+                }} else {{
+                    tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: var(--gray-500); padding: 40px;">No contacts found. Add some contacts to get started!</td></tr>';
+                }}
+                
+                if (button) {{
+                    button.textContent = '✓ Loaded';
+                    setTimeout(() => {{
+                        button.textContent = originalText;
+                    }}, 1500);
+                }}
+                
+            }} catch (error) {{
+                const tbody = document.getElementById('contactsBody');
+                tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: var(--danger-color); padding: 40px;">Error loading contacts: ' + error.message + '</td></tr>';
+                
+                if (button) {{
+                    button.textContent = '✗ Error';
+                    setTimeout(() => {{
+                        button.textContent = originalText;
+                    }}, 2000);
+                }}
+            }} finally {{
+                if (button) {{
+                    button.disabled = false;
+                }}
+            }}
         }}
         
         function showAddContact() {{
@@ -380,11 +752,25 @@ def serve_web_ui(event):
         }}
         
         async function sendCampaign() {{
+            const button = event.target;
+            const originalText = button.textContent;
+            
+            try {{
+                // Show loading state
+                button.textContent = 'Sending Campaign...';
+                button.classList.add('loading');
+                button.disabled = true;
+                
             const campaign = {{
                 campaign_name: document.getElementById('campaignName').value,
                 subject: document.getElementById('subject').value,
                 body: document.getElementById('body').value
             }};
+                
+                // Validate required fields
+                if (!campaign.campaign_name || !campaign.subject || !campaign.body) {{
+                    throw new Error('Please fill in all required fields');
+                }}
             
             const response = await fetch(`${{API_URL}}/campaign`, {{
                 method: 'POST',
@@ -394,8 +780,60 @@ def serve_web_ui(event):
             
             const result = await response.json();
             const resultDiv = document.getElementById('campaignResult');
-            resultDiv.innerHTML = `<h3>Campaign Result</h3><pre>${{JSON.stringify(result, null, 2)}}</pre>`;
+                
+                if (result.error) {{
+                    throw new Error(result.error);
+                }}
+                
+                // Create a beautiful result display
+                resultDiv.innerHTML = `
+                    <h3>🎉 Campaign Sent Successfully!</h3>
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; margin: 20px 0;">
+                        <div style="background: var(--success-color); color: white; padding: 20px; border-radius: 8px; text-align: center;">
+                            <h4 style="margin: 0; font-size: 2rem;">${{result.sent_count || 0}}</h4>
+                            <p style="margin: 5px 0 0 0;">Emails Sent</p>
+                        </div>
+                        <div style="background: var(--danger-color); color: white; padding: 20px; border-radius: 8px; text-align: center;">
+                            <h4 style="margin: 0; font-size: 2rem;">${{result.failed_count || 0}}</h4>
+                            <p style="margin: 5px 0 0 0;">Failed</p>
+                        </div>
+                        <div style="background: var(--info-color); color: white; padding: 20px; border-radius: 8px; text-align: center;">
+                            <h4 style="margin: 0; font-size: 2rem;">${{result.total_contacts || 0}}</h4>
+                            <p style="margin: 5px 0 0 0;">Total Contacts</p>
+                        </div>
+                    </div>
+                    <details style="margin-top: 20px;">
+                        <summary style="cursor: pointer; color: var(--gray-600);">View Raw Response</summary>
+                        <pre style="background: var(--gray-100); padding: 16px; border-radius: 8px; margin-top: 10px; overflow-x: auto;">${{JSON.stringify(result, null, 2)}}</pre>
+                    </details>
+                `;
             resultDiv.classList.remove('hidden');
+                
+                button.textContent = '✓ Campaign Sent!';
+                button.style.background = 'linear-gradient(135deg, var(--success-color), #059669)';
+                setTimeout(() => {{
+                    button.textContent = originalText;
+                    button.style.background = '';
+                }}, 3000);
+                
+            }} catch (error) {{
+                const resultDiv = document.getElementById('campaignResult');
+                resultDiv.innerHTML = `
+                    <h3 style="color: var(--danger-color);">❌ Campaign Failed</h3>
+                    <p style="color: var(--gray-600);">${{error.message}}</p>
+                `;
+                resultDiv.classList.remove('hidden');
+                
+                button.textContent = '✗ Error';
+                button.style.background = 'linear-gradient(135deg, var(--danger-color), #dc2626)';
+                setTimeout(() => {{
+                    button.textContent = originalText;
+                    button.style.background = '';
+                }}, 3000);
+            }} finally {{
+                button.classList.remove('loading');
+                button.disabled = false;
+            }}
         }}
         
         async function loadConfig() {{
@@ -411,7 +849,7 @@ def serve_web_ui(event):
                     
                     if (config.email_service === 'ses') {{
                         document.getElementById('awsRegion').value = config.aws_region || 'us-gov-west-1';
-                        document.getElementById('awsAccessKey').value = config.aws_access_key || '';
+                        document.getElementById('awsSecretName').value = config.aws_secret_name || '';
                     }} else {{
                         document.getElementById('smtpServer').value = config.smtp_server || '192.168.1.100';
                         document.getElementById('smtpPort').value = config.smtp_port || 25;
@@ -442,25 +880,82 @@ def save_email_config(body, headers):
     """Save email configuration"""
     try:
         print(f"Saving config: {body}")
-        email_config_table.put_item(
-            Item={
+        
+        # Prepare the item with proper data types
+        item = {
                 'config_id': 'default',
-                'email_service': body.get('email_service', 'ses'),
-                'from_email': body.get('from_email', ''),
-                'emails_per_minute': body.get('emails_per_minute', 60),
-                'aws_region': body.get('aws_region', 'us-gov-west-1'),
-                'aws_access_key': body.get('aws_access_key', ''),
-                'aws_secret_key': body.get('aws_secret_key', ''),
-                'smtp_server': body.get('smtp_server', ''),
-                'smtp_port': body.get('smtp_port', 25),
+            'email_service': str(body.get('email_service', 'ses')),
+            'from_email': str(body.get('from_email', '')),
+            'emails_per_minute': int(body.get('emails_per_minute', 60)),
                 'updated_at': datetime.now().isoformat()
             }
+        
+        # Add service-specific fields
+        if body.get('email_service') == 'ses':
+            item.update({
+                'aws_region': str(body.get('aws_region', 'us-gov-west-1')),
+                'aws_secret_name': str(body.get('aws_secret_name', ''))
+            })
+        else:  # SMTP
+            item.update({
+                'smtp_server': str(body.get('smtp_server', '')),
+                'smtp_port': int(body.get('smtp_port', 25))
+            })
+        
+        # Use conditional write to handle updates properly
+        email_config_table.put_item(
+            Item=item,
+            ConditionExpression='attribute_not_exists(config_id) OR config_id = :config_id',
+            ExpressionAttributeValues={':config_id': 'default'}
         )
+        
         print("Config saved successfully")
-        return {'statusCode': 200, 'headers': headers, 'body': json.dumps({'success': True})}
+        return {'statusCode': 200, 'headers': headers, 'body': json.dumps({'success': True, 'message': 'Configuration saved successfully'})}
+        
+    except email_config_table.meta.client.exceptions.ConditionalCheckFailedException:
+        # Item already exists, update it instead
+        try:
+            update_expression = "SET email_service = :service, from_email = :email, emails_per_minute = :rate, updated_at = :updated"
+            expression_values = {
+                ':service': str(body.get('email_service', 'ses')),
+                ':email': str(body.get('from_email', '')),
+                ':rate': int(body.get('emails_per_minute', 60)),
+                ':updated': datetime.now().isoformat()
+            }
+            
+            # Add service-specific fields to update
+            if body.get('email_service') == 'ses':
+                update_expression += ", aws_region = :region, aws_secret_name = :secret_name"
+                expression_values.update({
+                    ':region': str(body.get('aws_region', 'us-gov-west-1')),
+                    ':secret_name': str(body.get('aws_secret_name', ''))
+                })
+            else:  # SMTP
+                update_expression += ", smtp_server = :server, smtp_port = :port"
+                expression_values.update({
+                    ':server': str(body.get('smtp_server', '')),
+                    ':port': int(body.get('smtp_port', 25))
+                })
+            
+            email_config_table.update_item(
+                Key={'config_id': 'default'},
+                UpdateExpression=update_expression,
+                ExpressionAttributeValues=expression_values
+            )
+            
+            print("Config updated successfully")
+            return {'statusCode': 200, 'headers': headers, 'body': json.dumps({'success': True, 'message': 'Configuration updated successfully'})}
+            
+        except Exception as update_error:
+            print(f"Config update error: {str(update_error)}")
+            return {'statusCode': 500, 'headers': headers, 'body': json.dumps({'error': f'Failed to update config: {str(update_error)}'})}
+            
     except Exception as e:
         print(f"Config save error: {str(e)}")
-        return {'statusCode': 500, 'headers': headers, 'body': json.dumps({'error': str(e)})
+        print(f"Error type: {type(e).__name__}")
+        import traceback
+        traceback.print_exc()
+        return {'statusCode': 500, 'headers': headers, 'body': json.dumps({'error': f'Failed to save config: {str(e)}', 'error_type': type(e).__name__})}
 
 def get_email_config(headers):
     """Get email configuration"""
@@ -468,13 +963,22 @@ def get_email_config(headers):
         response = email_config_table.get_item(Key={'config_id': 'default'})
         if 'Item' in response:
             config = response['Item']
-            # Don't return secret key
-            if 'aws_secret_key' in config:
-                config['aws_secret_key'] = '***'
+            
+            # Convert Decimal types to appropriate Python types
+            for key, value in config.items():
+                if isinstance(value, Decimal):
+                    config[key] = int(value) if value % 1 == 0 else float(value)
+            
+            # Don't return secret name for security (it's stored in Secrets Manager)
+            if 'aws_secret_name' in config:
+                config['aws_secret_name'] = '***'
+                
+            print(f"Retrieved config: {config}")
             return {'statusCode': 200, 'headers': headers, 'body': json.dumps({'config': config})}
         else:
             return {'statusCode': 404, 'headers': headers, 'body': json.dumps({'error': 'Config not found'})}
     except Exception as e:
+        print(f"Config retrieval error: {str(e)}")
         return {'statusCode': 500, 'headers': headers, 'body': json.dumps({'error': str(e)})}
 
 def get_contacts(headers):
@@ -621,11 +1125,14 @@ def send_campaign(body, headers):
 def send_ses_email(config, contact, subject, body):
     """Send email via AWS SES"""
     try:
+        # Get credentials from Secrets Manager
+        credentials = get_aws_credentials_from_secrets_manager(config.get('aws_secret_name'))
+        
         ses_client = boto3.client(
             'ses',
             region_name=config.get('aws_region', 'us-gov-west-1'),
-            aws_access_key_id=config.get('aws_access_key'),
-            aws_secret_access_key=config.get('aws_secret_key')
+            aws_access_key_id=credentials['aws_access_key_id'],
+            aws_secret_access_key=credentials['aws_secret_access_key']
         )
         
         personalized_subject = personalize_content(subject, contact)
@@ -677,6 +1184,30 @@ def get_campaign_status(campaign_id, headers):
         return {'statusCode': 200, 'headers': headers, 'body': json.dumps(campaign)}
     except Exception as e:
         return {'statusCode': 500, 'headers': headers, 'body': json.dumps({'error': str(e)})}
+
+def get_aws_credentials_from_secrets_manager(secret_name):
+    """Retrieve AWS credentials from Secrets Manager"""
+    try:
+        print(f"Retrieving credentials from secret: {secret_name}")
+        response = secrets_client.get_secret_value(SecretId=secret_name)
+        
+        # Parse the secret (assuming it's stored as JSON)
+        secret_data = json.loads(response['SecretString'])
+        
+        credentials = {
+            'aws_access_key_id': secret_data.get('aws_access_key_id'),
+            'aws_secret_access_key': secret_data.get('aws_secret_access_key')
+        }
+        
+        if not credentials['aws_access_key_id'] or not credentials['aws_secret_access_key']:
+            raise ValueError("Missing aws_access_key_id or aws_secret_access_key in secret")
+        
+        print("Successfully retrieved AWS credentials from Secrets Manager")
+        return credentials
+        
+    except Exception as e:
+        print(f"Error retrieving credentials from Secrets Manager: {str(e)}")
+        raise
 
 def personalize_content(content, contact):
     """Replace placeholders with contact data"""
