@@ -296,6 +296,20 @@ def serve_web_ui(event):
         .btn-danger:hover {{ 
             box-shadow: 0 10px 25px rgba(239, 68, 68, 0.4); 
         }}
+        .btn-primary {{ 
+            background: linear-gradient(135deg, var(--primary-color), #1d4ed8); 
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: var(--border-radius);
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.3s ease;
+            margin: 2px;
+        }}
+        .btn-primary:hover {{ 
+            box-shadow: 0 10px 25px rgba(59, 130, 246, 0.4); 
+        }}
         
         /* Table Styling */
         table {{ 
@@ -355,8 +369,18 @@ def serve_web_ui(event):
             font-size: 13px;
             color: var(--gray-700);
         }}
-        .hidden {{ 
-            display: none; 
+        .hidden {{
+            display: none;
+        }}
+        
+        .contact-count {{
+            margin-left: 10px;
+            padding: 5px 10px;
+            background: var(--primary-color);
+            color: white;
+            border-radius: 15px;
+            font-size: 0.9em;
+            font-weight: bold;
         }}
         .card {{ 
             background: white; 
@@ -473,36 +497,156 @@ def serve_web_ui(event):
         
         <div id="contacts" class="tab-content">
             <h2>Contact Management</h2>
+            <div class="form-group">
+                <label>Filter by Group:</label>
+                <select id="groupFilter" onchange="filterContactsByGroup()">
+                    <option value="">All Groups</option>
+                </select>
+                <button onclick="loadAllContacts()">Load All Contacts</button>
+            </div>
             <button onclick="loadContacts()">Load Contacts</button>
             <button class="btn-success" onclick="showAddContact()">Add Contact</button>
             <input type="file" id="csvFile" accept=".csv" style="display: none;" onchange="uploadCSV()">
             <button onclick="document.getElementById('csvFile').click()">Upload CSV</button>
             
-            <div id="addContactForm" class="hidden">
+            <div id="addContactForm" class="hidden card">
                 <h3>Add Contact</h3>
-                <input type="email" id="newEmail" placeholder="Email">
-                <input type="text" id="newFirstName" placeholder="First Name">
-                <input type="text" id="newLastName" placeholder="Last Name">
-                <input type="text" id="newCompany" placeholder="Company">
-                <button class="btn-success" onclick="addContact()">Add</button>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                    <input type="email" id="newEmail" placeholder="Email Address *" required>
+                    <input type="text" id="newFirstName" placeholder="First Name *" required>
+                    <input type="text" id="newLastName" placeholder="Last Name *" required>
+                    <input type="text" id="newTitle" placeholder="Title">
+                    <input type="text" id="newEntityType" placeholder="Entity Type">
+                    <input type="text" id="newState" placeholder="State">
+                    <input type="text" id="newAgencyName" placeholder="Agency Name">
+                    <input type="text" id="newSector" placeholder="Sector">
+                    <input type="text" id="newSubsection" placeholder="Subsection">
+                    <input type="text" id="newPhone" placeholder="Phone">
+                    <select id="newMsIsacMember">
+                        <option value="">MS-ISAC Member</option>
+                        <option value="Yes">Yes</option>
+                        <option value="No">No</option>
+                    </select>
+                    <select id="newSocCall">
+                        <option value="">SOC Call</option>
+                        <option value="Yes">Yes</option>
+                        <option value="No">No</option>
+                    </select>
+                    <select id="newFusionCenter">
+                        <option value="">Fusion Center</option>
+                        <option value="Yes">Yes</option>
+                        <option value="No">No</option>
+                    </select>
+                    <select id="newK12">
+                        <option value="">K-12</option>
+                        <option value="Yes">Yes</option>
+                        <option value="No">No</option>
+                    </select>
+                    <select id="newWaterWastewater">
+                        <option value="">Water/Wastewater</option>
+                        <option value="Yes">Yes</option>
+                        <option value="No">No</option>
+                    </select>
+                    <select id="newWeeklyRollup">
+                        <option value="">Weekly Rollup</option>
+                        <option value="Yes">Yes</option>
+                        <option value="No">No</option>
+                    </select>
+                    <input type="email" id="newAlternateEmail" placeholder="Alternate Email">
+                    <input type="text" id="newRegion" placeholder="Region">
+                    <input type="text" id="newGroup" placeholder="Group">
+                </div>
+                <div style="margin-top: 20px;">
+                    <button class="btn-success" onclick="addContact()">Add</button>
                 <button onclick="hideAddContact()">Cancel</button>
+                </div>
+            </div>
+            
+            <div id="editContactForm" class="hidden card">
+                <h3>Edit Contact</h3>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                    <input type="email" id="editEmail" placeholder="Email Address *" required readonly>
+                    <input type="text" id="editFirstName" placeholder="First Name *" required>
+                    <input type="text" id="editLastName" placeholder="Last Name *" required>
+                    <input type="text" id="editTitle" placeholder="Title">
+                    <input type="text" id="editEntityType" placeholder="Entity Type">
+                    <input type="text" id="editState" placeholder="State">
+                    <input type="text" id="editAgencyName" placeholder="Agency Name">
+                    <input type="text" id="editSector" placeholder="Sector">
+                    <input type="text" id="editSubsection" placeholder="Subsection">
+                    <input type="text" id="editPhone" placeholder="Phone">
+                    <select id="editMsIsacMember">
+                        <option value="">MS-ISAC Member</option>
+                        <option value="Yes">Yes</option>
+                        <option value="No">No</option>
+                    </select>
+                    <select id="editSocCall">
+                        <option value="">SOC Call</option>
+                        <option value="Yes">Yes</option>
+                        <option value="No">No</option>
+                    </select>
+                    <select id="editFusionCenter">
+                        <option value="">Fusion Center</option>
+                        <option value="Yes">Yes</option>
+                        <option value="No">No</option>
+                    </select>
+                    <select id="editK12">
+                        <option value="">K-12</option>
+                        <option value="Yes">Yes</option>
+                        <option value="No">No</option>
+                    </select>
+                    <select id="editWaterWastewater">
+                        <option value="">Water/Wastewater</option>
+                        <option value="Yes">Yes</option>
+                        <option value="No">No</option>
+                    </select>
+                    <select id="editWeeklyRollup">
+                        <option value="">Weekly Rollup</option>
+                        <option value="Yes">Yes</option>
+                        <option value="No">No</option>
+                    </select>
+                    <input type="email" id="editAlternateEmail" placeholder="Alternate Email">
+                    <input type="text" id="editRegion" placeholder="Region">
+                    <input type="text" id="editGroup" placeholder="Group">
+                </div>
+                <div style="margin-top: 20px;">
+                    <button class="btn-success" onclick="saveContactEdit()">Save Changes</button>
+                    <button onclick="hideEditContact()">Cancel</button>
+                </div>
             </div>
             
             <div class="result">
-                <strong>CSV Format:</strong> email,first_name,last_name,company<br>
-                <strong>Example:</strong> john@example.com,John,Doe,Tech Corp
+                <strong>CSV Format:</strong> email,first_name,last_name,title,entity_type,state,agency_name,sector,subsection,phone,ms_isac_member,soc_call,fusion_center,k12,water_wastewater,weekly_rollup,alternate_email,region,group<br>
+                <strong>Example:</strong> john@example.com,John,Doe,IT Director,State Government,CA,Dept of Tech,Government,IT,555-0100,Yes,Yes,No,No,No,Yes,john.alt@example.com,West,State CISOs
             </div>
             
+            <div style="overflow-x: auto;">
             <table id="contactsTable">
                 <thead>
-                    <tr><th>Email</th><th>First Name</th><th>Last Name</th><th>Company</th><th>Actions</th></tr>
+                        <tr>
+                            <th>Email</th>
+                            <th>Name</th>
+                            <th>Title</th>
+                            <th>Entity Type</th>
+                            <th>State</th>
+                            <th>Agency</th>
+                            <th>Actions</th>
+                        </tr>
                 </thead>
                 <tbody id="contactsBody"></tbody>
             </table>
+            </div>
         </div>
         
         <div id="campaign" class="tab-content">
             <h2>Send Campaign</h2>
+            <div class="form-group">
+                <label>Target Group:</label>
+                <select id="targetGroup" onchange="loadContactsForCampaign()">
+                    <option value="">All Groups</option>
+                </select>
+                <span id="contactCount" class="contact-count"></span>
+            </div>
             <div class="form-group">
                 <label>Campaign Name:</label>
                 <input type="text" id="campaignName">
@@ -514,6 +658,7 @@ def serve_web_ui(event):
             <div class="form-group">
                 <label>Email Body:</label>
                 <textarea id="body" rows="8" placeholder="Dear {{{{first_name}}}} {{{{last_name}}}},\\n\\nYour message here..."></textarea>
+                <small>Available placeholders: {{{{first_name}}}}, {{{{last_name}}}}, {{{{email}}}}, {{{{title}}}}, {{{{entity_type}}}}, {{{{state}}}}, {{{{agency_name}}}}, {{{{sector}}}}, {{{{subsection}}}}, {{{{phone}}}}, {{{{ms_isac_member}}}}, {{{{soc_call}}}}, {{{{fusion_center}}}}, {{{{k12}}}}, {{{{water_wastewater}}}}, {{{{weekly_rollup}}}}, {{{{alternate_email}}}}, {{{{region}}}}, {{{{group}}}}</small>
             </div>
             <button class="btn-success" onclick="sendCampaign()">Send Campaign</button>
             
@@ -603,6 +748,8 @@ def serve_web_ui(event):
             }}
         }}
         
+        let allContacts = [];
+        
         async function loadContacts() {{
             const button = event?.target || document.querySelector('button[onclick="loadContacts()"]');
             const originalText = button?.textContent || 'Load Contacts';
@@ -616,23 +763,9 @@ def serve_web_ui(event):
             const response = await fetch(`${{API_URL}}/contacts`);
             const result = await response.json();
             
-            const tbody = document.getElementById('contactsBody');
-            tbody.innerHTML = '';
-            
-                if (result.contacts && result.contacts.length > 0) {{
-            result.contacts.forEach(contact => {{
-                const row = tbody.insertRow();
-                row.innerHTML = `
-                    <td>${{contact.email}}</td>
-                    <td>${{contact.first_name || ''}}</td>
-                    <td>${{contact.last_name || ''}}</td>
-                    <td>${{contact.company || ''}}</td>
-                    <td><button class="btn-danger" onclick="deleteContact('${{contact.email}}')">Delete</button></td>
-                `;
-            }});
-                }} else {{
-                    tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: var(--gray-500); padding: 40px;">No contacts found. Add some contacts to get started!</td></tr>';
-                }}
+                allContacts = result.contacts || [];
+                populateGroupFilters();
+                filterContactsByGroup();
                 
                 if (button) {{
                     button.textContent = 'Loaded';
@@ -643,7 +776,7 @@ def serve_web_ui(event):
                 
             }} catch (error) {{
                 const tbody = document.getElementById('contactsBody');
-                tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: var(--danger-color); padding: 40px;">Error loading contacts: ' + error.message + '</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: var(--danger-color); padding: 40px;">Error loading contacts: ' + error.message + '</td></tr>';
                 
                 if (button) {{
                     button.textContent = 'Error';
@@ -658,6 +791,67 @@ def serve_web_ui(event):
             }}
         }}
         
+        async function loadAllContacts() {{
+            await loadContacts();
+            document.getElementById('groupFilter').value = '';
+            filterContactsByGroup();
+        }}
+        
+        function populateGroupFilters() {{
+            const groups = [...new Set(allContacts.map(c => c.group).filter(g => g))].sort();
+            const groupFilter = document.getElementById('groupFilter');
+            const targetGroup = document.getElementById('targetGroup');
+            
+            // Clear existing options except "All Groups"
+            groupFilter.innerHTML = '<option value="">All Groups</option>';
+            targetGroup.innerHTML = '<option value="">All Groups</option>';
+            
+            groups.forEach(group => {{
+                const option1 = new Option(group, group);
+                const option2 = new Option(group, group);
+                groupFilter.add(option1);
+                targetGroup.add(option2);
+            }});
+        }}
+        
+        function filterContactsByGroup() {{
+            const selectedGroup = document.getElementById('groupFilter').value;
+            let filteredContacts = allContacts;
+            
+            if (selectedGroup) {{
+                filteredContacts = allContacts.filter(contact => contact.group === selectedGroup);
+            }}
+            
+            displayContacts(filteredContacts);
+        }}
+        
+        function displayContacts(contacts) {{
+            const tbody = document.getElementById('contactsBody');
+            tbody.innerHTML = '';
+            
+            if (contacts && contacts.length > 0) {{
+                contacts.forEach(contact => {{
+                const row = tbody.insertRow();
+                    const fullName = `${{contact.first_name || ''}} ${{contact.last_name || ''}}`.trim();
+                row.innerHTML = `
+                    <td>${{contact.email}}</td>
+                        <td>${{fullName}}</td>
+                        <td>${{contact.title || ''}}</td>
+                        <td>${{contact.entity_type || ''}}</td>
+                        <td>${{contact.state || ''}}</td>
+                        <td>${{contact.agency_name || ''}}</td>
+                        <td>
+                            <button class="btn-danger" onclick="deleteContact('${{contact.email}}')">Delete</button>
+                            <button onclick="viewContact('${{contact.email}}')">View</button>
+                            <button class="btn-primary" onclick="editContact('${{contact.email}}')">Edit</button>
+                        </td>
+                `;
+            }});
+            }} else {{
+                tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: var(--gray-500); padding: 40px;">No contacts found. Add some contacts to get started!</td></tr>';
+            }}
+        }}
+        
         function showAddContact() {{
             document.getElementById('addContactForm').classList.remove('hidden');
         }}
@@ -666,12 +860,108 @@ def serve_web_ui(event):
             document.getElementById('addContactForm').classList.add('hidden');
         }}
         
+        function editContact(email) {{
+            const contact = allContacts.find(c => c.email === email);
+            if (!contact) {{
+                alert('Contact not found');
+                return;
+            }}
+            
+            // Populate edit form with contact data
+            document.getElementById('editEmail').value = contact.email || '';
+            document.getElementById('editFirstName').value = contact.first_name || '';
+            document.getElementById('editLastName').value = contact.last_name || '';
+            document.getElementById('editTitle').value = contact.title || '';
+            document.getElementById('editEntityType').value = contact.entity_type || '';
+            document.getElementById('editState').value = contact.state || '';
+            document.getElementById('editAgencyName').value = contact.agency_name || '';
+            document.getElementById('editSector').value = contact.sector || '';
+            document.getElementById('editSubsection').value = contact.subsection || '';
+            document.getElementById('editPhone').value = contact.phone || '';
+            document.getElementById('editMsIsacMember').value = contact.ms_isac_member || '';
+            document.getElementById('editSocCall').value = contact.soc_call || '';
+            document.getElementById('editFusionCenter').value = contact.fusion_center || '';
+            document.getElementById('editK12').value = contact.k12 || '';
+            document.getElementById('editWaterWastewater').value = contact.water_wastewater || '';
+            document.getElementById('editWeeklyRollup').value = contact.weekly_rollup || '';
+            document.getElementById('editAlternateEmail').value = contact.alternate_email || '';
+            document.getElementById('editRegion').value = contact.region || '';
+            document.getElementById('editGroup').value = contact.group || '';
+            
+            // Show edit form
+            document.getElementById('editContactForm').classList.remove('hidden');
+        }}
+        
+        function hideEditContact() {{
+            document.getElementById('editContactForm').classList.add('hidden');
+        }}
+        
+        async function saveContactEdit() {{
+            const email = document.getElementById('editEmail').value;
+            const contactData = {{
+                email: email,
+                first_name: document.getElementById('editFirstName').value,
+                last_name: document.getElementById('editLastName').value,
+                title: document.getElementById('editTitle').value,
+                entity_type: document.getElementById('editEntityType').value,
+                state: document.getElementById('editState').value,
+                agency_name: document.getElementById('editAgencyName').value,
+                sector: document.getElementById('editSector').value,
+                subsection: document.getElementById('editSubsection').value,
+                phone: document.getElementById('editPhone').value,
+                ms_isac_member: document.getElementById('editMsIsacMember').value,
+                soc_call: document.getElementById('editSocCall').value,
+                fusion_center: document.getElementById('editFusionCenter').value,
+                k12: document.getElementById('editK12').value,
+                water_wastewater: document.getElementById('editWaterWastewater').value,
+                weekly_rollup: document.getElementById('editWeeklyRollup').value,
+                alternate_email: document.getElementById('editAlternateEmail').value,
+                region: document.getElementById('editRegion').value,
+                group: document.getElementById('editGroup').value
+            }};
+            
+            try {{
+                const response = await fetch(`${{API_URL}}/contacts`, {{
+                    method: 'PUT',
+                    headers: {{'Content-Type': 'application/json'}},
+                    body: JSON.stringify(contactData)
+                }});
+                
+                const result = await response.json();
+                if (result.success) {{
+                    hideEditContact();
+                    loadContacts(); // Refresh the contacts list
+                    alert('Contact updated successfully!');
+                }} else {{
+                    alert('Error updating contact: ' + (result.error || 'Unknown error'));
+                }}
+            }} catch (error) {{
+                console.error('Error updating contact:', error);
+                alert('Error updating contact: ' + error.message);
+            }}
+        }}
+        
         async function addContact() {{
             const contact = {{
                 email: document.getElementById('newEmail').value,
                 first_name: document.getElementById('newFirstName').value,
                 last_name: document.getElementById('newLastName').value,
-                company: document.getElementById('newCompany').value
+                title: document.getElementById('newTitle').value,
+                entity_type: document.getElementById('newEntityType').value,
+                state: document.getElementById('newState').value,
+                agency_name: document.getElementById('newAgencyName').value,
+                sector: document.getElementById('newSector').value,
+                subsection: document.getElementById('newSubsection').value,
+                phone: document.getElementById('newPhone').value,
+                ms_isac_member: document.getElementById('newMsIsacMember').value,
+                soc_call: document.getElementById('newSocCall').value,
+                fusion_center: document.getElementById('newFusionCenter').value,
+                k12: document.getElementById('newK12').value,
+                water_wastewater: document.getElementById('newWaterWastewater').value,
+                weekly_rollup: document.getElementById('newWeeklyRollup').value,
+                alternate_email: document.getElementById('newAlternateEmail').value,
+                region: document.getElementById('newRegion').value,
+                group: document.getElementById('newGroup').value
             }};
             
             const response = await fetch(`${{API_URL}}/contacts`, {{
@@ -684,6 +974,55 @@ def serve_web_ui(event):
             if (result.success) {{
                 hideAddContact();
                 loadContacts();
+                // Clear form
+                document.getElementById('newEmail').value = '';
+                document.getElementById('newFirstName').value = '';
+                document.getElementById('newLastName').value = '';
+                document.getElementById('newTitle').value = '';
+                document.getElementById('newEntityType').value = '';
+                document.getElementById('newState').value = '';
+                document.getElementById('newAgencyName').value = '';
+                document.getElementById('newSector').value = '';
+                document.getElementById('newSubsection').value = '';
+                document.getElementById('newPhone').value = '';
+                document.getElementById('newMsIsacMember').value = '';
+                document.getElementById('newSocCall').value = '';
+                document.getElementById('newFusionCenter').value = '';
+                document.getElementById('newK12').value = '';
+                document.getElementById('newWaterWastewater').value = '';
+                document.getElementById('newWeeklyRollup').value = '';
+                document.getElementById('newAlternateEmail').value = '';
+                document.getElementById('newRegion').value = '';
+                document.getElementById('newGroup').value = '';
+            }}
+        }}
+        
+        async function viewContact(email) {{
+            const response = await fetch(`${{API_URL}}/contacts`);
+            const result = await response.json();
+            const contact = result.contacts.find(c => c.email === email);
+            
+            if (contact) {{
+                alert(`Contact Details:\\n\\n` +
+                    `Email: ${{contact.email}}\\n` +
+                    `Name: ${{contact.first_name}} ${{contact.last_name}}\\n` +
+                    `Title: ${{contact.title || 'N/A'}}\\n` +
+                    `Entity Type: ${{contact.entity_type || 'N/A'}}\\n` +
+                    `State: ${{contact.state || 'N/A'}}\\n` +
+                    `Agency: ${{contact.agency_name || 'N/A'}}\\n` +
+                    `Sector: ${{contact.sector || 'N/A'}}\\n` +
+                    `Subsection: ${{contact.subsection || 'N/A'}}\\n` +
+                    `Phone: ${{contact.phone || 'N/A'}}\\n` +
+                    `MS-ISAC Member: ${{contact.ms_isac_member || 'N/A'}}\\n` +
+                    `SOC Call: ${{contact.soc_call || 'N/A'}}\\n` +
+                    `Fusion Center: ${{contact.fusion_center || 'N/A'}}\\n` +
+                    `K-12: ${{contact.k12 || 'N/A'}}\\n` +
+                    `Water/Wastewater: ${{contact.water_wastewater || 'N/A'}}\\n` +
+                    `Weekly Rollup: ${{contact.weekly_rollup || 'N/A'}}\\n` +
+                    `Alternate Email: ${{contact.alternate_email || 'N/A'}}\\n` +
+                    `Region: ${{contact.region || 'N/A'}}\\n` +
+                    `Group: ${{contact.group || 'N/A'}}`
+                );
             }}
         }}
         
@@ -717,15 +1056,51 @@ def serve_web_ui(event):
                 
                 const contact = {{}};
                 headers.forEach((header, index) => {{
-                    // Map common CSV headers to our fields
-                    if (header === 'email' || header === 'email_address') {{
-                        contact.email = values[index];
-                    }} else if (header === 'first_name' || header === 'firstname' || header === 'first') {{
-                        contact.first_name = values[index];
-                    }} else if (header === 'last_name' || header === 'lastname' || header === 'last') {{
-                        contact.last_name = values[index];
-                    }} else if (header === 'company' || header === 'organization') {{
-                        contact.company = values[index];
+                    // Map CSV headers to contact fields
+                    const fieldMap = {{
+                        'email': 'email',
+                        'email_address': 'email',
+                        'first_name': 'first_name',
+                        'firstname': 'first_name',
+                        'first': 'first_name',
+                        'last_name': 'last_name',
+                        'lastname': 'last_name',
+                        'last': 'last_name',
+                        'title': 'title',
+                        'entity_type': 'entity_type',
+                        'entitytype': 'entity_type',
+                        'state': 'state',
+                        'agency_name': 'agency_name',
+                        'agencyname': 'agency_name',
+                        'agency': 'agency_name',
+                        'sector': 'sector',
+                        'subsection': 'subsection',
+                        'phone': 'phone',
+                        'phone_number': 'phone',
+                        'ms_isac_member': 'ms_isac_member',
+                        'ms-isac': 'ms_isac_member',
+                        'msisac': 'ms_isac_member',
+                        'soc_call': 'soc_call',
+                        'soc': 'soc_call',
+                        'fusion_center': 'fusion_center',
+                        'fusion': 'fusion_center',
+                        'k12': 'k12',
+                        'k-12': 'k12',
+                        'water_wastewater': 'water_wastewater',
+                        'water/wastewater': 'water_wastewater',
+                        'water': 'water_wastewater',
+                        'weekly_rollup': 'weekly_rollup',
+                        'weekly': 'weekly_rollup',
+                        'rollup': 'weekly_rollup',
+                        'alternate_email': 'alternate_email',
+                        'alt_email': 'alternate_email',
+                        'region': 'region',
+                        'group': 'group'
+                    }};
+                    
+                    const fieldName = fieldMap[header];
+                    if (fieldName) {{
+                        contact[fieldName] = values[index];
                     }}
                 }});
                 
@@ -752,6 +1127,24 @@ def serve_web_ui(event):
             loadContacts();
         }}
         
+        function loadContactsForCampaign() {{
+            const selectedGroup = document.getElementById('targetGroup').value;
+            let targetContacts = allContacts;
+            
+            if (selectedGroup) {{
+                targetContacts = allContacts.filter(contact => contact.group === selectedGroup);
+            }}
+            
+            const contactCount = document.getElementById('contactCount');
+            if (targetContacts.length > 0) {{
+                contactCount.textContent = `${{targetContacts.length}} contact(s) selected`;
+                contactCount.style.display = 'inline-block';
+            }} else {{
+                contactCount.textContent = 'No contacts selected';
+                contactCount.style.display = 'inline-block';
+            }}
+        }}
+        
         async function sendCampaign() {{
             const button = event.target;
             const originalText = button.textContent;
@@ -762,10 +1155,23 @@ def serve_web_ui(event):
                 button.classList.add('loading');
                 button.disabled = true;
                 
+            const targetGroup = document.getElementById('targetGroup').value;
+            
+            // Get target contacts based on selected group
+            let targetContacts = allContacts;
+            if (targetGroup) {{
+                targetContacts = allContacts.filter(contact => contact.group === targetGroup);
+            }}
+            
+            if (targetContacts.length === 0) {{
+                throw new Error('No contacts found for the selected group. Please add contacts or select a different group.');
+            }}
+            
             const campaign = {{
                 campaign_name: document.getElementById('campaignName').value,
                 subject: document.getElementById('subject').value,
-                body: document.getElementById('body').value
+                body: document.getElementById('body').value,
+                target_group: targetGroup || null
             }};
                 
                 // Validate required fields
@@ -808,6 +1214,7 @@ def serve_web_ui(event):
                     </div>
                     <div style="background: var(--gray-50); padding: 16px; border-radius: 8px; margin-top: 20px;">
                         <p style="margin: 0; color: var(--gray-700);"><strong>Campaign ID:</strong> ${{result.campaign_id}}</p>
+                        <p style="margin: 5px 0 0 0; color: var(--gray-700);"><strong>Target Group:</strong> ${{targetGroup || 'All Groups'}}</p>
                         <p style="margin: 5px 0 0 0; color: var(--gray-700);"><strong>Queue:</strong> ${{result.queue_name || 'bulk-email-queue'}}</p>
                         <p style="margin: 10px 0 0 0; color: var(--gray-600); font-size: 0.9rem;">Check CloudWatch Logs to monitor email processing status</p>
                     </div>
@@ -1006,14 +1413,29 @@ def get_contacts(headers):
     return {'statusCode': 200, 'headers': headers, 'body': json.dumps({'contacts': contacts})}
 
 def add_contact(body, headers):
-    """Add new contact"""
+    """Add new contact with all CISA-specific fields"""
     try:
         contacts_table.put_item(
             Item={
                 'email': body['email'],
                 'first_name': body.get('first_name', ''),
                 'last_name': body.get('last_name', ''),
-                'company': body.get('company', ''),
+                'title': body.get('title', ''),
+                'entity_type': body.get('entity_type', ''),
+                'state': body.get('state', ''),
+                'agency_name': body.get('agency_name', ''),
+                'sector': body.get('sector', ''),
+                'subsection': body.get('subsection', ''),
+                'phone': body.get('phone', ''),
+                'ms_isac_member': body.get('ms_isac_member', ''),
+                'soc_call': body.get('soc_call', ''),
+                'fusion_center': body.get('fusion_center', ''),
+                'k12': body.get('k12', ''),
+                'water_wastewater': body.get('water_wastewater', ''),
+                'weekly_rollup': body.get('weekly_rollup', ''),
+                'alternate_email': body.get('alternate_email', ''),
+                'region': body.get('region', ''),
+                'group': body.get('group', ''),
                 'created_at': datetime.now().isoformat()
             }
         )
@@ -1022,18 +1444,31 @@ def add_contact(body, headers):
         return {'statusCode': 500, 'headers': headers, 'body': json.dumps({'error': str(e)})}
 
 def update_contact(body, headers):
-    """Update contact"""
+    """Update contact with all CISA fields"""
     try:
         email = body['email']
+        
+        # Define all possible contact fields
+        contact_fields = [
+            'first_name', 'last_name', 'title', 'entity_type', 'state', 
+            'agency_name', 'sector', 'subsection', 'phone', 'ms_isac_member',
+            'soc_call', 'fusion_center', 'k12', 'water_wastewater', 
+            'weekly_rollup', 'alternate_email', 'region', 'group'
+        ]
+        
         update_expr = "SET "
         expr_values = {}
+        update_parts = []
         
-        for field in ['first_name', 'last_name', 'company']:
+        for field in contact_fields:
             if field in body:
-                update_expr += f"{field} = :{field[0]}, "
-                expr_values[f":{field[0]}"] = body[field]
+                update_parts.append(f"{field} = :{field}")
+                expr_values[f":{field}"] = body[field]
         
-        update_expr = update_expr.rstrip(', ')
+        if not update_parts:
+            return {'statusCode': 400, 'headers': headers, 'body': json.dumps({'error': 'No fields to update'})}
+        
+        update_expr += ", ".join(update_parts)
         
         contacts_table.update_item(
             Key={'email': email},
@@ -1041,8 +1476,10 @@ def update_contact(body, headers):
             ExpressionAttributeValues=expr_values
         )
         
+        print(f"Updated contact {email} with fields: {list(body.keys())}")
         return {'statusCode': 200, 'headers': headers, 'body': json.dumps({'success': True})}
     except Exception as e:
+        print(f"Error updating contact: {str(e)}")
         return {'statusCode': 500, 'headers': headers, 'body': json.dumps({'error': str(e)})}
 
 def delete_contact(event, headers):
@@ -1064,12 +1501,22 @@ def send_campaign(body, headers):
         
         config = config_response['Item']
         
-        # Get contacts
+        # Get contacts (filter by group if specified)
         contacts_response = contacts_table.scan()
-        contacts = contacts_response['Items']
+        all_contacts = contacts_response['Items']
+        
+        # Filter by target group if specified
+        target_group = body.get('target_group')
+        if target_group:
+            contacts = [c for c in all_contacts if c.get('group') == target_group]
+            print(f"Filtering contacts by group: {target_group}, found {len(contacts)} contacts")
+        else:
+            contacts = all_contacts
+            print(f"Using all contacts: {len(contacts)} contacts")
         
         if not contacts:
-            return {'statusCode': 400, 'headers': headers, 'body': json.dumps({'error': 'No contacts found to send campaign'})}
+            group_msg = f" for group '{target_group}'" if target_group else ""
+            return {'statusCode': 400, 'headers': headers, 'body': json.dumps({'error': f'No contacts found{group_msg} to send campaign'})}
         
         campaign_id = f"campaign_{int(datetime.now().timestamp())}"
         
@@ -1159,8 +1606,10 @@ def send_campaign(body, headers):
             'statusCode': 200,
             'headers': headers,
             'body': json.dumps({
+                'success': True,
                 'campaign_id': campaign_id,
                 'message': 'Campaign queued successfully',
+                'target_group': target_group,
                 'total_contacts': len(contacts),
                 'queued_count': queued_count,
                 'failed_to_queue': failed_to_queue,
@@ -1263,9 +1712,36 @@ def get_aws_credentials_from_secrets_manager(secret_name):
         raise
 
 def personalize_content(content, contact):
-    """Replace placeholders with contact data"""
+    """Replace placeholders with contact data - supports all CISA fields"""
+    if not content:
+        return content
+        
+    # Basic contact info
     content = content.replace('{{first_name}}', contact.get('first_name', ''))
     content = content.replace('{{last_name}}', contact.get('last_name', ''))
     content = content.replace('{{email}}', contact.get('email', ''))
-    content = content.replace('{{company}}', contact.get('company', ''))
+    content = content.replace('{{title}}', contact.get('title', ''))
+    
+    # Organization info
+    content = content.replace('{{entity_type}}', contact.get('entity_type', ''))
+    content = content.replace('{{state}}', contact.get('state', ''))
+    content = content.replace('{{agency_name}}', contact.get('agency_name', ''))
+    content = content.replace('{{sector}}', contact.get('sector', ''))
+    content = content.replace('{{subsection}}', contact.get('subsection', ''))
+    content = content.replace('{{phone}}', contact.get('phone', ''))
+    
+    # CISA-specific fields
+    content = content.replace('{{ms_isac_member}}', contact.get('ms_isac_member', ''))
+    content = content.replace('{{soc_call}}', contact.get('soc_call', ''))
+    content = content.replace('{{fusion_center}}', contact.get('fusion_center', ''))
+    content = content.replace('{{k12}}', contact.get('k12', ''))
+    content = content.replace('{{water_wastewater}}', contact.get('water_wastewater', ''))
+    content = content.replace('{{weekly_rollup}}', contact.get('weekly_rollup', ''))
+    content = content.replace('{{alternate_email}}', contact.get('alternate_email', ''))
+    content = content.replace('{{region}}', contact.get('region', ''))
+    content = content.replace('{{group}}', contact.get('group', ''))
+    
+    # Legacy support
+    content = content.replace('{{company}}', contact.get('agency_name', ''))
+    
     return content

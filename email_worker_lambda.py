@@ -13,7 +13,7 @@ from datetime import datetime
 
 # Configure logging
 logger = logging.getLogger()
-logger.setLevel(logging.INFO)
+logger.setLevel(logging.DEBUG)  # Verbose logging enabled
 
 # Initialize clients
 dynamodb = boto3.resource('dynamodb', region_name='us-gov-west-1')
@@ -27,7 +27,7 @@ def lambda_handler(event, context):
     start_time = datetime.now()
     logger.info(f"Lambda invocation started at {start_time.isoformat()}")
     logger.info(f"Processing {len(event['Records'])} messages from SQS queue")
-    logger.info(f"Request ID: {context.request_id}")
+    logger.info(f"Request ID: {context.aws_request_id}")
     logger.info(f"Function Name: {context.function_name}")
     logger.info(f"Memory Limit: {context.memory_limit_in_mb} MB")
     
@@ -275,12 +275,36 @@ def send_smtp_email(campaign, contact, from_email, subject, body, msg_idx=0):
         return False
 
 def personalize_content(content, contact):
-    """Replace placeholders with contact data"""
+    """Replace placeholders with contact data - supports all CISA fields"""
     if not content:
         return content
-        
+    
+    # Basic contact info
     content = content.replace('{{first_name}}', contact.get('first_name', ''))
     content = content.replace('{{last_name}}', contact.get('last_name', ''))
     content = content.replace('{{email}}', contact.get('email', ''))
-    content = content.replace('{{company}}', contact.get('company', ''))
+    content = content.replace('{{title}}', contact.get('title', ''))
+    
+    # Organization info
+    content = content.replace('{{entity_type}}', contact.get('entity_type', ''))
+    content = content.replace('{{state}}', contact.get('state', ''))
+    content = content.replace('{{agency_name}}', contact.get('agency_name', ''))
+    content = content.replace('{{sector}}', contact.get('sector', ''))
+    content = content.replace('{{subsection}}', contact.get('subsection', ''))
+    content = content.replace('{{phone}}', contact.get('phone', ''))
+    
+    # CISA-specific fields
+    content = content.replace('{{ms_isac_member}}', contact.get('ms_isac_member', ''))
+    content = content.replace('{{soc_call}}', contact.get('soc_call', ''))
+    content = content.replace('{{fusion_center}}', contact.get('fusion_center', ''))
+    content = content.replace('{{k12}}', contact.get('k12', ''))
+    content = content.replace('{{water_wastewater}}', contact.get('water_wastewater', ''))
+    content = content.replace('{{weekly_rollup}}', contact.get('weekly_rollup', ''))
+    content = content.replace('{{alternate_email}}', contact.get('alternate_email', ''))
+    content = content.replace('{{region}}', contact.get('region', ''))
+    content = content.replace('{{group}}', contact.get('group', ''))
+    
+    # Legacy support
+    content = content.replace('{{company}}', contact.get('agency_name', ''))
+    
     return content
