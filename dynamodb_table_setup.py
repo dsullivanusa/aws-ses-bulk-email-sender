@@ -9,6 +9,17 @@ def create_dynamodb_table():
     table_name = 'EmailContacts'
     
     try:
+        # Check if table already exists
+        try:
+            table = dynamodb.Table(table_name)
+            table.load()  # This will raise an exception if table doesn't exist
+            print(f"Table {table_name} already exists!")
+            print(f"Table status: {table.table_status}")
+            return table
+        except:
+            pass  # Table doesn't exist, continue with creation
+        
+        # Create the table
         table = dynamodb.create_table(
             TableName=table_name,
             KeySchema=[
