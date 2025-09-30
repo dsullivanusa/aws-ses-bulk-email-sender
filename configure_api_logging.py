@@ -80,6 +80,7 @@ def configure_api_logging():
     # Custom log format with all variables including source IP
     log_format = json.dumps({
         "requestId": "$context.requestId",
+        "extendedRequestId": "$context.extendedRequestId",
         "requestTime": "$context.requestTime",
         "requestTimeEpoch": "$context.requestTimeEpoch",
         "httpMethod": "$context.httpMethod",

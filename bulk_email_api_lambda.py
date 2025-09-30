@@ -422,9 +422,9 @@ def serve_web_ui(event):
         </div>
         
         <div class="tabs">
-            <div class="tab active" onclick="showTab('config')">⚙️ Email Config</div>
-            <div class="tab" onclick="showTab('contacts')">👥 Contacts</div>
-            <div class="tab" onclick="showTab('campaign')">📧 Send Campaign</div>
+            <div class="tab active" onclick="showTab('config')">Email Config</div>
+            <div class="tab" onclick="showTab('contacts')">Contacts</div>
+            <div class="tab" onclick="showTab('campaign')">Send Campaign</div>
         </div>
         
         <div id="config" class="tab-content active">
@@ -468,15 +468,15 @@ def serve_web_ui(event):
                 <label>Emails per minute:</label>
                 <input type="number" id="emailsPerMinute" value="60">
             </div>
-            <button onclick="saveConfig()">💾 Save Configuration</button>
+            <button onclick="saveConfig()">Save Configuration</button>
         </div>
         
         <div id="contacts" class="tab-content">
             <h2>Contact Management</h2>
-            <button onclick="loadContacts()">🔄 Load Contacts</button>
-            <button class="btn-success" onclick="showAddContact()">➕ Add Contact</button>
+            <button onclick="loadContacts()">Load Contacts</button>
+            <button class="btn-success" onclick="showAddContact()">Add Contact</button>
             <input type="file" id="csvFile" accept=".csv" style="display: none;" onchange="uploadCSV()">
-            <button onclick="document.getElementById('csvFile').click()">📁 Upload CSV</button>
+            <button onclick="document.getElementById('csvFile').click()">Upload CSV</button>
             
             <div id="addContactForm" class="hidden">
                 <h3>Add Contact</h3>
@@ -484,8 +484,8 @@ def serve_web_ui(event):
                 <input type="text" id="newFirstName" placeholder="First Name">
                 <input type="text" id="newLastName" placeholder="Last Name">
                 <input type="text" id="newCompany" placeholder="Company">
-                <button class="btn-success" onclick="addContact()">✅ Add</button>
-                <button onclick="hideAddContact()">❌ Cancel</button>
+                <button class="btn-success" onclick="addContact()">Add</button>
+                <button onclick="hideAddContact()">Cancel</button>
             </div>
             
             <div class="result">
@@ -515,7 +515,7 @@ def serve_web_ui(event):
                 <label>Email Body:</label>
                 <textarea id="body" rows="8" placeholder="Dear {{{{first_name}}}} {{{{last_name}}}},\\n\\nYour message here..."></textarea>
             </div>
-            <button class="btn-success" onclick="sendCampaign()">🚀 Send Campaign</button>
+            <button class="btn-success" onclick="sendCampaign()">Send Campaign</button>
             
             <div id="campaignResult" class="result hidden"></div>
         </div>
@@ -579,7 +579,7 @@ def serve_web_ui(event):
             const result = await response.json();
                 
                 if (result.success) {{
-                    button.textContent = '✓ Saved!';
+                    button.textContent = 'Saved!';
                     button.style.background = 'linear-gradient(135deg, var(--success-color), #059669)';
                     setTimeout(() => {{
                         button.textContent = originalText;
@@ -590,7 +590,7 @@ def serve_web_ui(event):
                 }}
                 
             }} catch (error) {{
-                button.textContent = '✗ Error';
+                button.textContent = 'Error';
                 button.style.background = 'linear-gradient(135deg, var(--danger-color), #dc2626)';
                 setTimeout(() => {{
                     button.textContent = originalText;
@@ -627,7 +627,7 @@ def serve_web_ui(event):
                     <td>${{contact.first_name || ''}}</td>
                     <td>${{contact.last_name || ''}}</td>
                     <td>${{contact.company || ''}}</td>
-                            <td><button class="btn-danger" onclick="deleteContact('${{contact.email}}')">🗑️ Delete</button></td>
+                    <td><button class="btn-danger" onclick="deleteContact('${{contact.email}}')">Delete</button></td>
                 `;
             }});
                 }} else {{
@@ -635,7 +635,7 @@ def serve_web_ui(event):
                 }}
                 
                 if (button) {{
-                    button.textContent = '✓ Loaded';
+                    button.textContent = 'Loaded';
                     setTimeout(() => {{
                         button.textContent = originalText;
                     }}, 1500);
@@ -646,7 +646,7 @@ def serve_web_ui(event):
                 tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: var(--danger-color); padding: 40px;">Error loading contacts: ' + error.message + '</td></tr>';
                 
                 if (button) {{
-                    button.textContent = '✗ Error';
+                    button.textContent = 'Error';
                     setTimeout(() => {{
                         button.textContent = originalText;
                     }}, 2000);
@@ -788,9 +788,9 @@ def serve_web_ui(event):
                 
                 // Create a beautiful result display
                 resultDiv.innerHTML = `
-                    <h3>🎉 Campaign Queued Successfully!</h3>
+                    <h3>Campaign Queued Successfully!</h3>
                     <div style="background: var(--info-color); color: white; padding: 20px; border-radius: 12px; margin: 20px 0;">
-                        <p style="margin: 0; font-size: 1.1rem;">✉️ Your campaign has been queued and emails will be processed asynchronously.</p>
+                        <p style="margin: 0; font-size: 1.1rem;">Your campaign has been queued and emails will be processed asynchronously.</p>
                     </div>
                     <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; margin: 20px 0;">
                         <div style="background: var(--success-color); color: white; padding: 20px; border-radius: 8px; text-align: center;">
@@ -809,7 +809,7 @@ def serve_web_ui(event):
                     <div style="background: var(--gray-50); padding: 16px; border-radius: 8px; margin-top: 20px;">
                         <p style="margin: 0; color: var(--gray-700);"><strong>Campaign ID:</strong> ${{result.campaign_id}}</p>
                         <p style="margin: 5px 0 0 0; color: var(--gray-700);"><strong>Queue:</strong> ${{result.queue_name || 'bulk-email-queue'}}</p>
-                        <p style="margin: 10px 0 0 0; color: var(--gray-600); font-size: 0.9rem;">📊 Check CloudWatch Logs to monitor email processing status</p>
+                        <p style="margin: 10px 0 0 0; color: var(--gray-600); font-size: 0.9rem;">Check CloudWatch Logs to monitor email processing status</p>
                     </div>
                     <details style="margin-top: 20px;">
                         <summary style="cursor: pointer; color: var(--gray-600);">View Raw Response</summary>
@@ -818,7 +818,7 @@ def serve_web_ui(event):
                 `;
             resultDiv.classList.remove('hidden');
                 
-                button.textContent = '✓ Campaign Sent!';
+                button.textContent = 'Campaign Queued!';
                 button.style.background = 'linear-gradient(135deg, var(--success-color), #059669)';
                 setTimeout(() => {{
                     button.textContent = originalText;
@@ -828,12 +828,12 @@ def serve_web_ui(event):
             }} catch (error) {{
                 const resultDiv = document.getElementById('campaignResult');
                 resultDiv.innerHTML = `
-                    <h3 style="color: var(--danger-color);">❌ Campaign Failed</h3>
+                    <h3 style="color: var(--danger-color);">Campaign Failed</h3>
                     <p style="color: var(--gray-600);">${{error.message}}</p>
                 `;
                 resultDiv.classList.remove('hidden');
                 
-                button.textContent = '✗ Error';
+                button.textContent = 'Error';
                 button.style.background = 'linear-gradient(135deg, var(--danger-color), #dc2626)';
                 setTimeout(() => {{
                     button.textContent = originalText;

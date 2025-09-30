@@ -197,7 +197,7 @@ def deploy_bulk_email_api():
                 {
                     'op': 'replace',
                     'path': '/accessLogSettings/format',
-                    'value': '{"requestId":"$requestId","ip":"$ip","caller":"$caller","user":"$user","requestTime":"$requestTime","httpMethod":"$httpMethod","resourcePath":"$resourcePath","protocol":"$protocol","status":"$status","error":"$error.message","responseLength":"$responseLength","requestLength":"$requestLength","integrationError":"$integrationError","integrationStatus":"$integrationStatus","integrationLatency":"$integrationLatency","responseLatency":"$responseLatency","userAgent":"$context.identity.userAgent","sourceIp":"$context.identity.sourceIp","requestHeaders":"$input.params().header","queryString":"$input.params().querystring","pathParameters":"$input.params().path","stage":"$context.stage","apiId":"$context.apiId"}'
+                    'value': '{"requestId":"$context.requestId","extendedRequestId":"$context.extendedRequestId","ip":"$context.identity.sourceIp","caller":"$context.identity.caller","user":"$context.identity.user","requestTime":"$context.requestTime","httpMethod":"$context.httpMethod","resourcePath":"$context.resourcePath","protocol":"$context.protocol","status":"$context.status","error":"$context.error.message","responseLength":"$context.responseLength","requestLength":"$context.requestLength","integrationStatus":"$context.integrationStatus","integrationLatency":"$context.integrationLatency","responseLatency":"$context.responseLatency","stage":"$context.stage","apiId":"$context.apiId"}'
                 },
                 {
                     'op': 'replace',
