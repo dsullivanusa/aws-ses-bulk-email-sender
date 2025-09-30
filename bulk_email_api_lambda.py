@@ -483,6 +483,7 @@ def serve_web_ui(event):
         
         <div id="config" class="tab-content active">
             <h2>Email Configuration</h2>
+            <button onclick="alert('JavaScript is working!')" style="background: #28a745; color: white; padding: 10px; border: none; border-radius: 4px; cursor: pointer; margin-bottom: 20px;">Test JavaScript</button>
             <div class="form-group">
                 <label>Email Service:</label>
                 <select id="emailService" onchange="toggleEmailService()">
@@ -703,20 +704,19 @@ def serve_web_ui(event):
         const API_URL = '{api_url}';
         
         // Test if JavaScript is working
-        console.log('JavaScript loaded successfully!');
-        console.log('API URL:', API_URL);
+        alert('JavaScript loaded successfully! API URL: ' + API_URL);
         
         function showTab(tabName) {{
-            console.log('Switching to tab:', tabName);
+            alert('showTab called with: ' + tabName);
             document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
             document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
             event.target.classList.add('active');
             const targetTab = document.getElementById(tabName);
             if (targetTab) {{
                 targetTab.classList.add('active');
-                console.log('Tab switched successfully to:', tabName);
+                alert('Tab switched successfully to: ' + tabName);
             }} else {{
-                console.error('Tab not found:', tabName);
+                alert('ERROR: Tab not found: ' + tabName);
             }}
         }}
         
@@ -797,11 +797,11 @@ def serve_web_ui(event):
         
         // Initialize Quill Editor
         document.addEventListener('DOMContentLoaded', function() {{
-            console.log('DOM loaded, checking for Quill...');
+            alert('DOM loaded, checking for Quill...');
             
             // Check if Quill is available
             if (typeof Quill === 'undefined') {{
-                console.warn('Quill not loaded, using fallback textarea');
+                alert('Quill not loaded, using fallback textarea');
                 // Create fallback textarea
                 const editorDiv = document.getElementById('emailBodyEditor');
                 editorDiv.innerHTML = '<textarea id="body" rows="8" placeholder="Dear {{{{first_name}}}} {{{{last_name}}}},\\n\\nYour message here..." style="width: 100%; min-height: 200px; padding: 10px; border: 1px solid #ccc; border-radius: 4px;"></textarea>';
@@ -830,9 +830,9 @@ def serve_web_ui(event):
             // Set initial content with placeholder example
                 const initialContent = '<p>Dear {{{{first_name}}}} {{{{last_name}}}},</p><p><br></p><p>I hope this message finds you well. As the {{{{title}}}} for {{{{agency_name}}}}, we wanted to reach out regarding...</p><p><br></p><p>Best regards,<br>CISA Team</p>';
                 quillEditor.root.innerHTML = initialContent;
-                console.log('Quill editor initialized successfully');
+                alert('Quill editor initialized successfully');
             }} catch (error) {{
-                console.error('Error initializing Quill editor:', error);
+                alert('Error initializing Quill editor: ' + error.message);
             }}
         }});
         
