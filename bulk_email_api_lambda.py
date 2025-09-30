@@ -482,8 +482,8 @@ def serve_web_ui(event):
         
         <div class="tabs">
             <div class="tab active" onclick="showTab('config', this)">Email Config</div>
-            <div class="tab" onclick="showTab('contacts', this)">Contacts</div>
-            <div class="tab" onclick="showTab('campaign', this)">Send Campaign</div>
+            <div class="tab" onclick="alert('Contacts clicked'); showTab('contacts', this); alert('showTab called')">Contacts</div>
+            <div class="tab" onclick="alert('Campaign clicked'); showTab('campaign', this); alert('showTab called')">Send Campaign</div>
         </div>
         
         <div id="config" class="tab-content active">
@@ -725,6 +725,8 @@ def serve_web_ui(event):
         }}
         
         function showTab(tabName, clickedElement) {{
+            alert('showTab function called with: ' + tabName);
+            
             // Remove active class from all tabs
             document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
             
@@ -736,6 +738,8 @@ def serve_web_ui(event):
             
             // Add active class to target tab content
             document.getElementById(tabName).classList.add('active');
+            
+            alert('showTab function completed');
         }}
         
         function toggleEmailService() {{
