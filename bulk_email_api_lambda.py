@@ -712,16 +712,37 @@ def serve_web_ui(event):
         alert('JavaScript loaded successfully! API URL: ' + API_URL);
         
         function showTab(tabName, clickedElement) {{
-            alert('showTab called with: ' + tabName);
-            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-            clickedElement.classList.add('active');
-            const targetTab = document.getElementById(tabName);
-            if (targetTab) {{
-                targetTab.classList.add('active');
-                alert('Tab switched successfully to: ' + tabName);
-            }} else {{
-                alert('ERROR: Tab not found: ' + tabName);
+            try {{
+                alert('showTab called with: ' + tabName);
+                
+                // Remove active class from all tabs
+                const tabs = document.querySelectorAll('.tab');
+                alert('Found ' + tabs.length + ' tabs');
+                tabs.forEach(t => t.classList.remove('active'));
+                
+                // Remove active class from all tab contents
+                const contents = document.querySelectorAll('.tab-content');
+                alert('Found ' + contents.length + ' tab contents');
+                contents.forEach(c => c.classList.remove('active'));
+                
+                // Add active class to clicked tab
+                if (clickedElement) {{
+                    clickedElement.classList.add('active');
+                    alert('Added active class to clicked element');
+                }} else {{
+                    alert('ERROR: clickedElement is null');
+                }}
+                
+                // Find and activate target tab content
+                const targetTab = document.getElementById(tabName);
+                if (targetTab) {{
+                    targetTab.classList.add('active');
+                    alert('Tab switched successfully to: ' + tabName);
+                }} else {{
+                    alert('ERROR: Tab not found: ' + tabName);
+                }}
+            }} catch (error) {{
+                alert('ERROR in showTab: ' + error.message);
             }}
         }}
         
