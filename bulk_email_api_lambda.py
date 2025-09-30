@@ -479,8 +479,8 @@ def serve_web_ui(event):
         
         <div class="tabs">
             <div class="tab active" onclick="showTab('config', this)">Email Config</div>
-            <div class="tab" onclick="alert('Contacts clicked'); showTab('contacts', this); alert('showTab called')">Contacts</div>
-            <div class="tab" onclick="alert('Campaign clicked'); showTab('campaign', this); alert('showTab called')">Send Campaign</div>
+            <div class="tab" onclick="showTab('contacts', this)">Contacts</div>
+            <div class="tab" onclick="showTab('campaign', this)">Send Campaign</div>
         </div>
         
         <div id="config" class="tab-content active">
@@ -704,24 +704,9 @@ def serve_web_ui(event):
     <script>
         const API_URL = '{api_url}';
         
-        // Test if JavaScript is working
-        alert('JavaScript loaded successfully! API URL: ' + API_URL);
-        
-        // Test if showTab function exists
-        if (typeof showTab === 'function') {{
-            alert('showTab function is defined');
-        }} else {{
-            alert('ERROR: showTab function is NOT defined');
-        }}
-        
-        // Simple test function
-        function testFunction() {{
-            alert('testFunction called successfully');
-        }}
+        // Initialize the application
         
         function showTab(tabName, clickedElement) {{
-            alert('showTab function called with: ' + tabName);
-            
             // Remove active class from all tabs
             document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
             
@@ -733,8 +718,6 @@ def serve_web_ui(event):
             
             // Add active class to target tab content
             document.getElementById(tabName).classList.add('active');
-            
-            alert('showTab function completed');
         }}
         
         function toggleEmailService() {{
@@ -1351,10 +1334,10 @@ def serve_web_ui(event):
             }}
         }}
         
-        // window.onload = () => {{
-        //     loadContacts();
-        //     loadConfig();
-        // }};
+        window.onload = () => {{
+            loadContacts();
+            loadConfig();
+        }};
     </script>
 </body>
 </html>"""
