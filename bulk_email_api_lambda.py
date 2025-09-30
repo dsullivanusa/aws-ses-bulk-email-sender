@@ -702,11 +702,22 @@ def serve_web_ui(event):
     <script>
         const API_URL = '{api_url}';
         
+        // Test if JavaScript is working
+        console.log('JavaScript loaded successfully!');
+        console.log('API URL:', API_URL);
+        
         function showTab(tabName) {{
+            console.log('Switching to tab:', tabName);
             document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
             document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
             event.target.classList.add('active');
-            document.getElementById(tabName).classList.add('active');
+            const targetTab = document.getElementById(tabName);
+            if (targetTab) {{
+                targetTab.classList.add('active');
+                console.log('Tab switched successfully to:', tabName);
+            }} else {{
+                console.error('Tab not found:', tabName);
+            }}
         }}
         
         function toggleEmailService() {{
@@ -786,8 +797,20 @@ def serve_web_ui(event):
         
         // Initialize Quill Editor
         document.addEventListener('DOMContentLoaded', function() {{
-            // Initialize Quill editor
-            quillEditor = new Quill('#emailBodyEditor', {{
+            console.log('DOM loaded, checking for Quill...');
+            
+            // Check if Quill is available
+            if (typeof Quill === 'undefined') {{
+                console.warn('Quill not loaded, using fallback textarea');
+                // Create fallback textarea
+                const editorDiv = document.getElementById('emailBodyEditor');
+                editorDiv.innerHTML = '<textarea id="body" rows="8" placeholder="Dear {{{{first_name}}}} {{{{last_name}}}},\\n\\nYour message here..." style="width: 100%; min-height: 200px; padding: 10px; border: 1px solid #ccc; border-radius: 4px;"></textarea>';
+                return;
+            }}
+            
+            try {{
+                // Initialize Quill editor
+                quillEditor = new Quill('#emailBodyEditor', {{
                 theme: 'snow',
                 placeholder: 'Dear {{{{first_name}}}} {{{{last_name}}}},\\n\\nYour message here...',
                 modules: {{
@@ -805,8 +828,12 @@ def serve_web_ui(event):
             }});
             
             // Set initial content with placeholder example
-            const initialContent = '<p>Dear {{{{first_name}}}} {{{{last_name}}}},</p><p><br></p><p>I hope this message finds you well. As the {{{{title}}}} for {{{{agency_name}}}}, we wanted to reach out regarding...</p><p><br></p><p>Best regards,<br>CISA Team</p>';
-            quillEditor.root.innerHTML = initialContent;
+                const initialContent = '<p>Dear {{{{first_name}}}} {{{{last_name}}}},</p><p><br></p><p>I hope this message finds you well. As the {{{{title}}}} for {{{{agency_name}}}}, we wanted to reach out regarding...</p><p><br></p><p>Best regards,<br>CISA Team</p>';
+                quillEditor.root.innerHTML = initialContent;
+                console.log('Quill editor initialized successfully');
+            }} catch (error) {{
+                console.error('Error initializing Quill editor:', error);
+            }}
         }});
         
         function clearCampaignForm() {{
@@ -814,6 +841,11 @@ def serve_web_ui(event):
             document.getElementById('subject').value = '';
             if (quillEditor) {{
                 quillEditor.setContents([]);
+            }} else {{
+                const textarea = document.getElementById('body');
+                if (textarea) {{
+                    textarea.value = '';
+                }}
             }}
             document.getElementById('targetGroup').value = '';
             loadContactsForCampaign();
@@ -1236,8 +1268,16 @@ def serve_web_ui(event):
                 throw new Error('No contacts found for the selected group. Please add contacts or select a different group.');
             }}
             
-            // Get content from Quill editor
-            const emailBody = quillEditor ? quillEditor.root.innerHTML : '';
+            // Get content from Quill editor or fallback textarea
+            let emailBody = '';
+            if (quillEditor) {{
+                emailBody = quillEditor.root.innerHTML;
+            }} else {{
+                const textarea = document.getElementById('body');
+                if (textarea) {{
+                    emailBody = textarea.value;
+                }}
+            }}
             
             const campaign = {{
                 campaign_name: document.getElementById('campaignName').value,
