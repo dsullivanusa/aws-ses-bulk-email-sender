@@ -476,9 +476,9 @@ def serve_web_ui(event):
         </div>
         
         <div class="tabs">
-            <div class="tab active" onclick="showTab('config')">Email Config</div>
-            <div class="tab" onclick="showTab('contacts')">Contacts</div>
-            <div class="tab" onclick="showTab('campaign')">Send Campaign</div>
+            <div class="tab active" onclick="showTab('config', this)">Email Config</div>
+            <div class="tab" onclick="showTab('contacts', this)">Contacts</div>
+            <div class="tab" onclick="showTab('campaign', this)">Send Campaign</div>
         </div>
         
         <div id="config" class="tab-content active">
@@ -706,11 +706,11 @@ def serve_web_ui(event):
         // Test if JavaScript is working
         alert('JavaScript loaded successfully! API URL: ' + API_URL);
         
-        function showTab(tabName) {{
+        function showTab(tabName, clickedElement) {{
             alert('showTab called with: ' + tabName);
             document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
             document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-            event.target.classList.add('active');
+            clickedElement.classList.add('active');
             const targetTab = document.getElementById(tabName);
             if (targetTab) {{
                 targetTab.classList.add('active');
