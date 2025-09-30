@@ -1,0 +1,19 @@
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Effect": "Allow",
+            "Action": [
+                "sqs:SendMessage",
+                "sqs:ReceiveMessage",
+                "sqs:DeleteMessage",
+                "sqs:GetQueueAttributes",
+                "sqs:GetQueueUrl"
+            ],
+            "Resource": [
+                "arn:aws-us-gov:sqs:us-gov-west-1:*:bulk-email-queue",
+                "arn:aws-us-gov:sqs:us-gov-west-1:*:bulk-email-dlq"
+            ]
+        }
+    ]
+}

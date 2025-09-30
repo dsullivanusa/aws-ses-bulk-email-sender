@@ -17,6 +17,7 @@ contacts_table = dynamodb.Table('EmailContacts')
 campaigns_table = dynamodb.Table('EmailCampaigns')
 email_config_table = dynamodb.Table('EmailConfig')
 secrets_client = boto3.client('secretsmanager', region_name='us-gov-west-1')
+sqs_client = boto3.client('sqs', region_name='us-gov-west-1')
 
 def lambda_handler(event, context):
     """Bulk Email API with Web UI"""
@@ -344,7 +345,7 @@ def serve_web_ui(event):
             margin-top: 0;
             color: var(--gray-800);
             font-weight: 600;
-        }
+        }}
         .result pre {{
             background: var(--gray-100);
             padding: 16px;
@@ -787,20 +788,28 @@ def serve_web_ui(event):
                 
                 // Create a beautiful result display
                 resultDiv.innerHTML = `
-                    <h3>🎉 Campaign Sent Successfully!</h3>
+                    <h3>🎉 Campaign Queued Successfully!</h3>
+                    <div style="background: var(--info-color); color: white; padding: 20px; border-radius: 12px; margin: 20px 0;">
+                        <p style="margin: 0; font-size: 1.1rem;">✉️ Your campaign has been queued and emails will be processed asynchronously.</p>
+                    </div>
                     <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; margin: 20px 0;">
                         <div style="background: var(--success-color); color: white; padding: 20px; border-radius: 8px; text-align: center;">
-                            <h4 style="margin: 0; font-size: 2rem;">${{result.sent_count || 0}}</h4>
-                            <p style="margin: 5px 0 0 0;">Emails Sent</p>
+                            <h4 style="margin: 0; font-size: 2rem;">${{result.queued_count || 0}}</h4>
+                            <p style="margin: 5px 0 0 0;">Queued to SQS</p>
                         </div>
-                        <div style="background: var(--danger-color); color: white; padding: 20px; border-radius: 8px; text-align: center;">
-                            <h4 style="margin: 0; font-size: 2rem;">${{result.failed_count || 0}}</h4>
-                            <p style="margin: 5px 0 0 0;">Failed</p>
+                        <div style="background: var(--warning-color); color: white; padding: 20px; border-radius: 8px; text-align: center;">
+                            <h4 style="margin: 0; font-size: 2rem;">${{result.failed_to_queue || 0}}</h4>
+                            <p style="margin: 5px 0 0 0;">Failed to Queue</p>
                         </div>
                         <div style="background: var(--info-color); color: white; padding: 20px; border-radius: 8px; text-align: center;">
                             <h4 style="margin: 0; font-size: 2rem;">${{result.total_contacts || 0}}</h4>
                             <p style="margin: 5px 0 0 0;">Total Contacts</p>
                         </div>
+                    </div>
+                    <div style="background: var(--gray-50); padding: 16px; border-radius: 8px; margin-top: 20px;">
+                        <p style="margin: 0; color: var(--gray-700);"><strong>Campaign ID:</strong> ${{result.campaign_id}}</p>
+                        <p style="margin: 5px 0 0 0; color: var(--gray-700);"><strong>Queue:</strong> ${{result.queue_name || 'bulk-email-queue'}}</p>
+                        <p style="margin: 10px 0 0 0; color: var(--gray-600); font-size: 0.9rem;">📊 Check CloudWatch Logs to monitor email processing status</p>
                     </div>
                     <details style="margin-top: 20px;">
                         <summary style="cursor: pointer; color: var(--gray-600);">View Raw Response</summary>
@@ -1046,7 +1055,7 @@ def delete_contact(event, headers):
         return {'statusCode': 500, 'headers': headers, 'body': json.dumps({'error': str(e)})}
 
 def send_campaign(body, headers):
-    """Send email campaign"""
+    """Send email campaign by queuing contacts to SQS"""
     try:
         # Get email configuration
         config_response = email_config_table.get_item(Key={'config_id': 'default'})
@@ -1059,6 +1068,9 @@ def send_campaign(body, headers):
         contacts_response = contacts_table.scan()
         contacts = contacts_response['Items']
         
+        if not contacts:
+            return {'statusCode': 400, 'headers': headers, 'body': json.dumps({'error': 'No contacts found to send campaign'})}
+        
         campaign_id = f"campaign_{int(datetime.now().timestamp())}"
         
         # Initialize campaign
@@ -1066,60 +1078,106 @@ def send_campaign(body, headers):
             Item={
                 'campaign_id': campaign_id,
                 'campaign_name': body.get('campaign_name', 'Bulk Campaign'),
-                'status': 'in_progress',
+                'status': 'queued',
                 'total_contacts': len(contacts),
+                'queued_count': 0,
                 'sent_count': 0,
                 'failed_count': 0,
                 'created_at': datetime.now().isoformat()
             }
         )
         
-        sent_count = 0
-        failed_count = 0
+        # Get SQS queue URL
+        queue_name = 'bulk-email-queue'
+        try:
+            queue_url_response = sqs_client.get_queue_url(QueueName=queue_name)
+            queue_url = queue_url_response['QueueUrl']
+        except sqs_client.exceptions.QueueDoesNotExist:
+            return {'statusCode': 500, 'headers': headers, 'body': json.dumps({'error': f'SQS queue "{queue_name}" does not exist. Please create it first.'})}
         
-        # Send emails
+        queued_count = 0
+        failed_to_queue = 0
+        
+        # Queue all contacts to SQS
+        print(f"Queuing {len(contacts)} contacts to SQS for campaign {campaign_id}")
+        
         for contact in contacts:
             try:
-                if config['email_service'] == 'ses':
-                    success = send_ses_email(config, contact, body['subject'], body['body'])
-                else:
-                    success = send_smtp_email(config, contact, body['subject'], body['body'])
+                # Prepare message with all campaign details
+                message_body = {
+                    'campaign_id': campaign_id,
+                    'campaign_name': body.get('campaign_name', 'Bulk Campaign'),
+                    'subject': body['subject'],
+                    'body': body['body'],
+                    'contact': {
+                        'email': contact.get('email'),
+                        'first_name': contact.get('first_name', ''),
+                        'last_name': contact.get('last_name', ''),
+                        'company': contact.get('company', ''),
+                    },
+                    'config': {
+                        'email_service': config.get('email_service'),
+                        'from_email': config.get('from_email'),
+                        'aws_region': config.get('aws_region'),
+                        'aws_secret_name': config.get('aws_secret_name'),
+                        'smtp_server': config.get('smtp_server'),
+                        'smtp_port': config.get('smtp_port'),
+                    }
+                }
                 
-                if success:
-                    sent_count += 1
-                else:
-                    failed_count += 1
-                
-                # Rate limiting
-                time.sleep(60 / config.get('emails_per_minute', 60))
+                # Send message to SQS
+                sqs_client.send_message(
+                    QueueUrl=queue_url,
+                    MessageBody=json.dumps(message_body),
+                    MessageAttributes={
+                        'campaign_id': {
+                            'StringValue': campaign_id,
+                            'DataType': 'String'
+                        },
+                        'email': {
+                            'StringValue': contact.get('email', 'unknown'),
+                            'DataType': 'String'
+                        }
+                    }
+                )
+                queued_count += 1
+                print(f"Queued email for {contact.get('email')}")
                 
             except Exception as e:
-                failed_count += 1
+                print(f"Failed to queue email for {contact.get('email')}: {str(e)}")
+                failed_to_queue += 1
         
-        # Update campaign
+        # Update campaign status
         campaigns_table.update_item(
             Key={'campaign_id': campaign_id},
-            UpdateExpression="SET #status = :status, sent_count = :sent, failed_count = :failed",
+            UpdateExpression="SET #status = :status, queued_count = :queued",
             ExpressionAttributeNames={'#status': 'status'},
             ExpressionAttributeValues={
-                ':status': 'completed',
-                ':sent': sent_count,
-                ':failed': failed_count
+                ':status': 'processing',
+                ':queued': queued_count
             }
         )
+        
+        print(f"Campaign {campaign_id}: Queued {queued_count} emails, {failed_to_queue} failed to queue")
         
         return {
             'statusCode': 200,
             'headers': headers,
             'body': json.dumps({
                 'campaign_id': campaign_id,
-                'sent_count': sent_count,
-                'failed_count': failed_count,
-                'total_contacts': len(contacts)
+                'message': 'Campaign queued successfully',
+                'total_contacts': len(contacts),
+                'queued_count': queued_count,
+                'failed_to_queue': failed_to_queue,
+                'queue_name': queue_name,
+                'note': 'Emails will be processed asynchronously from the SQS queue'
             })
         }
         
     except Exception as e:
+        print(f"Campaign error: {str(e)}")
+        import traceback
+        traceback.print_exc()
         return {'statusCode': 500, 'headers': headers, 'body': json.dumps({'error': str(e)})}
 
 def send_ses_email(config, contact, subject, body):
