@@ -482,8 +482,8 @@ def serve_web_ui(event):
         
         <div class="tabs">
             <div class="tab active" onclick="showTab('config', this)">Email Config</div>
-            <div class="tab" onclick="alert('Contacts clicked!'); alert('About to call showTab'); testFunction(); showTab('contacts', this); alert('After showTab call')">Contacts</div>
-            <div class="tab" onclick="alert('Campaign clicked!'); alert('About to call showTab'); testFunction(); showTab('campaign', this); alert('After showTab call')">Send Campaign</div>
+            <div class="tab" onclick="alert('Contacts clicked!'); alert('About to call showTab'); alert('testFunction exists: ' + (typeof testFunction === 'function')); testFunction(); showTab('contacts', this); alert('After showTab call')">Contacts</div>
+            <div class="tab" onclick="alert('Campaign clicked!'); alert('About to call showTab'); alert('testFunction exists: ' + (typeof testFunction === 'function')); testFunction(); showTab('campaign', this); alert('After showTab call')">Send Campaign</div>
         </div>
         
         <div id="config" class="tab-content active">
@@ -1418,10 +1418,10 @@ def serve_web_ui(event):
             }}
         }}
         
-        window.onload = () => {{
-            loadContacts();
-            loadConfig();
-        }};
+        // window.onload = () => {{
+        //     loadContacts();
+        //     loadConfig();
+        // }};
     </script>
 </body>
 </html>"""
