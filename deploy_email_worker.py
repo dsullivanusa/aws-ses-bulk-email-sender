@@ -77,6 +77,42 @@ def deploy_email_worker_lambda():
     role_arn = role_response['Role']['Arn']
     account_id = role_arn.split(':')[4]
     
+    # Add inline SQS policy with specific permissions for the queue
+    sqs_inline_policy = {
+        "Version": "2012-10-17",
+        "Statement": [
+            {
+                "Effect": "Allow",
+                "Action": [
+                    "sqs:ReceiveMessage",
+                    "sqs:DeleteMessage",
+                    "sqs:GetQueueAttributes",
+                    "sqs:ChangeMessageVisibility"
+                ],
+                "Resource": f"arn:aws-us-gov:sqs:us-gov-west-1:{account_id}:bulk-email-queue"
+            },
+            {
+                "Effect": "Allow",
+                "Action": [
+                    "sqs:GetQueueUrl"
+                ],
+                "Resource": "*"
+            }
+        ]
+    }
+    
+    try:
+        iam_client.put_role_policy(
+            RoleName=role_name,
+            PolicyName='SQSReceiveMessagePolicy',
+            PolicyDocument=json.dumps(sqs_inline_policy)
+        )
+        print(f"✓ Added SQS receive permissions for Lambda execution role")
+        time.sleep(5)  # Wait for policy to propagate
+    except Exception as e:
+        if 'EntityAlreadyExists' not in str(e):
+            print(f"⚠️  SQS inline policy warning: {e}")
+    
     # Create Lambda deployment package
     function_name = 'email-worker-function'
     
