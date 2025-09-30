@@ -165,6 +165,8 @@ def serve_web_ui(event):
             border-radius: var(--border-radius); 
             padding: 8px; 
             gap: 4px;
+            position: relative;
+            z-index: 5;
         }}
         .tab {{ 
             flex: 1; 
@@ -178,6 +180,9 @@ def serve_web_ui(event):
             color: var(--gray-600);
             position: relative;
             overflow: hidden;
+            z-index: 10;
+            pointer-events: auto;
+            user-select: none;
         }}
         .tab:hover {{ 
             background: rgba(99, 102, 241, 0.1); 
@@ -477,8 +482,8 @@ def serve_web_ui(event):
         
         <div class="tabs">
             <div class="tab active" onclick="showTab('config', this)">Email Config</div>
-            <div class="tab" onclick="showTab('contacts', this)">Contacts</div>
-            <div class="tab" onclick="showTab('campaign', this)">Send Campaign</div>
+            <div class="tab" onclick="alert('Contacts clicked!'); showTab('contacts', this)">Contacts</div>
+            <div class="tab" onclick="alert('Campaign clicked!'); showTab('campaign', this)">Send Campaign</div>
         </div>
         
         <div id="config" class="tab-content active">
