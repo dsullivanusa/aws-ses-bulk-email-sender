@@ -482,8 +482,8 @@ def serve_web_ui(event):
         
         <div class="tabs">
             <div class="tab active" onclick="showTab('config', this)">Email Config</div>
-            <div class="tab" onclick="alert('Contacts clicked!'); alert('About to call showTab'); alert('testFunction exists: ' + (typeof testFunction === 'function')); testFunction(); alert('After testFunction'); showTab('contacts', this); alert('After showTab call')">Contacts</div>
-            <div class="tab" onclick="alert('Campaign clicked!'); alert('About to call showTab'); alert('testFunction exists: ' + (typeof testFunction === 'function')); testFunction(); alert('After testFunction'); showTab('campaign', this); alert('After showTab call')">Send Campaign</div>
+            <div class="tab" onclick="showTab('contacts', this)">Contacts</div>
+            <div class="tab" onclick="showTab('campaign', this)">Send Campaign</div>
         </div>
         
         <div id="config" class="tab-content active">
@@ -725,28 +725,17 @@ def serve_web_ui(event):
         }}
         
         function showTab(tabName, clickedElement) {{
-            alert('showTab function started');
-            alert('tabName: ' + tabName);
-            alert('clickedElement: ' + (clickedElement ? 'exists' : 'null'));
-            
-            // Simple test first
-            alert('About to remove active classes');
+            // Remove active class from all tabs
             document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-            alert('Removed active from tabs');
             
+            // Remove active class from all tab contents  
             document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-            alert('Removed active from contents');
             
+            // Add active class to clicked tab
             clickedElement.classList.add('active');
-            alert('Added active to clicked element');
             
-            const targetTab = document.getElementById(tabName);
-            if (targetTab) {{
-                targetTab.classList.add('active');
-                alert('Tab switched successfully to: ' + tabName);
-            }} else {{
-                alert('ERROR: Tab not found: ' + tabName);
-            }}
+            // Add active class to target tab content
+            document.getElementById(tabName).classList.add('active');
         }}
         
         function toggleEmailService() {{
