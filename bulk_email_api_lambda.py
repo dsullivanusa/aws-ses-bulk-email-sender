@@ -482,8 +482,8 @@ def serve_web_ui(event):
         
         <div class="tabs">
             <div class="tab active" onclick="showTab('config', this)">Email Config</div>
-            <div class="tab" onclick="alert('Contacts clicked!'); alert('About to call showTab'); showTab('contacts', this); alert('After showTab call')">Contacts</div>
-            <div class="tab" onclick="alert('Campaign clicked!'); alert('About to call showTab'); showTab('campaign', this); alert('After showTab call')">Send Campaign</div>
+            <div class="tab" onclick="alert('Contacts clicked!'); alert('About to call showTab'); testFunction(); showTab('contacts', this); alert('After showTab call')">Contacts</div>
+            <div class="tab" onclick="alert('Campaign clicked!'); alert('About to call showTab'); testFunction(); showTab('campaign', this); alert('After showTab call')">Send Campaign</div>
         </div>
         
         <div id="config" class="tab-content active">
@@ -716,6 +716,11 @@ def serve_web_ui(event):
             alert('showTab function is defined');
         }} else {{
             alert('ERROR: showTab function is NOT defined');
+        }}
+        
+        // Simple test function
+        function testFunction() {{
+            alert('testFunction called successfully');
         }}
         
         function showTab(tabName, clickedElement) {{
