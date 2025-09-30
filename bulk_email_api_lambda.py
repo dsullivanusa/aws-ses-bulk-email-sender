@@ -482,8 +482,8 @@ def serve_web_ui(event):
         
         <div class="tabs">
             <div class="tab active" onclick="showTab('config', this)">Email Config</div>
-            <div class="tab" onclick="alert('Contacts clicked!'); showTab('contacts', this)">Contacts</div>
-            <div class="tab" onclick="alert('Campaign clicked!'); showTab('campaign', this)">Send Campaign</div>
+            <div class="tab" onclick="alert('Contacts clicked!'); alert('About to call showTab'); showTab('contacts', this); alert('After showTab call')">Contacts</div>
+            <div class="tab" onclick="alert('Campaign clicked!'); alert('About to call showTab'); showTab('campaign', this); alert('After showTab call')">Send Campaign</div>
         </div>
         
         <div id="config" class="tab-content active">
@@ -710,6 +710,13 @@ def serve_web_ui(event):
         
         // Test if JavaScript is working
         alert('JavaScript loaded successfully! API URL: ' + API_URL);
+        
+        // Test if showTab function exists
+        if (typeof showTab === 'function') {{
+            alert('showTab function is defined');
+        }} else {{
+            alert('ERROR: showTab function is NOT defined');
+        }}
         
         function showTab(tabName, clickedElement) {{
             try {{
