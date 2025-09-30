@@ -719,37 +719,27 @@ def serve_web_ui(event):
         }}
         
         function showTab(tabName, clickedElement) {{
-            try {{
-                alert('showTab called with: ' + tabName);
-                
-                // Remove active class from all tabs
-                const tabs = document.querySelectorAll('.tab');
-                alert('Found ' + tabs.length + ' tabs');
-                tabs.forEach(t => t.classList.remove('active'));
-                
-                // Remove active class from all tab contents
-                const contents = document.querySelectorAll('.tab-content');
-                alert('Found ' + contents.length + ' tab contents');
-                contents.forEach(c => c.classList.remove('active'));
-                
-                // Add active class to clicked tab
-                if (clickedElement) {{
-                    clickedElement.classList.add('active');
-                    alert('Added active class to clicked element');
-                }} else {{
-                    alert('ERROR: clickedElement is null');
-                }}
-                
-                // Find and activate target tab content
-                const targetTab = document.getElementById(tabName);
-                if (targetTab) {{
-                    targetTab.classList.add('active');
-                    alert('Tab switched successfully to: ' + tabName);
-                }} else {{
-                    alert('ERROR: Tab not found: ' + tabName);
-                }}
-            }} catch (error) {{
-                alert('ERROR in showTab: ' + error.message);
+            alert('showTab function started');
+            alert('tabName: ' + tabName);
+            alert('clickedElement: ' + (clickedElement ? 'exists' : 'null'));
+            
+            // Simple test first
+            alert('About to remove active classes');
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            alert('Removed active from tabs');
+            
+            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+            alert('Removed active from contents');
+            
+            clickedElement.classList.add('active');
+            alert('Added active to clicked element');
+            
+            const targetTab = document.getElementById(tabName);
+            if (targetTab) {{
+                targetTab.classList.add('active');
+                alert('Tab switched successfully to: ' + tabName);
+            }} else {{
+                alert('ERROR: Tab not found: ' + tabName);
             }}
         }}
         
