@@ -485,35 +485,9 @@ def serve_web_ui(event):
         
         <div id="config" class="tab-content active">
             <h2>Email Configuration</h2>
-            <div class="form-group">
-                <label>Email Service:</label>
-                <select id="emailService" onchange="toggleEmailService()">
-                    <option value="ses">AWS SES</option>
-                    <option value="smtp">SMTP</option>
-                </select>
-            </div>
-            
-            <div id="sesConfig">
                 <div class="form-group">
                     <label>AWS Region:</label>
                     <input type="text" id="awsRegion" value="us-gov-west-1">
-                </div>
-                <div class="form-group">
-                    <label>AWS Secrets Manager Secret Name (Optional):</label>
-                    <input type="text" id="awsSecretName" placeholder="email-api-credentials">
-                    <small style="color: #666; font-size: 0.9em;">Leave empty to use Lambda's IAM role (recommended). Only provide if using specific credentials.</small>
-                </div>
-            </div>
-            
-            <div id="smtpConfig" class="hidden">
-                <div class="form-group">
-                    <label>SMTP Server:</label>
-                    <input type="text" id="smtpServer" value="192.168.1.100">
-                </div>
-                <div class="form-group">
-                    <label>SMTP Port:</label>
-                    <input type="number" id="smtpPort" value="25">
-                </div>
             </div>
             
             <div class="form-group">
@@ -721,19 +695,6 @@ def serve_web_ui(event):
             document.getElementById(tabName).classList.add('active');
         }}
         
-        function toggleEmailService() {{
-            const service = document.getElementById('emailService').value;
-            const sesConfig = document.getElementById('sesConfig');
-            const smtpConfig = document.getElementById('smtpConfig');
-            
-            if (service === 'ses') {{
-                sesConfig.classList.remove('hidden');
-                smtpConfig.classList.add('hidden');
-            }} else {{
-                sesConfig.classList.add('hidden');
-                smtpConfig.classList.remove('hidden');
-            }}
-        }}
         
         async function saveConfig() {{
             const button = event.target;
@@ -745,20 +706,12 @@ def serve_web_ui(event):
                 button.classList.add('loading');
                 button.disabled = true;
                 
-            const service = document.getElementById('emailService').value;
             const config = {{
-                email_service: service,
+                email_service: 'ses',
+                aws_region: document.getElementById('awsRegion').value,
                 from_email: document.getElementById('fromEmail').value,
                 emails_per_minute: parseInt(document.getElementById('emailsPerMinute').value)
             }};
-            
-            if (service === 'ses') {{
-                config.aws_region = document.getElementById('awsRegion').value;
-                    config.aws_secret_name = document.getElementById('awsSecretName').value;
-            }} else {{
-                config.smtp_server = document.getElementById('smtpServer').value;
-                config.smtp_port = parseInt(document.getElementById('smtpPort').value);
-            }}
             
             const response = await fetch(`${{API_URL}}/config`, {{
                 method: 'POST',
@@ -1374,19 +1327,9 @@ def serve_web_ui(event):
                     const result = await response.json();
                     const config = result.config;
                     
-                    document.getElementById('emailService').value = config.email_service || 'ses';
+                    document.getElementById('awsRegion').value = config.aws_region || 'us-gov-west-1';
                     document.getElementById('fromEmail').value = config.from_email || '';
                     document.getElementById('emailsPerMinute').value = config.emails_per_minute || 60;
-                    
-                    if (config.email_service === 'ses') {{
-                        document.getElementById('awsRegion').value = config.aws_region || 'us-gov-west-1';
-                        document.getElementById('awsSecretName').value = config.aws_secret_name || '';
-                    }} else {{
-                        document.getElementById('smtpServer').value = config.smtp_server || '192.168.1.100';
-                        document.getElementById('smtpPort').value = config.smtp_port || 25;
-                    }}
-                    
-                    toggleEmailService();
                 }}
             }} catch (e) {{
                 console.log('No existing config found');
