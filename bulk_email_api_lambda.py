@@ -498,7 +498,10 @@ def serve_web_ui(event):
                 <label>Emails per minute:</label>
                 <input type="number" id="emailsPerMinute" value="60">
             </div>
-            <button onclick="saveConfig()">Save Configuration</button>
+            <div style="display: flex; gap: 10px; margin-top: 20px;">
+                <button onclick="saveConfig()">Save Configuration</button>
+                <button onclick="loadConfig()" style="background: #007bff;">Test Load Config</button>
+            </div>
         </div>
         
         <div id="contacts" class="tab-content">
@@ -810,6 +813,7 @@ def serve_web_ui(event):
         }};
         
         async function loadContacts() {{
+            console.log('loadContacts called');
             const button = event?.target || document.querySelector('button[onclick="loadContacts()"]');
             const originalText = button?.textContent || 'Load Contacts';
             
@@ -819,10 +823,21 @@ def serve_web_ui(event):
                     button.disabled = true;
                 }}
                 
-            const response = await fetch(`${{API_URL}}/contacts`);
-            const result = await response.json();
-            
+                console.log('Fetching contacts from:', `${{API_URL}}/contacts`);
+                const response = await fetch(`${{API_URL}}/contacts`);
+                console.log('Contacts response status:', response.status);
+                
+                if (!response.ok) {{
+                    throw new Error(`HTTP ${{response.status}}: ${{response.statusText}}`);
+                }}
+                
+                const result = await response.json();
+                console.log('Contacts result:', result);
+                
                 allContacts = result.contacts || [];
+                console.log('Loaded contacts count:', allContacts.length);
+                console.log('First contact:', allContacts[0]);
+                
                 populateGroupFilters();
                 filterContactsByGroup();
                 
@@ -834,6 +849,7 @@ def serve_web_ui(event):
                 }}
                 
             }} catch (error) {{
+                console.error('Error loading contacts:', error);
                 const tbody = document.getElementById('contactsBody');
                 tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: var(--danger-color); padding: 40px;">Error loading contacts: ' + error.message + '</td></tr>';
                 
@@ -1322,6 +1338,7 @@ def serve_web_ui(event):
         
         async function loadConfig() {{
             try {{
+                alert('Loading config from DynamoDB...');
                 console.log('Loading config from:', `${{API_URL}}/config`);
                 const response = await fetch(`${{API_URL}}/config`);
                 console.log('Config response status:', response.status);
@@ -1386,13 +1403,7 @@ def save_email_config(body, headers):
         # Add service-specific fields
         if body.get('email_service') == 'ses':
             item.update({
-                'aws_region': str(body.get('aws_region', 'us-gov-west-1')),
-                'aws_secret_name': str(body.get('aws_secret_name', ''))
-            })
-        else:  # SMTP
-            item.update({
-                'smtp_server': str(body.get('smtp_server', '')),
-                'smtp_port': int(body.get('smtp_port', 25))
+                'aws_region': str(body.get('aws_region', 'us-gov-west-1'))
             })
         
         # Use conditional write to handle updates properly
