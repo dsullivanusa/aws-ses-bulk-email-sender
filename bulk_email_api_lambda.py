@@ -325,15 +325,33 @@ def serve_web_ui(event):
             background: linear-gradient(135deg, var(--primary-color), #1d4ed8); 
             color: white;
             border: none;
-            padding: 8px 16px;
             border-radius: var(--border-radius);
             cursor: pointer;
-            font-size: 14px;
             transition: all 0.3s ease;
-            margin: 2px;
         }}
         .btn-primary:hover {{ 
             box-shadow: 0 10px 25px rgba(59, 130, 246, 0.4); 
+        }}
+        .btn-info {{ 
+            background: linear-gradient(135deg, var(--info-color), #2563eb); 
+        }}
+        .btn-info:hover {{ 
+            box-shadow: 0 10px 25px rgba(59, 130, 246, 0.4); 
+        }}
+        .btn-warning {{ 
+            background: linear-gradient(135deg, var(--warning-color), #d97706); 
+        }}
+        .btn-warning:hover {{ 
+            box-shadow: 0 10px 25px rgba(245, 158, 11, 0.4); 
+        }}
+        
+        /* Table Action Buttons - Consistent Sizing */
+        table button {{
+            padding: 8px 16px;
+            margin: 4px 2px;
+            font-size: 14px;
+            min-width: 70px;
+            display: inline-block;
         }}
         
         /* Table Styling */
@@ -983,8 +1001,8 @@ def serve_web_ui(event):
                         <td>${{contact.agency_name || ''}}</td>
                         <td>
                             <button class="btn-danger" onclick="deleteContact('${{contact.email}}')">Delete</button>
-                            <button onclick="viewContact('${{contact.email}}')">View</button>
-                            <button class="btn-primary" onclick="editContact('${{contact.email}}')">Edit</button>
+                            <button class="btn-info" onclick="viewContact('${{contact.email}}')">View</button>
+                            <button class="btn-warning" onclick="editContact('${{contact.email}}')">Edit</button>
                         </td>
                 `;
             }});
@@ -1663,12 +1681,17 @@ def update_contact(body, headers):
         
         update_expr = "SET "
         expr_values = {}
+        expr_names = {}
         update_parts = []
         
         for field in contact_fields:
             if field in body:
-                update_parts.append(f"{field} = :{field}")
-                expr_values[f":{field}"] = body[field]
+                # Use ExpressionAttributeNames to avoid reserved keyword issues
+                field_placeholder = f"#{field}"
+                value_placeholder = f":{field}"
+                update_parts.append(f"{field_placeholder} = {value_placeholder}")
+                expr_names[field_placeholder] = field
+                expr_values[value_placeholder] = body[field]
         
         if not update_parts:
             return {'statusCode': 400, 'headers': headers, 'body': json.dumps({'error': 'No fields to update'})}
@@ -1678,6 +1701,7 @@ def update_contact(body, headers):
         contacts_table.update_item(
             Key={'email': email},
             UpdateExpression=update_expr,
+            ExpressionAttributeNames=expr_names,
             ExpressionAttributeValues=expr_values
         )
         
