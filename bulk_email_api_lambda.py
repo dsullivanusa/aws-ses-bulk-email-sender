@@ -64,6 +64,8 @@ def lambda_handler(event, context):
             return update_contact(body, headers)
         elif path == '/contacts' and method == 'DELETE':
             return delete_contact(event, headers)
+        elif path == '/groups' and method == 'GET':
+            return get_groups(headers)
         elif path == '/campaign' and method == 'POST':
             return send_campaign(body, headers)
         elif path == '/campaign/{campaign_id}' and method == 'GET':
@@ -516,7 +518,7 @@ def serve_web_ui(event):
             </div>
             <div style="display: flex; gap: 10px; margin-top: 20px;">
                 <button onclick="saveConfig()">Save Configuration</button>
-                <button onclick="loadConfig()" style="background: #007bff;">Test Load Config</button>
+                <!-- <button onclick="loadConfig()" style="background: #007bff;">Test Load Config</button> -->
             </div>
         </div>
         
@@ -527,7 +529,7 @@ def serve_web_ui(event):
                 <select id="groupFilter" onchange="filterContactsByGroup()">
                     <option value="">All Groups</option>
                 </select>
-                <button onclick="loadAllContacts()">Load All Contacts</button>
+                <!-- <button onclick="loadAllContacts()">Load All Contacts</button> -->
             </div>
             <button onclick="loadContacts()">Load Contacts</button>
             <button class="btn-success" onclick="showAddContact()">Add Contact</button>
@@ -640,10 +642,10 @@ def serve_web_ui(event):
                 </div>
             </div>
             
-            <div class="result">
+            <!-- <div class="result">
                 <strong>CSV Format:</strong> email,first_name,last_name,title,entity_type,state,agency_name,sector,subsection,phone,ms_isac_member,soc_call,fusion_center,k12,water_wastewater,weekly_rollup,alternate_email,region,group<br>
                 <strong>Example:</strong> john@example.com,John,Doe,IT Director,State Government,CA,Dept of Tech,Government,IT,555-0100,Yes,Yes,No,No,No,Yes,john.alt@example.com,West,State CISOs
-            </div>
+            </div> -->
             
             <div style="overflow-x: auto;">
             <table id="contactsTable">
@@ -651,8 +653,7 @@ def serve_web_ui(event):
                         <tr>
                             <th>Email</th>
                             <th>Name</th>
-                            <th>Title</th>
-                            <th>Entity Type</th>
+                            <th>Group</th>
                             <th>State</th>
                             <th>Agency</th>
                             <th>Actions</th>
@@ -798,6 +799,7 @@ def serve_web_ui(event):
         }}
         
         let allContacts = [];
+        let allGroups = [];
         let userSessionId = Math.random().toString(36).substr(2, 9);
         console.log('User session ID:', userSessionId);
         
@@ -886,7 +888,6 @@ def serve_web_ui(event):
                 console.log('Loaded contacts count:', allContacts.length);
                 console.log('First contact:', allContacts[0]);
                 
-                populateGroupFilters();
                 filterContactsByGroup();
                 
                 if (button) {{
@@ -920,8 +921,25 @@ def serve_web_ui(event):
             filterContactsByGroup();
         }}
         
+        async function loadGroupsFromDB() {{
+            try {{
+                console.log('Loading groups from DynamoDB...');
+                const response = await fetch(`${{API_URL}}/groups`);
+                
+                if (response.ok) {{
+                    const result = await response.json();
+                    allGroups = result.groups || [];
+                    console.log('Loaded groups:', allGroups);
+                    populateGroupFilters();
+                }} else {{
+                    console.error('Error loading groups:', response.status);
+                }}
+            }} catch (error) {{
+                console.error('Error loading groups:', error);
+            }}
+        }}
+        
         function populateGroupFilters() {{
-            const groups = [...new Set(allContacts.map(c => c.group).filter(g => g))].sort();
             const groupFilter = document.getElementById('groupFilter');
             const targetGroup = document.getElementById('targetGroup');
             
@@ -929,7 +947,8 @@ def serve_web_ui(event):
             groupFilter.innerHTML = '<option value="">All Groups</option>';
             targetGroup.innerHTML = '<option value="">All Groups</option>';
             
-            groups.forEach(group => {{
+            // Use allGroups from API
+            allGroups.forEach(group => {{
                 const option1 = new Option(group, group);
                 const option2 = new Option(group, group);
                 groupFilter.add(option1);
@@ -959,8 +978,7 @@ def serve_web_ui(event):
                 row.innerHTML = `
                     <td>${{contact.email}}</td>
                         <td>${{fullName}}</td>
-                        <td>${{contact.title || ''}}</td>
-                        <td>${{contact.entity_type || ''}}</td>
+                        <td>${{contact.group || ''}}</td>
                         <td>${{contact.state || ''}}</td>
                         <td>${{contact.agency_name || ''}}</td>
                         <td>
@@ -1054,6 +1072,7 @@ def serve_web_ui(event):
                 if (result.success) {{
                     hideEditContact();
                     loadContacts(); // Refresh the contacts list
+                    loadGroupsFromDB(); // Refresh groups in case group changed
                     alert('Contact updated successfully!');
                 }} else {{
                     alert('Error updating contact: ' + (result.error || 'Unknown error'));
@@ -1097,6 +1116,7 @@ def serve_web_ui(event):
             if (result.success) {{
                 hideAddContact();
                 loadContacts();
+                loadGroupsFromDB(); // Refresh groups in case new group added
                 // Clear form
                 document.getElementById('newEmail').value = '';
                 document.getElementById('newFirstName').value = '';
@@ -1248,6 +1268,7 @@ def serve_web_ui(event):
             
             alert(`CSV Upload Complete!\\nImported: ${{imported}} contacts\\nErrors: ${{errors}}`);
             loadContacts();
+            loadGroupsFromDB(); // Refresh groups from uploaded contacts
         }}
         
         function loadContactsForCampaign() {{
@@ -1386,7 +1407,7 @@ def serve_web_ui(event):
         
         async function loadConfig() {{
             try {{
-                alert('Loading config from DynamoDB...');
+                // alert('Loading config from DynamoDB...');
                 console.log('Loading config from:', `${{API_URL}}/config`);
                 const response = await fetch(`${{API_URL}}/config`);
                 console.log('Config response status:', response.status);
@@ -1405,10 +1426,10 @@ def serve_web_ui(event):
                     if (config && config.from_email) {{
                         document.getElementById('fromEmail').value = config.from_email;
                         console.log('Set From Email to:', config.from_email);
-                        alert('From Email loaded: ' + config.from_email);
+                        // alert('From Email loaded: ' + config.from_email);
                     }} else {{
                         console.log('No from_email found in config');
-                        alert('No From Email found in configuration');
+                        // alert('No From Email found in configuration');
                     }}
                     
                     if (config && config.emails_per_minute) {{
@@ -1417,7 +1438,7 @@ def serve_web_ui(event):
                     }}
                 }} else {{
                     console.log('Config response not OK:', response.status);
-                    alert('Config API error: ' + response.status);
+                    // alert('Config API error: ' + response.status);
                 }}
             }} catch (e) {{
                 console.error('Error loading config:', e);
@@ -1427,6 +1448,7 @@ def serve_web_ui(event):
         window.onload = () => {{
             // Initialize UI and load configuration
             loadConfig();
+            loadGroupsFromDB();  // Load groups on page load
             console.log('Web UI loaded successfully');
         }};
     </script>
@@ -1552,6 +1574,48 @@ def get_contacts(headers):
         contacts.append(contact)
     
     return {'statusCode': 200, 'headers': headers, 'body': json.dumps({'contacts': contacts})}
+
+def get_groups(headers):
+    """Get distinct groups from contacts - optimized for large datasets"""
+    try:
+        groups = set()
+        
+        # Scan with ProjectionExpression to only get the 'group' field
+        response = contacts_table.scan(
+            ProjectionExpression='#grp',
+            ExpressionAttributeNames={'#grp': 'group'}
+        )
+        
+        # Add groups from first batch
+        for item in response.get('Items', []):
+            if 'group' in item and item['group']:
+                groups.add(item['group'])
+        
+        # Handle pagination for large datasets
+        while 'LastEvaluatedKey' in response:
+            response = contacts_table.scan(
+                ProjectionExpression='#grp',
+                ExpressionAttributeNames={'#grp': 'group'},
+                ExclusiveStartKey=response['LastEvaluatedKey']
+            )
+            for item in response.get('Items', []):
+                if 'group' in item and item['group']:
+                    groups.add(item['group'])
+        
+        # Convert to sorted list
+        groups_list = sorted(list(groups))
+        
+        return {
+            'statusCode': 200, 
+            'headers': headers, 
+            'body': json.dumps({'groups': groups_list})
+        }
+    except Exception as e:
+        return {
+            'statusCode': 500, 
+            'headers': headers, 
+            'body': json.dumps({'error': str(e)})
+        }
 
 def add_contact(body, headers):
     """Add new contact with all CISA-specific fields"""
