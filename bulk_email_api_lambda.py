@@ -1322,17 +1322,35 @@ def serve_web_ui(event):
         
         async function loadConfig() {{
             try {{
+                console.log('Loading config from:', `${{API_URL}}/config`);
                 const response = await fetch(`${{API_URL}}/config`);
+                console.log('Config response status:', response.status);
+                
                 if (response.ok) {{
                     const result = await response.json();
+                    console.log('Config result:', result);
                     const config = result.config;
+                    console.log('Config data:', config);
                     
-                    document.getElementById('awsRegion').value = config.aws_region || 'us-gov-west-1';
-                    document.getElementById('fromEmail').value = config.from_email || '';
-                    document.getElementById('emailsPerMinute').value = config.emails_per_minute || 60;
+                    if (config.aws_region) {{
+                        document.getElementById('awsRegion').value = config.aws_region;
+                        console.log('Set AWS Region to:', config.aws_region);
+                    }}
+                    
+                    if (config.from_email) {{
+                        document.getElementById('fromEmail').value = config.from_email;
+                        console.log('Set From Email to:', config.from_email);
+                    }}
+                    
+                    if (config.emails_per_minute) {{
+                        document.getElementById('emailsPerMinute').value = config.emails_per_minute;
+                        console.log('Set Emails per minute to:', config.emails_per_minute);
+                    }}
+                }} else {{
+                    console.log('Config response not OK:', response.status);
                 }}
             }} catch (e) {{
-                console.log('No existing config found');
+                console.error('Error loading config:', e);
             }}
         }}
         
