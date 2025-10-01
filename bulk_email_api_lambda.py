@@ -3,6 +3,7 @@ import boto3
 import smtplib
 import ssl
 import time
+import os
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email.mime.base import MIMEBase
@@ -18,6 +19,14 @@ campaigns_table = dynamodb.Table('EmailCampaigns')
 email_config_table = dynamodb.Table('EmailConfig')
 secrets_client = boto3.client('secretsmanager', region_name='us-gov-west-1')
 sqs_client = boto3.client('sqs', region_name='us-gov-west-1')
+
+# Custom API URL configuration
+# To use your own domain instead of the AWS API Gateway URL:
+# 1. Set Lambda environment variable: CUSTOM_API_URL = https://yourdomain.com
+# 2. If using API Gateway Custom Domain, set it to: https://api.yourdomain.com/prod
+# 3. Make sure your custom domain routes to this Lambda function
+# If not set, it will automatically use the API Gateway URL
+CUSTOM_API_URL = os.environ.get('CUSTOM_API_URL', None)
 
 def lambda_handler(event, context):
     """Bulk Email API with Web UI"""
@@ -68,8 +77,12 @@ def lambda_handler(event, context):
 
 def serve_web_ui(event):
     """Serve web UI HTML"""
-    api_id = event.get('requestContext', {}).get('apiId', 'UNKNOWN')
-    api_url = f"https://{api_id}.execute-api.us-gov-west-1.amazonaws.com/prod"
+    # Use custom API URL if configured, otherwise use API Gateway URL
+    if CUSTOM_API_URL:
+        api_url = CUSTOM_API_URL
+    else:
+        api_id = event.get('requestContext', {}).get('apiId', 'UNKNOWN')
+        api_url = f"https://{api_id}.execute-api.us-gov-west-1.amazonaws.com/prod"
     
     html_content = f"""<!DOCTYPE html>
 <html>
