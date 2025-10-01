@@ -1337,7 +1337,8 @@ def serve_web_ui(event):
         }}
         
         window.onload = () => {{
-            // Initialize UI without auto-loading data
+            // Initialize UI and load configuration
+            loadConfig();
             console.log('Web UI loaded successfully');
         }};
     </script>
