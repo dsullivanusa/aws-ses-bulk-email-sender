@@ -672,6 +672,7 @@ def serve_web_ui(event):
         
         <div id="campaign" class="tab-content">
             <h2>Send Campaign</h2>
+            <div id="formStatus" class="form-status" style="display: none; padding: 10px; margin-bottom: 15px; border-radius: 4px; background: #fff3cd; border: 1px solid #ffeaa7; color: #856404;"></div>
             <div class="form-group">
                 <label>Target Group:</label>
                 <select id="targetGroup" onchange="loadContactsForCampaign()">
@@ -793,9 +794,61 @@ def serve_web_ui(event):
         }}
         
         let allContacts = [];
+        let userSessionId = Math.random().toString(36).substr(2, 9);
+        console.log('User session ID:', userSessionId);
         
+        
+        function showFormStatus(message, type = 'warning') {{
+            const statusDiv = document.getElementById('formStatus');
+            if (statusDiv) {{
+                statusDiv.textContent = message;
+                statusDiv.style.display = 'block';
+                
+                // Set color based on type
+                if (type === 'error') {{
+                    statusDiv.style.background = '#f8d7da';
+                    statusDiv.style.borderColor = '#f5c6cb';
+                    statusDiv.style.color = '#721c24';
+                }} else if (type === 'success') {{
+                    statusDiv.style.background = '#d4edda';
+                    statusDiv.style.borderColor = '#c3e6cb';
+                    statusDiv.style.color = '#155724';
+                }}
+                
+                // Auto-hide after 5 seconds
+                setTimeout(() => {{
+                    statusDiv.style.display = 'none';
+                }}, 5000);
+            }}
+        }}
+        
+        function checkFormAvailability() {{
+            const campaignName = document.getElementById('campaignName');
+            const subject = document.getElementById('subject');
+            const body = document.getElementById('body');
+            
+            if (!campaignName || !subject || !body) {{
+                console.error('Form elements not found');
+                showFormStatus('Form elements not found. Please refresh the page.', 'error');
+                return false;
+            }}
+            
+            // Check if form is disabled or readonly
+            if (campaignName.disabled || subject.disabled || body.disabled) {{
+                console.warn('Form is currently disabled');
+                showFormStatus('Form is currently being used by another user. Please wait and try again.', 'warning');
+                return false;
+            }}
+            
+            return true;
+        }}
         
         function clearCampaignForm() {{
+            if (!checkFormAvailability()) {{
+                alert('Form is currently unavailable. Please refresh the page.');
+                return;
+            }}
+            
             document.getElementById('campaignName').value = '';
             document.getElementById('subject').value = '';
             document.getElementById('body').value = '';
@@ -1199,6 +1252,12 @@ def serve_web_ui(event):
         }}
         
         async function sendCampaign() {{
+            // Check form availability first
+            if (!checkFormAvailability()) {{
+                alert('Form is currently unavailable. Please refresh the page and try again.');
+                return;
+            }}
+            
             const button = event.target;
             const originalText = button.textContent;
             
@@ -1335,8 +1394,8 @@ def serve_web_ui(event):
         }}
         
         window.onload = () => {{
-            loadContacts();
-            loadConfig();
+            // Initialize UI without auto-loading data
+            console.log('Web UI loaded successfully');
         }};
     </script>
 </body>
