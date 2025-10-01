@@ -76,9 +76,6 @@ def serve_web_ui(event):
 <head>
     <title>CISA Email Campaign Management System</title>
     
-    <!-- Quill Rich Text Editor -->
-    <link href="https://cdn.quilljs.com/1.3.6/quill.snow.css" rel="stylesheet">
-    <script src="https://cdn.quilljs.com/1.3.6/quill.js"></script>
     
     <style>
         /* Modern CSS Variables for Consistent Theming */
@@ -670,7 +667,7 @@ def serve_web_ui(event):
             </div>
             <div class="form-group">
                 <label>Email Body:</label>
-                <div id="body" style="min-height: 200px; background: white;"></div>
+                <textarea id="body" rows="8" placeholder="Dear {{first_name}} {{last_name}},\\n\\nYour message here..." style="width: 100%; min-height: 200px; padding: 10px; border: 1px solid #ccc; border-radius: 4px;"></textarea>
                 <small>Available placeholders: {{{{first_name}}}}, {{{{last_name}}}}, {{{{email}}}}, {{{{title}}}}, {{{{entity_type}}}}, {{{{state}}}}, {{{{agency_name}}}}, {{{{sector}}}}, {{{{subsection}}}}, {{{{phone}}}}, {{{{ms_isac_member}}}}, {{{{soc_call}}}}, {{{{fusion_center}}}}, {{{{k12}}}}, {{{{water_wastewater}}}}, {{{{weekly_rollup}}}}, {{{{alternate_email}}}}, {{{{region}}}}, {{{{group}}}}</small>
             </div>
             <div style="display: flex; gap: 15px; margin-top: 20px;">
@@ -684,26 +681,6 @@ def serve_web_ui(event):
     
     <script>
         const API_URL = '{api_url}';
-        
-        // Initialize Quill Rich Text Editor
-        let quillEditor;
-        document.addEventListener('DOMContentLoaded', function() {{
-            quillEditor = new Quill('#body', {{
-                theme: 'snow',
-                placeholder: 'Dear {{{{first_name}}}} {{{{last_name}}}},\\n\\nYour message here...',
-                modules: {{
-                    toolbar: [
-                        [{{ 'header': [1, 2, 3, false] }}],
-                        ['bold', 'italic', 'underline', 'strike'],
-                        [{{ 'color': [] }}, {{ 'background': [] }}],
-                        [{{ 'list': 'ordered'}}, {{ 'list': 'bullet' }}],
-                        [{{ 'align': [] }}],
-                        ['link', 'image'],
-                        ['clean']
-                    ]
-                }}
-            }});
-        }});
         
         // Initialize the application
         
@@ -842,7 +819,7 @@ def serve_web_ui(event):
             
             document.getElementById('campaignName').value = '';
             document.getElementById('subject').value = '';
-            quillEditor.setContents([]);
+            document.getElementById('body').value = '';
             document.getElementById('targetGroup').value = '';
             document.getElementById('contactCount').textContent = '0';
         }};
@@ -1283,8 +1260,8 @@ def serve_web_ui(event):
                 throw new Error('No contacts found for the selected group. Please add contacts or select a different group.');
             }}
             
-            // Get content from Quill editor
-            const emailBody = quillEditor.root.innerHTML;
+            // Get content from textarea
+            const emailBody = document.getElementById('body').value;
             
             const campaign = {{
                 campaign_name: document.getElementById('campaignName').value,
