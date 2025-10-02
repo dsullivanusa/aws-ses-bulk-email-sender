@@ -941,18 +941,23 @@ def serve_web_ui(event):
         async function loadGroupsFromDB() {{
             try {{
                 console.log('Loading groups from DynamoDB...');
+                console.log('API URL:', `${{API_URL}}/groups`);
                 const response = await fetch(`${{API_URL}}/groups`);
                 
                 if (response.ok) {{
                     const result = await response.json();
                     allGroups = result.groups || [];
-                    console.log('Loaded groups:', allGroups);
+                    console.log('Loaded groups from API:', allGroups);
+                    console.log('Number of groups found:', allGroups.length);
                     populateGroupFilters();
                 }} else {{
-                    console.error('Error loading groups:', response.status);
+                    console.error('Error loading groups. Status:', response.status);
+                    console.error('Response:', await response.text());
+                    alert('Warning: Could not load groups from database. Status: ' + response.status);
                 }}
             }} catch (error) {{
                 console.error('Error loading groups:', error);
+                alert('Error loading groups: ' + error.message + '\\n\\nMake sure the /groups endpoint is configured in API Gateway.');
             }}
         }}
         
