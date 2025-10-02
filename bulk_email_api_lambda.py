@@ -275,6 +275,23 @@ def serve_web_ui(event):
         input:hover, textarea:hover, select:hover {{
             border-color: var(--gray-300);
         }}
+        select[multiple] {{
+            padding: 8px;
+            min-height: 150px;
+        }}
+        select[multiple] option {{
+            padding: 8px 12px;
+            margin: 2px 0;
+            border-radius: 4px;
+            cursor: pointer;
+        }}
+        select[multiple] option:hover {{
+            background: var(--primary-light);
+        }}
+        select[multiple] option:checked {{
+            background: linear-gradient(135deg, var(--primary-color), var(--primary-dark));
+            color: white;
+        }}
         small {{
             color: var(--gray-500);
             font-size: 0.875rem;
@@ -553,11 +570,31 @@ def serve_web_ui(event):
         <div id="contacts" class="tab-content">
             <h2>👥 Contact Management</h2>
             <div class="form-group">
-                <label>🔍 Filter by Group:</label>
-                <select id="groupFilter" onchange="filterContactsByGroup()">
-                    <option value="">All Groups</option>
-                </select>
-                <!-- <button onclick="loadAllContacts()">Load All Contacts</button> -->
+                <label>🔍 Contact Filter:</label>
+                <div style="display: grid; grid-template-columns: 1fr 2fr; gap: 10px; align-items: start;">
+                    <select id="filterType" onchange="loadFilterValues()">
+                        <option value="">All Contacts</option>
+                        <option value="group">Group</option>
+                        <option value="entity_type">Entity Type</option>
+                        <option value="state">State</option>
+                        <option value="agency_name">Agency Name</option>
+                        <option value="sector">Sector</option>
+                        <option value="subsection">Subsection</option>
+                        <option value="ms_isac_member">MS-ISAC Member</option>
+                        <option value="soc_call">SOC Call</option>
+                        <option value="fusion_center">Fusion Center</option>
+                        <option value="k12">K-12</option>
+                        <option value="water_wastewater">Water/Wastewater</option>
+                        <option value="weekly_rollup">Weekly Rollup</option>
+                        <option value="region">Region</option>
+                    </select>
+                    <div id="filterValueContainer" style="display: none;">
+                        <select id="filterValue" multiple size="6" onchange="applyContactFilter()" style="margin-bottom: 0; height: auto;">
+                        </select>
+                        <small style="display: block; margin-top: 5px; color: #6b7280;">Hold Ctrl (Windows) or Cmd (Mac) to select multiple</small>
+                        <button onclick="clearFilterSelection()" style="margin-top: 8px; padding: 6px 12px; font-size: 13px; background: #6b7280;">🔄 Clear Selection</button>
+                    </div>
+                </div>
             </div>
             <button onclick="loadContacts()">🔄 Load Contacts</button>
             <button class="btn-success" onclick="showAddContact()">➕ Add Contact</button>
@@ -947,7 +984,7 @@ def serve_web_ui(event):
                 console.log('Loaded contacts count:', allContacts.length);
                 console.log('First contact:', allContacts[0]);
                 
-                filterContactsByGroup();
+                applyContactFilter();
                 
                 if (button) {{
                     button.textContent = 'Loaded';
@@ -976,8 +1013,9 @@ def serve_web_ui(event):
         
         async function loadAllContacts() {{
             await loadContacts();
-            document.getElementById('groupFilter').value = '';
-            filterContactsByGroup();
+            document.getElementById('filterType').value = '';
+            document.getElementById('filterValueContainer').style.display = 'none';
+            applyContactFilter();
         }}
         
         async function loadGroupsFromDB() {{
@@ -1004,31 +1042,94 @@ def serve_web_ui(event):
         }}
         
         function populateGroupFilters() {{
-            const groupFilter = document.getElementById('groupFilter');
             const targetGroup = document.getElementById('targetGroup');
             
             // Clear existing options except "All Groups"
-            groupFilter.innerHTML = '<option value="">All Groups</option>';
             targetGroup.innerHTML = '<option value="">All Groups</option>';
             
             // Use allGroups from API
             allGroups.forEach(group => {{
-                const option1 = new Option(group, group);
-                const option2 = new Option(group, group);
-                groupFilter.add(option1);
-                targetGroup.add(option2);
+                const option = new Option(group, group);
+                targetGroup.add(option);
             }});
         }}
         
-        function filterContactsByGroup() {{
-            const selectedGroup = document.getElementById('groupFilter').value;
+        async function loadFilterValues() {{
+            const filterType = document.getElementById('filterType').value;
+            const filterValueContainer = document.getElementById('filterValueContainer');
+            const filterValue = document.getElementById('filterValue');
+            
+            if (!filterType) {{
+                // No filter type selected - show all contacts
+                filterValueContainer.style.display = 'none';
+                applyContactFilter();
+                return;
+            }}
+            
+            // Auto-load contacts if not already loaded
+            if (allContacts.length === 0) {{
+                console.log('Contacts not loaded yet, loading now...');
+                await loadContacts();
+            }}
+            
+            // Get distinct values for selected field from loaded contacts
+            const distinctValues = [...new Set(
+                allContacts
+                    .map(c => c[filterType])
+                    .filter(v => v && v.trim() !== '')
+            )].sort();
+            
+            console.log(`Found ${{distinctValues.length}} distinct values for ${{filterType}}`);
+            
+            // Populate filter value multi-select dropdown
+            filterValue.innerHTML = '';
+            distinctValues.forEach(value => {{
+                filterValue.add(new Option(value, value));
+            }});
+            
+            filterValueContainer.style.display = 'block';
+            
+            // Don't auto-apply filter yet - let user select values first
+        }}
+        
+        async function applyContactFilter() {{
+            // Auto-load contacts if not already loaded
+            if (allContacts.length === 0) {{
+                console.log('Auto-loading contacts for filter...');
+                await loadContacts();
+                return; // loadContacts will call applyContactFilter when done
+            }}
+            
+            const filterType = document.getElementById('filterType').value;
+            const filterValueSelect = document.getElementById('filterValue');
+            
             let filteredContacts = allContacts;
             
-            if (selectedGroup) {{
-                filteredContacts = allContacts.filter(contact => contact.group === selectedGroup);
+            if (filterType && filterValueSelect.selectedOptions.length > 0) {{
+                // Get all selected values from multi-select
+                const selectedValues = Array.from(filterValueSelect.selectedOptions).map(opt => opt.value);
+                
+                filteredContacts = allContacts.filter(contact => 
+                    contact[filterType] && selectedValues.includes(contact[filterType])
+                );
+                
+                console.log(`Filtered by ${{filterType}} IN [${{selectedValues.join(', ')}}]: ${{filteredContacts.length}} contacts`);
+            }} else if (!filterType) {{
+                // Show all contacts when no filter type selected
+                console.log(`Showing all contacts: ${{filteredContacts.length}}`);
+            }} else {{
+                // Filter type selected but no values chosen - show nothing
+                filteredContacts = [];
+                console.log('No filter values selected - showing empty table');
             }}
             
             displayContacts(filteredContacts);
+        }}
+        
+        function clearFilterSelection() {{
+            const filterValue = document.getElementById('filterValue');
+            filterValue.selectedIndex = -1; // Clear all selections
+            applyContactFilter();
         }}
         
         function displayContacts(contacts) {{
