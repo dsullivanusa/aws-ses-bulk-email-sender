@@ -19,6 +19,10 @@ campaigns_table = dynamodb.Table('EmailCampaigns')
 email_config_table = dynamodb.Table('EmailConfig')
 secrets_client = boto3.client('secretsmanager', region_name='us-gov-west-1')
 sqs_client = boto3.client('sqs', region_name='us-gov-west-1')
+s3_client = boto3.client('s3', region_name='us-gov-west-1')
+
+# S3 bucket for attachments
+ATTACHMENTS_BUCKET = 'jcdc-ses-contact-list'
 
 # Custom API URL configuration
 # To use your own domain instead of the AWS API Gateway URL:
@@ -68,6 +72,8 @@ def lambda_handler(event, context):
             return batch_add_contacts(body, headers)
         elif path == '/groups' and method == 'GET':
             return get_groups(headers)
+        elif path == '/upload-attachment' and method == 'POST':
+            return upload_attachment(body, headers)
         elif path == '/campaign' and method == 'POST':
             return send_campaign(body, headers)
         elif path == '/campaign/{campaign_id}' and method == 'GET':
@@ -719,6 +725,21 @@ def serve_web_ui(event):
                 <div id="body" style="min-height: 200px; background: white;"></div>
                 <small>Available placeholders: {{{{first_name}}}}, {{{{last_name}}}}, {{{{email}}}}, {{{{title}}}}, {{{{entity_type}}}}, {{{{state}}}}, {{{{agency_name}}}}, {{{{sector}}}}, {{{{subsection}}}}, {{{{phone}}}}, {{{{ms_isac_member}}}}, {{{{soc_call}}}}, {{{{fusion_center}}}}, {{{{k12}}}}, {{{{water_wastewater}}}}, {{{{weekly_rollup}}}}, {{{{alternate_email}}}}, {{{{region}}}}, {{{{group}}}}</small>
             </div>
+            
+            <div class="form-group">
+                <label>Attachments (Optional):</label>
+                <div style="margin-bottom: 10px; padding: 12px; background: #fef3c7; border-left: 4px solid #f59e0b; border-radius: 4px;">
+                    <strong>⚠️ Important:</strong> Maximum total size is <strong>10 MB per email</strong> (including all attachments). 
+                    Supported formats: PDF, DOC, DOCX, XLS, XLSX, PNG, JPG, TXT, CSV
+                </div>
+                <input type="file" id="attachmentFiles" multiple style="display: none;" onchange="handleAttachmentUpload()">
+                <button onclick="document.getElementById('attachmentFiles').click()" style="background: #6366f1;">
+                    📎 Add Attachments
+                </button>
+                <div id="attachmentsList" style="margin-top: 15px;"></div>
+                <div id="attachmentSize" style="margin-top: 10px; font-size: 14px; color: #6b7280;"></div>
+            </div>
+            
             <div style="display: flex; gap: 15px; margin-top: 20px;">
             <button class="btn-success" onclick="sendCampaign()">Send Campaign</button>
                 <button onclick="clearCampaignForm()">Clear Form</button>
@@ -892,6 +913,10 @@ def serve_web_ui(event):
             quillEditor.setContents([]);
             document.getElementById('targetGroup').value = '';
             document.getElementById('contactCount').textContent = '0';
+            
+            // Clear attachments
+            campaignAttachments = [];
+            displayAttachments();
         }};
         
         async function loadContacts() {{
@@ -1536,6 +1561,126 @@ def serve_web_ui(event):
             }}
         }}
         
+        // Attachment handling
+        let campaignAttachments = [];
+        const MAX_ATTACHMENT_SIZE = 10 * 1024 * 1024; // 10 MB in bytes
+        
+        async function handleAttachmentUpload() {{
+            const fileInput = document.getElementById('attachmentFiles');
+            const files = Array.from(fileInput.files);
+            
+            if (files.length === 0) return;
+            
+            // Calculate total size
+            let totalSize = campaignAttachments.reduce((sum, att) => sum + att.size, 0);
+            for (const file of files) {{
+                totalSize += file.size;
+            }}
+            
+            if (totalSize > MAX_ATTACHMENT_SIZE) {{
+                alert(`Total attachment size exceeds 10 MB limit.\\nCurrent total: ${{(totalSize / 1024 / 1024).toFixed(2)}} MB\\nPlease remove some files.`);
+                fileInput.value = ''; // Clear selection
+                return;
+            }}
+            
+            // Upload files to S3
+            for (const file of files) {{
+                try {{
+                    console.log(`Uploading attachment: ${{file.name}}`);
+                    const s3Key = await uploadAttachmentToS3(file);
+                    
+                    campaignAttachments.push({{
+                        filename: file.name,
+                        size: file.size,
+                        type: file.type,
+                        s3_key: s3Key
+                    }});
+                    
+                    console.log(`✓ Uploaded: ${{file.name}} to S3`);
+                }} catch (error) {{
+                    console.error(`Error uploading ${{file.name}}:`, error);
+                    alert(`Failed to upload ${{file.name}}: ${{error.message}}`);
+                }}
+            }}
+            
+            displayAttachments();
+            fileInput.value = ''; // Clear input
+        }}
+        
+        async function uploadAttachmentToS3(file) {{
+            const timestamp = Date.now();
+            const randomStr = Math.random().toString(36).substring(7);
+            const s3Key = `campaign-attachments/${{timestamp}}-${{randomStr}}-${{file.name}}`;
+            
+            // Convert file to base64
+            const base64Data = await fileToBase64(file);
+            
+            // Upload to S3 via Lambda
+            const response = await fetch(`${{API_URL}}/upload-attachment`, {{
+                method: 'POST',
+                headers: {{'Content-Type': 'application/json'}},
+                body: JSON.stringify({{
+                    filename: file.name,
+                    content_type: file.type,
+                    s3_key: s3Key,
+                    data: base64Data
+                }})
+            }});
+            
+            if (!response.ok) {{
+                throw new Error(`Upload failed: ${{response.status}}`);
+            }}
+            
+            const result = await response.json();
+            return result.s3_key;
+        }}
+        
+        function fileToBase64(file) {{
+            return new Promise((resolve, reject) => {{
+                const reader = new FileReader();
+                reader.onload = () => {{
+                    const base64 = reader.result.split(',')[1];
+                    resolve(base64);
+                }};
+                reader.onerror = reject;
+                reader.readAsDataURL(file);
+            }});
+        }}
+        
+        function displayAttachments() {{
+            const container = document.getElementById('attachmentsList');
+            const sizeDiv = document.getElementById('attachmentSize');
+            
+            if (campaignAttachments.length === 0) {{
+                container.innerHTML = '';
+                sizeDiv.textContent = '';
+                return;
+            }}
+            
+            const totalSize = campaignAttachments.reduce((sum, att) => sum + att.size, 0);
+            const totalSizeMB = (totalSize / 1024 / 1024).toFixed(2);
+            
+            container.innerHTML = campaignAttachments.map((att, index) => `
+                <div style="display: flex; align-items: center; justify-content: space-between; padding: 8px; background: #f3f4f6; border-radius: 4px; margin-bottom: 8px;">
+                    <div style="display: flex; align-items: center; gap: 10px;">
+                        <span style="font-size: 20px;">📎</span>
+                        <div>
+                            <div style="font-weight: 500;">${{att.filename}}</div>
+                            <div style="font-size: 12px; color: #6b7280;">${{(att.size / 1024).toFixed(1)}} KB</div>
+                        </div>
+                    </div>
+                    <button onclick="removeAttachment(${{index}})" style="background: #ef4444; padding: 6px 12px; font-size: 14px;">Remove</button>
+                </div>
+            `).join('');
+            
+            sizeDiv.innerHTML = `<strong>Total size:</strong> ${{totalSizeMB}} MB / 10 MB ${{totalSize > MAX_ATTACHMENT_SIZE ? '<span style="color: #ef4444;">⚠️ Exceeds limit!</span>' : '✓'}}`;
+        }}
+        
+        function removeAttachment(index) {{
+            campaignAttachments.splice(index, 1);
+            displayAttachments();
+        }}
+        
         async function sendCampaign() {{
             // Check form availability first
             if (!checkFormAvailability()) {{
@@ -1571,12 +1716,19 @@ def serve_web_ui(event):
                 campaign_name: document.getElementById('campaignName').value,
                 subject: document.getElementById('subject').value,
                 body: emailBody,
-                target_group: targetGroup || null
+                target_group: targetGroup || null,
+                attachments: campaignAttachments  // Include attachments
             }};
                 
                 // Validate required fields
                 if (!campaign.campaign_name || !campaign.subject || !campaign.body) {{
                     throw new Error('Please fill in all required fields');
+                }}
+                
+                // Validate attachment size
+                const totalAttachmentSize = campaignAttachments.reduce((sum, att) => sum + att.size, 0);
+                if (totalAttachmentSize > MAX_ATTACHMENT_SIZE) {{
+                    throw new Error(`Attachments exceed 10 MB limit (${{(totalAttachmentSize / 1024 / 1024).toFixed(2)}} MB)`);
                 }}
             
             const response = await fetch(`${{API_URL}}/campaign`, {{
@@ -1864,6 +2016,54 @@ def get_groups(headers):
             'body': json.dumps({'error': str(e)})
         }
 
+def upload_attachment(body, headers):
+    """Upload attachment to S3 bucket"""
+    try:
+        filename = body.get('filename')
+        content_type = body.get('content_type', 'application/octet-stream')
+        s3_key = body.get('s3_key')
+        data = body.get('data')  # Base64 encoded file data
+        
+        if not all([filename, s3_key, data]):
+            return {
+                'statusCode': 400, 
+                'headers': headers, 
+                'body': json.dumps({'error': 'Missing required fields'})
+            }
+        
+        # Decode base64 data
+        file_data = base64.b64decode(data)
+        
+        # Upload to S3
+        s3_client.put_object(
+            Bucket=ATTACHMENTS_BUCKET,
+            Key=s3_key,
+            Body=file_data,
+            ContentType=content_type,
+            Metadata={
+                'original_filename': filename
+            }
+        )
+        
+        print(f"Uploaded attachment: {filename} to s3://{ATTACHMENTS_BUCKET}/{s3_key}")
+        
+        return {
+            'statusCode': 200, 
+            'headers': headers, 
+            'body': json.dumps({
+                'success': True,
+                's3_key': s3_key,
+                'bucket': ATTACHMENTS_BUCKET
+            })
+        }
+    except Exception as e:
+        print(f"Error uploading attachment: {str(e)}")
+        return {
+            'statusCode': 500, 
+            'headers': headers, 
+            'body': json.dumps({'error': str(e)})
+        }
+
 def add_contact(body, headers):
     """Add new contact with all CISA-specific fields"""
     try:
@@ -2049,28 +2249,35 @@ def send_campaign(body, headers):
         
         campaign_id = f"campaign_{int(datetime.now().timestamp())}"
         
+        # Get attachments
+        attachments = body.get('attachments', [])
+        
         # Save complete campaign data to DynamoDB
-        print(f"Saving campaign {campaign_id} to DynamoDB")
-        campaigns_table.put_item(
-            Item={
-                'campaign_id': campaign_id,
-                'campaign_name': body.get('campaign_name', 'Bulk Campaign'),
-                'subject': body.get('subject', ''),
-                'body': body.get('body', ''),
-                'from_email': config.get('from_email', ''),
-                'email_service': config.get('email_service', 'ses'),
-                'aws_region': config.get('aws_region', 'us-gov-west-1'),
-                'aws_secret_name': config.get('aws_secret_name', ''),
-                'smtp_server': config.get('smtp_server', ''),
-                'smtp_port': int(config.get('smtp_port', 25)) if config.get('smtp_port') else 25,
-                'status': 'queued',
-                'total_contacts': len(contacts),
-                'queued_count': 0,
-                'sent_count': 0,
-                'failed_count': 0,
-                'created_at': datetime.now().isoformat()
-            }
-        )
+        print(f"Saving campaign {campaign_id} to DynamoDB with {len(attachments)} attachments")
+        campaign_item = {
+            'campaign_id': campaign_id,
+            'campaign_name': body.get('campaign_name', 'Bulk Campaign'),
+            'subject': body.get('subject', ''),
+            'body': body.get('body', ''),
+            'from_email': config.get('from_email', ''),
+            'email_service': config.get('email_service', 'ses'),
+            'aws_region': config.get('aws_region', 'us-gov-west-1'),
+            'aws_secret_name': config.get('aws_secret_name', ''),
+            'smtp_server': config.get('smtp_server', ''),
+            'smtp_port': int(config.get('smtp_port', 25)) if config.get('smtp_port') else 25,
+            'status': 'queued',
+            'total_contacts': len(contacts),
+            'queued_count': 0,
+            'sent_count': 0,
+            'failed_count': 0,
+            'created_at': datetime.now().isoformat()
+        }
+        
+        # Add attachments if present
+        if attachments:
+            campaign_item['attachments'] = attachments
+        
+        campaigns_table.put_item(Item=campaign_item)
         print(f"Campaign {campaign_id} saved to DynamoDB")
         
         # Get SQS queue URL
