@@ -1342,6 +1342,7 @@ def serve_web_ui(event):
                 let imported = 0;
                 let errors = 0;
                 const totalBatches = Math.ceil(allContacts.length / BATCH_SIZE);
+                const failedBatches = [];  // Track failed batches
                 
                 updateCSVProgress(0, allContacts.length, 'Starting import...');
                 
@@ -1382,12 +1383,30 @@ def serve_web_ui(event):
                             console.error(`Batch ${{batchNum + 1}} failed:`, response.status, errorText);
                             errors += batch.length;
                             
+                            // Track failed batch details
+                            failedBatches.push({{
+                                batchNum: batchNum + 1,
+                                rowStart: start + 1,
+                                rowEnd: end,
+                                contacts: batch,
+                                error: `HTTP ${{response.status}}: ${{errorText}}`
+                            }});
+                            
                             updateCSVProgress(imported, allContacts.length, 
                                 `Batch ${{batchNum + 1}}/${{totalBatches}} FAILED - Imported: ${{imported}}, Errors: ${{errors}}`);
                         }}
                     }} catch (e) {{
                         console.error(`Batch ${{batchNum + 1}} exception:`, e);
                         errors += batch.length;
+                        
+                        // Track failed batch details
+                        failedBatches.push({{
+                            batchNum: batchNum + 1,
+                            rowStart: start + 1,
+                            rowEnd: end,
+                            contacts: batch,
+                            error: e.message
+                        }});
                         
                         updateCSVProgress(imported, allContacts.length, 
                             `Batch ${{batchNum + 1}}/${{totalBatches}} ERROR - Imported: ${{imported}}, Errors: ${{errors}}`);
@@ -1399,9 +1418,31 @@ def serve_web_ui(event):
                 
                 console.log('Batch CSV Upload Complete. Imported:', imported, 'Errors:', errors);
                 
+                // Log failed batches details
+                if (failedBatches.length > 0) {{
+                    console.log('\\n=== FAILED BATCHES DETAILS ===');
+                    failedBatches.forEach(fb => {{
+                        console.log(`\\nBatch ${{fb.batchNum}} (Rows ${{fb.rowStart}}-${{fb.rowEnd}}):`);
+                        console.log(`  Error: ${{fb.error}}`);
+                        console.log(`  Failed contacts:`, fb.contacts);
+                    }});
+                    console.log('\\n=== END FAILED BATCHES ===\\n');
+                    
+                    // Create downloadable CSV of failed rows
+                    window.failedContacts = failedBatches.flatMap(fb => fb.contacts);
+                    console.log('To download failed contacts, run: downloadFailedContacts()');
+                }}
+                
                 hideCSVProgress();
                 
-                alert(`CSV Import Complete!\\n\\nImported: ${{imported}} contacts\\nErrors: ${{errors}}\\n\\nProcessed ${{totalBatches}} batches of up to 25 contacts each.`);
+                let message = `CSV Import Complete!\\n\\nImported: ${{imported}} contacts\\nErrors: ${{errors}}\\n\\nProcessed ${{totalBatches}} batches of up to 25 contacts each.`;
+                
+                if (failedBatches.length > 0) {{
+                    message += `\\n\\n⚠️ ${{failedBatches.length}} batches failed (${{errors}} contacts).`;
+                    message += `\\n\\nTo see failed rows:\\n1. Open Console (F12)\\n2. Look for "FAILED BATCHES DETAILS"\\n3. Run: downloadFailedContacts()`;
+                }}
+                
+                alert(message);
                 
                 loadContacts();
                 loadGroupsFromDB(); // Refresh groups from uploaded contacts
@@ -1434,6 +1475,47 @@ def serve_web_ui(event):
             if (confirm('Are you sure you want to cancel the import? Progress will be saved up to this point.')) {{
                 csvUploadCancelled = true;
             }}
+        }}
+        
+        function downloadFailedContacts() {{
+            if (!window.failedContacts || window.failedContacts.length === 0) {{
+                console.log('No failed contacts to download. Import completed successfully or no errors were tracked.');
+                return;
+            }}
+            
+            // Create CSV content
+            const headers = ['email', 'first_name', 'last_name', 'title', 'entity_type', 'state', 'agency_name', 
+                           'sector', 'subsection', 'phone', 'ms_isac_member', 'soc_call', 'fusion_center', 
+                           'k12', 'water_wastewater', 'weekly_rollup', 'alternate_email', 'region', 'group'];
+            
+            let csvContent = headers.join(',') + '\\n';
+            
+            window.failedContacts.forEach(contact => {{
+                const row = headers.map(header => {{
+                    const value = contact[header] || '';
+                    // Escape values that contain commas or quotes
+                    if (value.includes(',') || value.includes('"')) {{
+                        return '"' + value.replace(/"/g, '""') + '"';
+                    }}
+                    return value;
+                }});
+                csvContent += row.join(',') + '\\n';
+            }});
+            
+            // Create download link
+            const blob = new Blob([csvContent], {{ type: 'text/csv;charset=utf-8;' }});
+            const link = document.createElement('a');
+            const url = URL.createObjectURL(blob);
+            
+            link.setAttribute('href', url);
+            link.setAttribute('download', 'failed_contacts_' + new Date().toISOString().slice(0,10) + '.csv');
+            link.style.visibility = 'hidden';
+            
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            
+            console.log(`Downloaded ${{window.failedContacts.length}} failed contacts to CSV file`);
         }}
         
         function loadContactsForCampaign() {{
