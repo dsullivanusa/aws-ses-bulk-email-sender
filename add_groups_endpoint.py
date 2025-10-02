@@ -9,8 +9,8 @@ import json
 
 # Configuration
 REGION = 'us-gov-west-1'
-API_NAME = 'BulkEmailAPI'  # Change this if your API has a different name
-LAMBDA_FUNCTION_NAME = 'bulk_email_api_lambda'  # Change this to match your Lambda function name
+API_NAME = 'bulk-mail-api'
+LAMBDA_FUNCTION_NAME = 'bulk-email-api-function'
 
 def add_groups_endpoint():
     """Add the /groups GET endpoint to API Gateway"""

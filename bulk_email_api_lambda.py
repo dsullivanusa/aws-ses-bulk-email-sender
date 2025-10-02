@@ -684,7 +684,7 @@ def serve_web_ui(event):
             <table id="contactsTable">
                 <thead>
                         <tr>
-                            <th>Email</th>
+                            <th>Email Address</th>
                             <th>Name</th>
                             <th>Group</th>
                             <th>Agency</th>
@@ -1279,6 +1279,7 @@ def serve_web_ui(event):
                         const fieldMap = {{
                             'email': 'email',
                             'email_address': 'email',
+                            'email address': 'email',
                             'first_name': 'first_name',
                             'firstname': 'first_name',
                             'first': 'first_name',
