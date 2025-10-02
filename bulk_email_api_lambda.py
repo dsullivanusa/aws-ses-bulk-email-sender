@@ -64,6 +64,8 @@ def lambda_handler(event, context):
             return update_contact(body, headers)
         elif path == '/contacts' and method == 'DELETE':
             return delete_contact(event, headers)
+        elif path == '/contacts/batch' and method == 'POST':
+            return batch_add_contacts(body, headers)
         elif path == '/groups' and method == 'GET':
             return get_groups(headers)
         elif path == '/campaign' and method == 'POST':
@@ -552,7 +554,17 @@ def serve_web_ui(event):
             <button onclick="loadContacts()">Load Contacts</button>
             <button class="btn-success" onclick="showAddContact()">Add Contact</button>
             <input type="file" id="csvFile" accept=".csv" style="display: none;" onchange="uploadCSV()">
-            <button onclick="document.getElementById('csvFile').click()">Upload CSV</button>
+            <button onclick="document.getElementById('csvFile').click()">Upload CSV (Batch)</button>
+            
+            <!-- CSV Upload Progress Bar -->
+            <div id="csvUploadProgress" class="hidden" style="margin-top: 20px; padding: 20px; background: #f8f9fa; border-radius: 8px; border: 1px solid #dee2e6;">
+                <h4 style="margin: 0 0 10px 0;">CSV Import Progress</h4>
+                <div style="background: #e9ecef; border-radius: 4px; height: 30px; overflow: hidden; margin-bottom: 10px;">
+                    <div id="csvProgressBar" style="background: linear-gradient(90deg, #10b981, #059669); height: 100%; width: 0%; transition: width 0.3s; display: flex; align-items: center; justify-content: center; color: white; font-weight: 600; font-size: 14px;"></div>
+                </div>
+                <div id="csvProgressText" style="font-size: 14px; color: #6b7280;"></div>
+                <button id="csvCancelButton" onclick="cancelCSVUpload()" style="margin-top: 10px; background: #ef4444;">Cancel Import</button>
+            </div>
             
             <div id="addContactForm" class="hidden card">
                 <h3>Add Contact</h3>
@@ -1197,99 +1209,227 @@ def serve_web_ui(event):
             }}
         }}
         
+        // Global variable to track CSV upload cancellation
+        let csvUploadCancelled = false;
+        
         async function uploadCSV() {{
             const file = document.getElementById('csvFile').files[0];
             if (!file) return;
             
-            const text = await file.text();
-            const lines = text.split('\\n').filter(line => line.trim());
+            csvUploadCancelled = false;
             
-            if (lines.length < 2) {{
-                alert('CSV file must have at least a header row and one data row');
-                return;
-            }}
+            console.log('Starting batch CSV upload...', file.name);
             
-            const headers = lines[0].split(',').map(h => h.trim().toLowerCase());
-            let imported = 0;
-            let errors = 0;
+            // Show progress bar
+            document.getElementById('csvUploadProgress').classList.remove('hidden');
             
-            for (let i = 1; i < lines.length; i++) {{
-                const values = lines[i].split(',').map(v => v.trim());
+            try {{
+                const text = await file.text();
+                const lines = text.split('\\n').filter(line => line.trim());
                 
-                if (values.length !== headers.length) continue;
+                console.log('Total lines in CSV:', lines.length);
                 
-                const contact = {{}};
-                headers.forEach((header, index) => {{
-                    // Map CSV headers to contact fields
-                    const fieldMap = {{
-                        'email': 'email',
-                        'email_address': 'email',
-                        'first_name': 'first_name',
-                        'firstname': 'first_name',
-                        'first': 'first_name',
-                        'last_name': 'last_name',
-                        'lastname': 'last_name',
-                        'last': 'last_name',
-                        'title': 'title',
-                        'entity_type': 'entity_type',
-                        'entitytype': 'entity_type',
-                        'state': 'state',
-                        'agency_name': 'agency_name',
-                        'agencyname': 'agency_name',
-                        'agency': 'agency_name',
-                        'sector': 'sector',
-                        'subsection': 'subsection',
-                        'phone': 'phone',
-                        'phone_number': 'phone',
-                        'ms_isac_member': 'ms_isac_member',
-                        'ms-isac': 'ms_isac_member',
-                        'msisac': 'ms_isac_member',
-                        'soc_call': 'soc_call',
-                        'soc': 'soc_call',
-                        'fusion_center': 'fusion_center',
-                        'fusion': 'fusion_center',
-                        'k12': 'k12',
-                        'k-12': 'k12',
-                        'water_wastewater': 'water_wastewater',
-                        'water/wastewater': 'water_wastewater',
-                        'water': 'water_wastewater',
-                        'weekly_rollup': 'weekly_rollup',
-                        'weekly': 'weekly_rollup',
-                        'rollup': 'weekly_rollup',
-                        'alternate_email': 'alternate_email',
-                        'alt_email': 'alternate_email',
-                        'region': 'region',
-                        'group': 'group'
-                    }};
+                if (lines.length < 2) {{
+                    alert('CSV file must have at least a header row and one data row');
+                    hideCSVProgress();
+                    return;
+                }}
+                
+                // Better CSV parsing - handle quoted fields
+                function parseCSVLine(line) {{
+                    const result = [];
+                    let current = '';
+                    let inQuotes = false;
                     
-                    const fieldName = fieldMap[header];
-                    if (fieldName) {{
-                        contact[fieldName] = values[index];
+                    for (let i = 0; i < line.length; i++) {{
+                        const char = line[i];
+                        
+                        if (char === '"') {{
+                            inQuotes = !inQuotes;
+                        }} else if (char === ',' && !inQuotes) {{
+                            result.push(current.trim());
+                            current = '';
+                        }} else {{
+                            current += char;
+                        }}
                     }}
-                }});
+                    result.push(current.trim());
+                    return result;
+                }}
                 
-                if (contact.email) {{
+                const headers = parseCSVLine(lines[0]).map(h => h.trim().toLowerCase());
+                console.log('CSV Headers:', headers);
+                
+                // Parse all contacts first
+                const allContacts = [];
+                for (let i = 1; i < lines.length; i++) {{
+                    const values = parseCSVLine(lines[i]);
+                    
+                    if (values.length !== headers.length) {{
+                        console.warn(`Row ${{i}}: Column count mismatch. Got ${{values.length}}, expected ${{headers.length}}`);
+                        continue;
+                    }}
+                
+                    const contact = {{}};
+                    headers.forEach((header, index) => {{
+                        // Map CSV headers to contact fields
+                        const fieldMap = {{
+                            'email': 'email',
+                            'email_address': 'email',
+                            'first_name': 'first_name',
+                            'firstname': 'first_name',
+                            'first': 'first_name',
+                            'last_name': 'last_name',
+                            'lastname': 'last_name',
+                            'last': 'last_name',
+                            'title': 'title',
+                            'entity_type': 'entity_type',
+                            'entitytype': 'entity_type',
+                            'state': 'state',
+                            'agency_name': 'agency_name',
+                            'agencyname': 'agency_name',
+                            'agency': 'agency_name',
+                            'sector': 'sector',
+                            'subsection': 'subsection',
+                            'phone': 'phone',
+                            'phone_number': 'phone',
+                            'ms_isac_member': 'ms_isac_member',
+                            'ms-isac': 'ms_isac_member',
+                            'msisac': 'ms_isac_member',
+                            'soc_call': 'soc_call',
+                            'soc': 'soc_call',
+                            'fusion_center': 'fusion_center',
+                            'fusion': 'fusion_center',
+                            'k12': 'k12',
+                            'k-12': 'k12',
+                            'water_wastewater': 'water_wastewater',
+                            'water/wastewater': 'water_wastewater',
+                            'water': 'water_wastewater',
+                            'weekly_rollup': 'weekly_rollup',
+                            'weekly': 'weekly_rollup',
+                            'rollup': 'weekly_rollup',
+                            'alternate_email': 'alternate_email',
+                            'alt_email': 'alternate_email',
+                            'region': 'region',
+                            'group': 'group'
+                        }};
+                        
+                        const fieldName = fieldMap[header];
+                        if (fieldName) {{
+                            contact[fieldName] = values[index];
+                        }}
+                    }});
+                    
+                    if (contact.email) {{
+                        allContacts.push(contact);
+                    }}
+                }}
+                
+                console.log(`Parsed ${{allContacts.length}} valid contacts from CSV`);
+                
+                if (allContacts.length === 0) {{
+                    alert('No valid contacts found in CSV file');
+                    hideCSVProgress();
+                    return;
+                }}
+                
+                // Process in batches of 25 (DynamoDB batch limit)
+                const BATCH_SIZE = 25;
+                let imported = 0;
+                let errors = 0;
+                const totalBatches = Math.ceil(allContacts.length / BATCH_SIZE);
+                
+                updateCSVProgress(0, allContacts.length, 'Starting import...');
+                
+                for (let batchNum = 0; batchNum < totalBatches; batchNum++) {{
+                    // Check if cancelled
+                    if (csvUploadCancelled) {{
+                        console.log('CSV upload cancelled by user');
+                        alert(`Import cancelled.\\nImported: ${{imported}} contacts\\nRemaining: ${{allContacts.length - imported}}`);
+                        hideCSVProgress();
+                        return;
+                    }}
+                    
+                    const start = batchNum * BATCH_SIZE;
+                    const end = Math.min(start + BATCH_SIZE, allContacts.length);
+                    const batch = allContacts.slice(start, end);
+                    
+                    console.log(`Processing batch ${{batchNum + 1}}/${{totalBatches}}: contacts ${{start + 1}}-${{end}}`);
+                    
                     try {{
-                        const response = await fetch(`${{API_URL}}/contacts`, {{
+                        const response = await fetch(`${{API_URL}}/contacts/batch`, {{
                             method: 'POST',
                             headers: {{'Content-Type': 'application/json'}},
-                            body: JSON.stringify(contact)
+                            body: JSON.stringify({{ contacts: batch }})
                         }});
                         
                         if (response.ok) {{
-                            imported++;
+                            const result = await response.json();
+                            imported += result.imported || 0;
+                            errors += result.unprocessed || 0;
+                            
+                            const percentage = Math.round((imported / allContacts.length) * 100);
+                            updateCSVProgress(imported, allContacts.length, 
+                                `Batch ${{batchNum + 1}}/${{totalBatches}} - Imported: ${{imported}}, Errors: ${{errors}}`);
+                            
+                            console.log(`✓ Batch ${{batchNum + 1}} complete: +${{result.imported}} imported, ${{result.unprocessed}} failed`);
                         }} else {{
-                            errors++;
+                            const errorText = await response.text();
+                            console.error(`Batch ${{batchNum + 1}} failed:`, response.status, errorText);
+                            errors += batch.length;
+                            
+                            updateCSVProgress(imported, allContacts.length, 
+                                `Batch ${{batchNum + 1}}/${{totalBatches}} FAILED - Imported: ${{imported}}, Errors: ${{errors}}`);
                         }}
                     }} catch (e) {{
-                        errors++;
+                        console.error(`Batch ${{batchNum + 1}} exception:`, e);
+                        errors += batch.length;
+                        
+                        updateCSVProgress(imported, allContacts.length, 
+                            `Batch ${{batchNum + 1}}/${{totalBatches}} ERROR - Imported: ${{imported}}, Errors: ${{errors}}`);
                     }}
+                    
+                    // Small delay to avoid overwhelming the API
+                    await new Promise(resolve => setTimeout(resolve, 100));
                 }}
+                
+                console.log('Batch CSV Upload Complete. Imported:', imported, 'Errors:', errors);
+                
+                hideCSVProgress();
+                
+                alert(`CSV Import Complete!\\n\\nImported: ${{imported}} contacts\\nErrors: ${{errors}}\\n\\nProcessed ${{totalBatches}} batches of up to 25 contacts each.`);
+                
+                loadContacts();
+                loadGroupsFromDB(); // Refresh groups from uploaded contacts
+                
+            }} catch (error) {{
+                console.error('CSV upload error:', error);
+                hideCSVProgress();
+                alert('Error during CSV import: ' + error.message);
             }}
+        }}
+        
+        function updateCSVProgress(current, total, message) {{
+            const percentage = Math.round((current / total) * 100);
+            const progressBar = document.getElementById('csvProgressBar');
+            const progressText = document.getElementById('csvProgressText');
             
-            alert(`CSV Upload Complete!\\nImported: ${{imported}} contacts\\nErrors: ${{errors}}`);
-            loadContacts();
-            loadGroupsFromDB(); // Refresh groups from uploaded contacts
+            progressBar.style.width = percentage + '%';
+            progressBar.textContent = percentage + '%';
+            progressText.textContent = message + ` (${{current}} / ${{total}})`;
+        }}
+        
+        function hideCSVProgress() {{
+            document.getElementById('csvUploadProgress').classList.add('hidden');
+            document.getElementById('csvProgressBar').style.width = '0%';
+            document.getElementById('csvProgressBar').textContent = '';
+            document.getElementById('csvProgressText').textContent = '';
+        }}
+        
+        function cancelCSVUpload() {{
+            if (confirm('Are you sure you want to cancel the import? Progress will be saved up to this point.')) {{
+                csvUploadCancelled = true;
+            }}
         }}
         
         function loadContactsForCampaign() {{
@@ -1669,6 +1809,77 @@ def add_contact(body, headers):
     except Exception as e:
         return {'statusCode': 500, 'headers': headers, 'body': json.dumps({'error': str(e)})}
 
+def batch_add_contacts(body, headers):
+    """Batch add contacts - up to 25 at a time (DynamoDB limit)"""
+    try:
+        contacts = body.get('contacts', [])
+        
+        if not contacts:
+            return {'statusCode': 400, 'headers': headers, 'body': json.dumps({'error': 'No contacts provided'})}
+        
+        if len(contacts) > 25:
+            return {'statusCode': 400, 'headers': headers, 'body': json.dumps({'error': 'Maximum 25 contacts per batch'})}
+        
+        # Prepare batch write requests
+        dynamodb_client = boto3.client('dynamodb', region_name='us-gov-west-1')
+        
+        request_items = []
+        for contact in contacts:
+            if not contact.get('email'):
+                continue
+                
+            item = {
+                'email': {'S': contact['email']},
+                'first_name': {'S': contact.get('first_name', '')},
+                'last_name': {'S': contact.get('last_name', '')},
+                'title': {'S': contact.get('title', '')},
+                'entity_type': {'S': contact.get('entity_type', '')},
+                'state': {'S': contact.get('state', '')},
+                'agency_name': {'S': contact.get('agency_name', '')},
+                'sector': {'S': contact.get('sector', '')},
+                'subsection': {'S': contact.get('subsection', '')},
+                'phone': {'S': contact.get('phone', '')},
+                'ms_isac_member': {'S': contact.get('ms_isac_member', '')},
+                'soc_call': {'S': contact.get('soc_call', '')},
+                'fusion_center': {'S': contact.get('fusion_center', '')},
+                'k12': {'S': contact.get('k12', '')},
+                'water_wastewater': {'S': contact.get('water_wastewater', '')},
+                'weekly_rollup': {'S': contact.get('weekly_rollup', '')},
+                'alternate_email': {'S': contact.get('alternate_email', '')},
+                'region': {'S': contact.get('region', '')},
+                'group': {'S': contact.get('group', '')},
+                'created_at': {'S': datetime.now().isoformat()}
+            }
+            
+            request_items.append({'PutRequest': {'Item': item}})
+        
+        if not request_items:
+            return {'statusCode': 400, 'headers': headers, 'body': json.dumps({'error': 'No valid contacts with email addresses'})}
+        
+        # Execute batch write
+        response = dynamodb_client.batch_write_item(
+            RequestItems={
+                'EmailContacts': request_items
+            }
+        )
+        
+        # Check for unprocessed items
+        unprocessed = response.get('UnprocessedItems', {})
+        unprocessed_count = len(unprocessed.get('EmailContacts', []))
+        
+        return {
+            'statusCode': 200, 
+            'headers': headers, 
+            'body': json.dumps({
+                'success': True, 
+                'imported': len(request_items) - unprocessed_count,
+                'unprocessed': unprocessed_count
+            })
+        }
+    except Exception as e:
+        print(f"Batch import error: {str(e)}")
+        return {'statusCode': 500, 'headers': headers, 'body': json.dumps({'error': str(e)})}
+
 def update_contact(body, headers):
     """Update contact with all CISA fields"""
     try:
@@ -1976,4 +2187,5 @@ def personalize_content(content, contact):
     # Legacy support
     content = content.replace('{{company}}', contact.get('agency_name', ''))
     
+    return content
     return content

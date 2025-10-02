@@ -106,6 +106,10 @@ def add_groups_endpoint():
         except Exception as e:
             print(f"Integration setup: {str(e)}")
         
+        # Get AWS account ID
+        sts = boto3.client('sts', region_name=REGION)
+        account_id = sts.get_caller_identity()['Account']
+        
         # Add Lambda permission
         try:
             print("Adding Lambda invoke permission...")
@@ -114,11 +118,14 @@ def add_groups_endpoint():
                 StatementId=f'apigateway-groups-{api_id}',
                 Action='lambda:InvokeFunction',
                 Principal='apigateway.amazonaws.com',
-                SourceArn=f'arn:aws-us-gov:execute-api:{REGION}:*:{api_id}/*/*/groups'
+                SourceArn=f'arn:aws-us-gov:execute-api:{REGION}:{account_id}:{api_id}/*/GET/groups'
             )
             print("✓ Lambda permission added")
         except lambda_client.exceptions.ResourceConflictException:
             print("⚠️  Lambda permission already exists")
+        except Exception as e:
+            print(f"⚠️  Could not add Lambda permission: {str(e)}")
+            print("    You may need to add this manually in the Lambda console")
         
         # Add OPTIONS method for CORS
         try:
