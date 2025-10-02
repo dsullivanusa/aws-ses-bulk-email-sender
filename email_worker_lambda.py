@@ -20,6 +20,10 @@ dynamodb = boto3.resource('dynamodb', region_name='us-gov-west-1')
 campaigns_table = dynamodb.Table('EmailCampaigns')
 contacts_table = dynamodb.Table('EmailContacts')
 secrets_client = boto3.client('secretsmanager', region_name='us-gov-west-1')
+s3_client = boto3.client('s3', region_name='us-gov-west-1')
+
+# S3 bucket for attachments
+ATTACHMENTS_BUCKET = 'jcdc-ses-contact-list'
 
 def lambda_handler(event, context):
     """Process SQS messages and send emails"""
@@ -195,10 +199,16 @@ def get_aws_credentials_from_secrets_manager(secret_name, msg_idx=0):
         raise
 
 def send_ses_email(campaign, contact, from_email, subject, body, msg_idx=0):
-    """Send email via AWS SES using IAM role or Secrets Manager credentials"""
+    """Send email via AWS SES using IAM role or Secrets Manager credentials with attachment support"""
     try:
+        from email.mime.multipart import MIMEMultipart
+        from email.mime.text import MIMEText
+        from email.mime.base import MIMEBase
+        from email import encoders
+        
         aws_region = campaign.get('aws_region', 'us-gov-west-1')
         secret_name = campaign.get('aws_secret_name')
+        attachments = campaign.get('attachments', [])
         
         # Check if we should use IAM role or explicit credentials
         if secret_name:
@@ -218,22 +228,81 @@ def send_ses_email(campaign, contact, from_email, subject, body, msg_idx=0):
             ses_client = boto3.client('ses', region_name=aws_region)
         
         logger.info(f"[Message {msg_idx}] Creating SES client for region: {aws_region}")
+        logger.info(f"[Message {msg_idx}] Attachments in campaign: {len(attachments)}")
         
-        # Send email
-        logger.info(f"[Message {msg_idx}] Calling SES send_email API")
+        # If no attachments, use simple send_email
+        if not attachments or len(attachments) == 0:
+            logger.info(f"[Message {msg_idx}] No attachments - using send_email API")
+            response = ses_client.send_email(
+                Source=from_email,
+                Destination={'ToAddresses': [contact['email']]},
+                Message={
+                    'Subject': {'Data': subject},
+                    'Body': {'Html': {'Data': body}}
+                }
+            )
+            message_id = response.get('MessageId', 'unknown')
+            logger.info(f"[Message {msg_idx}] SES send successful. Message ID: {message_id}")
+            return True
+        
+        # Build MIME message with attachments
+        logger.info(f"[Message {msg_idx}] Building MIME message with {len(attachments)} attachment(s)")
+        msg = MIMEMultipart()
+        msg['From'] = from_email
+        msg['To'] = contact['email']
+        msg['Subject'] = subject
+        
+        # Attach HTML body
+        msg.attach(MIMEText(body, 'html'))
+        
+        # Download and attach files from S3
+        for idx, attachment in enumerate(attachments, 1):
+            s3_key = attachment.get('s3_key')
+            filename = attachment.get('filename')
+            
+            if not s3_key or not filename:
+                logger.warning(f"[Message {msg_idx}] Attachment {idx}: Missing s3_key or filename, skipping")
+                continue
+            
+            try:
+                logger.info(f"[Message {msg_idx}] Downloading attachment {idx}/{len(attachments)}: {filename} from S3")
+                logger.debug(f"[Message {msg_idx}] S3 bucket: {ATTACHMENTS_BUCKET}, key: {s3_key}")
+                
+                # Download from S3
+                s3_response = s3_client.get_object(Bucket=ATTACHMENTS_BUCKET, Key=s3_key)
+                file_data = s3_response['Body'].read()
+                
+                logger.info(f"[Message {msg_idx}] Downloaded {len(file_data)} bytes for {filename}")
+                
+                # Determine MIME type
+                content_type = attachment.get('type', 'application/octet-stream')
+                maintype, subtype = content_type.split('/', 1) if '/' in content_type else ('application', 'octet-stream')
+                
+                # Create MIME attachment
+                part = MIMEBase(maintype, subtype)
+                part.set_payload(file_data)
+                encoders.encode_base64(part)
+                part.add_header('Content-Disposition', f'attachment; filename="{filename}"')
+                
+                msg.attach(part)
+                logger.info(f"[Message {msg_idx}] Attached {filename} to email")
+                
+            except Exception as attachment_error:
+                logger.error(f"[Message {msg_idx}] Error attaching {filename}: {str(attachment_error)}")
+                # Continue with other attachments even if one fails
+        
+        # Send via send_raw_email (supports attachments)
+        logger.info(f"[Message {msg_idx}] Calling SES send_raw_email API with attachments")
         logger.debug(f"[Message {msg_idx}] From: {from_email}, To: {contact['email']}")
         
-        response = ses_client.send_email(
+        response = ses_client.send_raw_email(
             Source=from_email,
-            Destination={'ToAddresses': [contact['email']]},
-            Message={
-                'Subject': {'Data': subject},
-                'Body': {'Html': {'Data': body}}
-            }
+            Destinations=[contact['email']],
+            RawMessage={'Data': msg.as_string()}
         )
         
         message_id = response.get('MessageId', 'unknown')
-        logger.info(f"[Message {msg_idx}] SES send successful. Message ID: {message_id}")
+        logger.info(f"[Message {msg_idx}] SES send_raw_email successful. Message ID: {message_id}")
         return True
         
     except Exception as e:
