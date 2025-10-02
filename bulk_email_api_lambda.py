@@ -571,7 +571,7 @@ def serve_web_ui(event):
             <div class="form-group">
                 <label>🔍 Contact Filter:</label>
                 <div style="display: grid; grid-template-columns: 1fr 2fr; gap: 10px; align-items: start;">
-                    <select id="filterType" onchange="loadFilterValues()">
+                    <select id="filterType" onchange="loadFilterValues()" title="Select a filter type - you can change this anytime">
                         <option value="">All Contacts</option>
                         <option value="group">Group</option>
                         <option value="entity_type">Entity Type</option>
@@ -586,13 +586,16 @@ def serve_web_ui(event):
                         <option value="water_wastewater">Water/Wastewater</option>
                         <option value="weekly_rollup">Weekly Rollup</option>
                         <option value="region">Region</option>
-                </select>
+                    </select>
                     <div id="filterValueContainer" style="display: none;">
                         <div style="max-height: 300px; overflow-y: auto; padding: 12px; background: #f9fafb; border-radius: 8px; border: 1px solid #e5e7eb;">
-                            <div style="margin-bottom: 12px; padding-bottom: 10px; border-bottom: 1px solid #e5e7eb;">
-                                <button onclick="selectAllFilterValues()" style="padding: 6px 12px; font-size: 13px; background: #10b981; margin-right: 8px;">✅ Select All</button>
-                                <button onclick="clearAllFilterValues()" style="padding: 6px 12px; font-size: 13px; background: #ef4444;">❌ Clear All</button>
-            </div>
+                            <div style="margin-bottom: 12px; padding-bottom: 10px; border-bottom: 1px solid #e5e7eb; display: flex; justify-content: space-between; align-items: center;">
+                                <div>
+                                    <button onclick="selectAllFilterValues()" style="padding: 6px 12px; font-size: 13px; background: #10b981; margin-right: 8px;">✅ Select All</button>
+                                    <button onclick="clearAllFilterValues()" style="padding: 6px 12px; font-size: 13px; background: #ef4444;">❌ Clear All</button>
+                                </div>
+                                <small style="color: #6b7280; margin: 0;">Click checkboxes to load filtered contacts</small>
+                            </div>
                             <div id="filterValueCheckboxes"></div>
                         </div>
                         <small style="display: block; margin-top: 8px; color: #6b7280;" id="filterCount"></small>
@@ -730,7 +733,7 @@ def serve_web_ui(event):
             
             <div class="form-group" style="margin-top: 20px;">
                 <label>🔎 Search by Name:</label>
-                <input type="text" id="nameSearch" placeholder="Search by first or last name..." oninput="searchContactsByName()" style="margin-bottom: 10px;">
+                <input type="text" id="nameSearch" placeholder="Search by first or last name..." oninput="debouncedSearch()" style="margin-bottom: 10px;">
                 <small id="searchResults" style="color: #6b7280;"></small>
             </div>
             
@@ -1082,10 +1085,17 @@ def serve_web_ui(event):
             const filterType = document.getElementById('filterType').value;
             const filterValueContainer = document.getElementById('filterValueContainer');
             const filterValueCheckboxes = document.getElementById('filterValueCheckboxes');
+            const filterTypeDropdown = document.getElementById('filterType');
+            
+            // Always keep filter type dropdown enabled
+            filterTypeDropdown.disabled = false;
             
             if (!filterType) {{
                 // No filter type selected - show all contacts
                 filterValueContainer.style.display = 'none';
+                // Clear search if switching to "All Contacts"
+                document.getElementById('nameSearch').value = '';
+                document.getElementById('searchResults').textContent = '';
                 applyContactFilter();
                 return;
             }}
@@ -1112,7 +1122,7 @@ def serve_web_ui(event):
                 checkboxDiv.style.marginBottom = '5px';
                 checkboxDiv.innerHTML = `
                     <label style="display: flex; align-items: center; padding: 8px; cursor: pointer; border-radius: 4px; transition: background 0.2s;" onmouseover="this.style.background='#e0e7ff'" onmouseout="this.style.background='transparent'">
-                        <input type="checkbox" class="filterCheckbox" value="${{value}}" onchange="applyContactFilter()" style="margin-right: 10px; width: auto;">
+                        <input type="checkbox" class="filterCheckbox" value="${{value}}" onchange="onFilterCheckboxChange()" style="margin-right: 10px; width: auto;">
                         <span>${{value}}</span>
                     </label>
                 `;
@@ -1123,7 +1133,71 @@ def serve_web_ui(event):
             updateFilterCount();
         }}
         
+        async function onFilterCheckboxChange() {{
+            const checkedBoxes = document.querySelectorAll('.filterCheckbox:checked');
+            
+            console.log(`Filter checkbox changed. ${{checkedBoxes.length}} selected`);
+            
+            // If any checkboxes are selected, load contacts from DynamoDB
+            if (checkedBoxes.length > 0) {{
+                console.log('Loading contacts from DynamoDB based on filter selection...');
+                await loadContactsWithFilter();
+            }} else {{
+                // No checkboxes selected - just update count
+                updateFilterCount();
+                displayContacts(allContacts);
+            }}
+        }}
+        
+        async function loadContactsWithFilter() {{
+            const filterType = document.getElementById('filterType').value;
+            const checkedBoxes = document.querySelectorAll('.filterCheckbox:checked');
+            
+            if (!filterType || checkedBoxes.length === 0) {{
+                // No filter active - load all contacts
+                await loadContacts();
+                return;
+            }}
+            
+            const selectedValues = Array.from(checkedBoxes).map(cb => cb.value);
+            
+            try {{
+                console.log(`Querying DynamoDB for ${{filterType}} IN [${{selectedValues.join(', ')}}]...`);
+                
+                // Load all contacts from DynamoDB
+                const response = await fetch(`${{API_URL}}/contacts`);
+                
+                if (response.ok) {{
+                    const result = await response.json();
+                    allContacts = result.contacts || [];
+                    
+                    // Filter based on selection
+                    const filteredContacts = allContacts.filter(contact => 
+                        contact[filterType] && selectedValues.includes(contact[filterType])
+                    );
+                    
+                    console.log(`Loaded ${{allContacts.length}} total contacts, ${{filteredContacts.length}} match filter`);
+                    
+                    updateFilterCount();
+                    displayContacts(filteredContacts);
+                }} else {{
+                    console.error('Failed to load contacts:', response.status);
+                }}
+            }} catch (error) {{
+                console.error('Error loading contacts with filter:', error);
+            }}
+        }}
+        
         async function applyContactFilter() {{
+            const searchTerm = document.getElementById('nameSearch').value.trim();
+            
+            // If there's a search term, always use DynamoDB search instead
+            if (searchTerm && searchTerm.length >= 2) {{
+                console.log('Search term detected - using DynamoDB search instead of local filter');
+                await searchContactsByName();
+                return;
+            }}
+            
             // Auto-load contacts if not already loaded
             if (allContacts.length === 0) {{
                 console.log('Auto-loading contacts for filter...');
@@ -1133,7 +1207,6 @@ def serve_web_ui(event):
             
             const filterType = document.getElementById('filterType').value;
             const checkedBoxes = document.querySelectorAll('.filterCheckbox:checked');
-            const searchTerm = document.getElementById('nameSearch').value.trim().toLowerCase();
             
             let filteredContacts = allContacts;
             
@@ -1154,38 +1227,47 @@ def serve_web_ui(event):
                 console.log('Filter type selected but no values checked - showing all');
             }}
             
-            // Apply name search on top of category filter
-            if (searchTerm) {{
-                filteredContacts = filteredContacts.filter(contact => {{
-                    const firstName = (contact.first_name || '').toLowerCase();
-                    const lastName = (contact.last_name || '').toLowerCase();
-                    const fullName = `${{firstName}} ${{lastName}}`.trim();
-                    
-                    return firstName.includes(searchTerm) || 
-                           lastName.includes(searchTerm) || 
-                           fullName.includes(searchTerm);
-                }});
-                
-                const searchResults = document.getElementById('searchResults');
-                searchResults.textContent = `Found ${{filteredContacts.length}} contact(s) matching "${{searchTerm}}"`;
-            }} else {{
-                document.getElementById('searchResults').textContent = '';
-            }}
-            
+            document.getElementById('searchResults').textContent = '';
             updateFilterCount();
             displayContacts(filteredContacts);
         }}
         
-        function selectAllFilterValues() {{
+        async function selectAllFilterValues() {{
             const checkboxes = document.querySelectorAll('.filterCheckbox');
             checkboxes.forEach(cb => cb.checked = true);
-            applyContactFilter();
+            await onFilterCheckboxChange();
         }}
         
-        function clearAllFilterValues() {{
+        async function clearAllFilterValues() {{
             const checkboxes = document.querySelectorAll('.filterCheckbox');
             checkboxes.forEach(cb => cb.checked = false);
-            applyContactFilter();
+            updateFilterCount();
+            // When cleared, show all contacts or apply just category filter
+            await applyContactFilter();
+        }}
+        
+        // Debounce search to avoid too many API calls while typing
+        let searchTimeout;
+        function debouncedSearch() {{
+            clearTimeout(searchTimeout);
+            const searchTerm = document.getElementById('nameSearch').value.trim();
+            
+            if (!searchTerm) {{
+                // If empty, clear immediately
+                searchContactsByName();
+                return;
+            }}
+            
+            // Show "Typing..." indicator
+            const searchResults = document.getElementById('searchResults');
+            if (searchTerm.length >= 2) {{
+                searchResults.textContent = 'Typing...';
+            }}
+            
+            // Wait 500ms after user stops typing, then search
+            searchTimeout = setTimeout(() => {{
+                searchContactsByName();
+            }}, 500);
         }}
         
         function updateFilterCount() {{
@@ -1896,7 +1978,7 @@ def serve_web_ui(event):
             // Upload files to S3
             for (const file of files) {{
                 try {{
-                    console.log(`Uploading attachment: ${{file.name}}`);
+                    console.log(`Uploading attachment: ${{file.name}} (${{(file.size / 1024).toFixed(1)}} KB)`);
                     const s3Key = await uploadAttachmentToS3(file);
                     
                     campaignAttachments.push({{
@@ -1906,10 +1988,22 @@ def serve_web_ui(event):
                         s3_key: s3Key
                     }});
                     
-                    console.log(`✓ Uploaded: ${{file.name}} to S3`);
+                    console.log(`✓ Uploaded: ${{file.name}} to S3 as ${{s3Key}}`);
                 }} catch (error) {{
                     console.error(`Error uploading ${{file.name}}:`, error);
-                    alert(`Failed to upload ${{file.name}}: ${{error.message}}`);
+                    let errorMsg = `Failed to upload ${{file.name}}: ${{error.message}}`;
+                    
+                    if (error.message.includes('404')) {{
+                        errorMsg += '\\n\\nThe /upload-attachment endpoint is not configured.\\nPlease run: python add_attachment_endpoint.py';
+                    }} else if (error.message.includes('403')) {{
+                        errorMsg += '\\n\\nLambda function does not have S3 permissions.\\nCheck IAM role permissions for S3 bucket access.';
+                    }} else if (error.message.includes('500')) {{
+                        errorMsg += '\\n\\nServer error. Check Lambda CloudWatch logs for details.';
+                    }}
+                    
+                    alert(errorMsg);
+                    fileInput.value = ''; // Clear input on error
+                    return; // Stop processing more files
                 }}
             }}
             
@@ -2410,33 +2504,69 @@ def get_groups(headers):
 def upload_attachment(body, headers):
     """Upload attachment to S3 bucket"""
     try:
+        print(f"Upload attachment request received")
+        
         filename = body.get('filename')
         content_type = body.get('content_type', 'application/octet-stream')
         s3_key = body.get('s3_key')
         data = body.get('data')  # Base64 encoded file data
         
+        print(f"Filename: {filename}, ContentType: {content_type}, S3Key: {s3_key}")
+        print(f"Data length: {len(data) if data else 0} characters")
+        
         if not all([filename, s3_key, data]):
+            missing = []
+            if not filename: missing.append('filename')
+            if not s3_key: missing.append('s3_key')
+            if not data: missing.append('data')
+            error_msg = f'Missing required fields: {", ".join(missing)}'
+            print(f"ERROR: {error_msg}")
             return {
                 'statusCode': 400, 
                 'headers': headers, 
-                'body': json.dumps({'error': 'Missing required fields'})
+                'body': json.dumps({'error': error_msg})
             }
         
         # Decode base64 data
-        file_data = base64.b64decode(data)
+        print(f"Decoding base64 data...")
+        try:
+            file_data = base64.b64decode(data)
+            print(f"Decoded file size: {len(file_data)} bytes")
+        except Exception as decode_error:
+            error_msg = f"Base64 decode error: {str(decode_error)}"
+            print(f"ERROR: {error_msg}")
+            return {
+                'statusCode': 400,
+                'headers': headers,
+                'body': json.dumps({'error': error_msg})
+            }
         
         # Upload to S3
-        s3_client.put_object(
-            Bucket=ATTACHMENTS_BUCKET,
-            Key=s3_key,
-            Body=file_data,
-            ContentType=content_type,
-            Metadata={
-                'original_filename': filename
+        print(f"Uploading to S3 bucket: {ATTACHMENTS_BUCKET}, key: {s3_key}")
+        try:
+            s3_client.put_object(
+                Bucket=ATTACHMENTS_BUCKET,
+                Key=s3_key,
+                Body=file_data,
+                ContentType=content_type,
+                Metadata={
+                    'original_filename': filename
+                }
+            )
+            print(f"✓ Successfully uploaded: {filename} to s3://{ATTACHMENTS_BUCKET}/{s3_key}")
+        except Exception as s3_error:
+            error_msg = f"S3 upload error: {str(s3_error)}"
+            print(f"ERROR: {error_msg}")
+            # Check for specific S3 errors
+            if 'AccessDenied' in str(s3_error):
+                error_msg = f"S3 Access Denied: Lambda role does not have permission to write to bucket '{ATTACHMENTS_BUCKET}'. Add s3:PutObject permission."
+            elif 'NoSuchBucket' in str(s3_error):
+                error_msg = f"S3 bucket '{ATTACHMENTS_BUCKET}' does not exist or is not accessible."
+            return {
+                'statusCode': 500,
+                'headers': headers,
+                'body': json.dumps({'error': error_msg})
             }
-        )
-        
-        print(f"Uploaded attachment: {filename} to s3://{ATTACHMENTS_BUCKET}/{s3_key}")
         
         return {
             'statusCode': 200, 
@@ -2444,15 +2574,19 @@ def upload_attachment(body, headers):
             'body': json.dumps({
                 'success': True,
                 's3_key': s3_key,
-                'bucket': ATTACHMENTS_BUCKET
+                'bucket': ATTACHMENTS_BUCKET,
+                'size': len(file_data)
             })
         }
     except Exception as e:
-        print(f"Error uploading attachment: {str(e)}")
+        error_msg = f"Unexpected error uploading attachment: {str(e)}"
+        print(f"ERROR: {error_msg}")
+        import traceback
+        traceback.print_exc()
         return {
             'statusCode': 500, 
             'headers': headers, 
-            'body': json.dumps({'error': str(e)})
+            'body': json.dumps({'error': error_msg})
         }
 
 def add_contact(body, headers):
