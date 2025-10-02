@@ -72,6 +72,8 @@ def lambda_handler(event, context):
             return batch_add_contacts(body, headers)
         elif path == '/groups' and method == 'GET':
             return get_groups(headers)
+        elif path == '/contacts/search' and method == 'POST':
+            return search_contacts(body, headers)
         elif path == '/upload-attachment' and method == 'POST':
             return upload_attachment(body, headers)
         elif path == '/campaign' and method == 'POST':
@@ -275,22 +277,19 @@ def serve_web_ui(event):
         input:hover, textarea:hover, select:hover {{
             border-color: var(--gray-300);
         }}
-        select[multiple] {{
-            padding: 8px;
-            min-height: 150px;
-        }}
-        select[multiple] option {{
-            padding: 8px 12px;
-            margin: 2px 0;
-            border-radius: 4px;
+        /* Checkbox styling */
+        input[type="checkbox"] {{
+            width: 18px;
+            height: 18px;
             cursor: pointer;
+            accent-color: var(--primary-color);
         }}
-        select[multiple] option:hover {{
-            background: var(--primary-light);
+        input[type="checkbox"]:checked + span {{
+            font-weight: 600;
+            color: var(--primary-color);
         }}
-        select[multiple] option:checked {{
-            background: linear-gradient(135deg, var(--primary-color), var(--primary-dark));
-            color: white;
+        .filterCheckbox:checked {{
+            transform: scale(1.1);
         }}
         small {{
             color: var(--gray-500);
@@ -587,12 +586,16 @@ def serve_web_ui(event):
                         <option value="water_wastewater">Water/Wastewater</option>
                         <option value="weekly_rollup">Weekly Rollup</option>
                         <option value="region">Region</option>
-                    </select>
+                </select>
                     <div id="filterValueContainer" style="display: none;">
-                        <select id="filterValue" multiple size="6" onchange="applyContactFilter()" style="margin-bottom: 0; height: auto;">
-                        </select>
-                        <small style="display: block; margin-top: 5px; color: #6b7280;">Hold Ctrl (Windows) or Cmd (Mac) to select multiple</small>
-                        <button onclick="clearFilterSelection()" style="margin-top: 8px; padding: 6px 12px; font-size: 13px; background: #6b7280;">🔄 Clear Selection</button>
+                        <div style="max-height: 300px; overflow-y: auto; padding: 12px; background: #f9fafb; border-radius: 8px; border: 1px solid #e5e7eb;">
+                            <div style="margin-bottom: 12px; padding-bottom: 10px; border-bottom: 1px solid #e5e7eb;">
+                                <button onclick="selectAllFilterValues()" style="padding: 6px 12px; font-size: 13px; background: #10b981; margin-right: 8px;">✅ Select All</button>
+                                <button onclick="clearAllFilterValues()" style="padding: 6px 12px; font-size: 13px; background: #ef4444;">❌ Clear All</button>
+            </div>
+                            <div id="filterValueCheckboxes"></div>
+                        </div>
+                        <small style="display: block; margin-top: 8px; color: #6b7280;" id="filterCount"></small>
                     </div>
                 </div>
             </div>
@@ -751,11 +754,36 @@ def serve_web_ui(event):
             <h2>📧 Send Campaign</h2>
             <div id="formStatus" class="form-status" style="display: none; padding: 10px; margin-bottom: 15px; border-radius: 4px; background: #fff3cd; border: 1px solid #ffeaa7; color: #856404;"></div>
             <div class="form-group">
-                <label>🎯 Target Group:</label>
-                <select id="targetGroup" onchange="loadContactsForCampaign()">
-                    <option value="">All Groups</option>
+                <label>🎯 Target Contacts:</label>
+                <div style="display: grid; grid-template-columns: 1fr 2fr; gap: 10px; align-items: start;">
+                    <select id="campaignFilterType" onchange="loadCampaignFilterValues()">
+                        <option value="">All Contacts</option>
+                        <option value="test_group">🧪 Test Group Only</option>
+                        <option value="group">Group</option>
+                        <option value="entity_type">Entity Type</option>
+                        <option value="state">State</option>
+                        <option value="agency_name">Agency Name</option>
+                        <option value="sector">Sector</option>
+                        <option value="subsection">Subsection</option>
+                        <option value="ms_isac_member">MS-ISAC Member</option>
+                        <option value="soc_call">SOC Call</option>
+                        <option value="fusion_center">Fusion Center</option>
+                        <option value="k12">K-12</option>
+                        <option value="water_wastewater">Water/Wastewater</option>
+                        <option value="weekly_rollup">Weekly Rollup</option>
+                        <option value="region">Region</option>
                 </select>
-                <span id="contactCount" class="contact-count"></span>
+                    <div id="campaignFilterValueContainer" style="display: none;">
+                        <div style="max-height: 300px; overflow-y: auto; padding: 12px; background: #f9fafb; border-radius: 8px; border: 1px solid #e5e7eb;">
+                            <div style="margin-bottom: 12px; padding-bottom: 10px; border-bottom: 1px solid #e5e7eb;">
+                                <button onclick="selectAllCampaignFilters()" style="padding: 6px 12px; font-size: 13px; background: #10b981; margin-right: 8px;">✅ Select All</button>
+                                <button onclick="clearAllCampaignFilters()" style="padding: 6px 12px; font-size: 13px; background: #ef4444;">❌ Clear All</button>
+                            </div>
+                            <div id="campaignFilterCheckboxes"></div>
+                        </div>
+                        <small style="display: block; margin-top: 8px; color: #6b7280;" id="campaignFilterCount"></small>
+                    </div>
+                </div>
             </div>
             <div class="form-group">
                 <label>📝 Campaign Name:</label>
@@ -956,8 +984,11 @@ def serve_web_ui(event):
             document.getElementById('campaignName').value = '';
             document.getElementById('subject').value = '';
             quillEditor.setContents([]);
-            document.getElementById('targetGroup').value = '';
-            document.getElementById('contactCount').textContent = '0';
+            
+            // Clear campaign filter
+            document.getElementById('campaignFilterType').value = '';
+            document.getElementById('campaignFilterValueContainer').style.display = 'none';
+            clearAllCampaignFilters();
             
             // Clear attachments
             campaignAttachments = [];
@@ -1021,6 +1052,7 @@ def serve_web_ui(event):
             await loadContacts();
             document.getElementById('filterType').value = '';
             document.getElementById('filterValueContainer').style.display = 'none';
+            document.getElementById('nameSearch').value = '';
             applyContactFilter();
         }}
         
@@ -1035,7 +1067,6 @@ def serve_web_ui(event):
                     allGroups = result.groups || [];
                     console.log('Loaded groups from API:', allGroups);
                     console.log('Number of groups found:', allGroups.length);
-                    populateGroupFilters();
                 }} else {{
                     console.error('Error loading groups. Status:', response.status);
                     console.error('Response:', await response.text());
@@ -1047,23 +1078,10 @@ def serve_web_ui(event):
             }}
         }}
         
-        function populateGroupFilters() {{
-            const targetGroup = document.getElementById('targetGroup');
-            
-            // Clear existing options except "All Groups"
-            targetGroup.innerHTML = '<option value="">All Groups</option>';
-            
-            // Use allGroups from API
-            allGroups.forEach(group => {{
-                const option = new Option(group, group);
-                targetGroup.add(option);
-            }});
-        }}
-        
         async function loadFilterValues() {{
             const filterType = document.getElementById('filterType').value;
             const filterValueContainer = document.getElementById('filterValueContainer');
-            const filterValue = document.getElementById('filterValue');
+            const filterValueCheckboxes = document.getElementById('filterValueCheckboxes');
             
             if (!filterType) {{
                 // No filter type selected - show all contacts
@@ -1087,15 +1105,22 @@ def serve_web_ui(event):
             
             console.log(`Found ${{distinctValues.length}} distinct values for ${{filterType}}`);
             
-            // Populate filter value multi-select dropdown
-            filterValue.innerHTML = '';
-            distinctValues.forEach(value => {{
-                filterValue.add(new Option(value, value));
+            // Populate filter value checkboxes
+            filterValueCheckboxes.innerHTML = '';
+            distinctValues.forEach((value, index) => {{
+                const checkboxDiv = document.createElement('div');
+                checkboxDiv.style.marginBottom = '5px';
+                checkboxDiv.innerHTML = `
+                    <label style="display: flex; align-items: center; padding: 8px; cursor: pointer; border-radius: 4px; transition: background 0.2s;" onmouseover="this.style.background='#e0e7ff'" onmouseout="this.style.background='transparent'">
+                        <input type="checkbox" class="filterCheckbox" value="${{value}}" onchange="applyContactFilter()" style="margin-right: 10px; width: auto;">
+                        <span>${{value}}</span>
+                    </label>
+                `;
+                filterValueCheckboxes.appendChild(checkboxDiv);
             }});
             
             filterValueContainer.style.display = 'block';
-            
-            // Don't auto-apply filter yet - let user select values first
+            updateFilterCount();
         }}
         
         async function applyContactFilter() {{
@@ -1107,15 +1132,14 @@ def serve_web_ui(event):
             }}
             
             const filterType = document.getElementById('filterType').value;
-            const filterValueSelect = document.getElementById('filterValue');
+            const checkedBoxes = document.querySelectorAll('.filterCheckbox:checked');
             const searchTerm = document.getElementById('nameSearch').value.trim().toLowerCase();
             
             let filteredContacts = allContacts;
             
-            // Apply category filter
-            if (filterType && filterValueSelect.selectedOptions.length > 0) {{
-                // Get all selected values from multi-select
-                const selectedValues = Array.from(filterValueSelect.selectedOptions).map(opt => opt.value);
+            // Apply category filter from checked checkboxes
+            if (filterType && checkedBoxes.length > 0) {{
+                const selectedValues = Array.from(checkedBoxes).map(cb => cb.value);
                 
                 filteredContacts = filteredContacts.filter(contact => 
                     contact[filterType] && selectedValues.includes(contact[filterType])
@@ -1126,8 +1150,8 @@ def serve_web_ui(event):
                 // Show all contacts when no filter type selected
                 console.log(`Showing all contacts: ${{filteredContacts.length}}`);
             }} else {{
-                // Filter type selected but no values chosen - show all until values selected
-                console.log('Filter type selected but no values chosen - showing all');
+                // Filter type selected but no checkboxes checked - show all
+                console.log('Filter type selected but no values checked - showing all');
             }}
             
             // Apply name search on top of category filter
@@ -1148,25 +1172,36 @@ def serve_web_ui(event):
                 document.getElementById('searchResults').textContent = '';
             }}
             
+            updateFilterCount();
             displayContacts(filteredContacts);
         }}
         
-        function clearFilterSelection() {{
-            const filterValue = document.getElementById('filterValue');
-            filterValue.selectedIndex = -1; // Clear all selections
+        function selectAllFilterValues() {{
+            const checkboxes = document.querySelectorAll('.filterCheckbox');
+            checkboxes.forEach(cb => cb.checked = true);
             applyContactFilter();
         }}
         
-        async function searchContactsByName() {{
-            const searchTerm = document.getElementById('nameSearch').value.trim().toLowerCase();
-            const searchResults = document.getElementById('searchResults');
+        function clearAllFilterValues() {{
+            const checkboxes = document.querySelectorAll('.filterCheckbox');
+            checkboxes.forEach(cb => cb.checked = false);
+            applyContactFilter();
+        }}
+        
+        function updateFilterCount() {{
+            const checkedBoxes = document.querySelectorAll('.filterCheckbox:checked');
+            const filterCount = document.getElementById('filterCount');
             
-            // Auto-load contacts if not already loaded
-            if (allContacts.length === 0 && searchTerm) {{
-                console.log('Auto-loading contacts for search...');
-                await loadContacts();
-                return; // loadContacts will trigger this function again via applyContactFilter
+            if (checkedBoxes.length > 0) {{
+                filterCount.textContent = `${{checkedBoxes.length}} filter(s) selected`;
+            }} else {{
+                filterCount.textContent = 'No filters selected - showing all';
             }}
+        }}
+        
+        async function searchContactsByName() {{
+            const searchTerm = document.getElementById('nameSearch').value.trim();
+            const searchResults = document.getElementById('searchResults');
             
             if (!searchTerm) {{
                 // Empty search - apply current filter or show all
@@ -1175,35 +1210,53 @@ def serve_web_ui(event):
                 return;
             }}
             
-            // Get currently filtered contacts (respect existing filters)
-            const filterType = document.getElementById('filterType').value;
-            const filterValueSelect = document.getElementById('filterValue');
-            
-            let baseContacts = allContacts;
-            
-            // Apply existing filter first
-            if (filterType && filterValueSelect.selectedOptions.length > 0) {{
-                const selectedValues = Array.from(filterValueSelect.selectedOptions).map(opt => opt.value);
-                baseContacts = allContacts.filter(contact => 
-                    contact[filterType] && selectedValues.includes(contact[filterType])
-                );
+            if (searchTerm.length < 2) {{
+                searchResults.textContent = 'Enter at least 2 characters to search';
+                return;
             }}
             
-            // Then apply name search on filtered results
-            const searchResults_contacts = baseContacts.filter(contact => {{
-                const firstName = (contact.first_name || '').toLowerCase();
-                const lastName = (contact.last_name || '').toLowerCase();
-                const fullName = `${{firstName}} ${{lastName}}`.trim();
+            try {{
+                console.log(`Searching DynamoDB for: "${{searchTerm}}"`);
+                searchResults.textContent = 'Searching...';
                 
-                return firstName.includes(searchTerm) || 
-                       lastName.includes(searchTerm) || 
-                       fullName.includes(searchTerm);
-            }});
-            
-            console.log(`Name search "${{searchTerm}}": ${{searchResults_contacts.length}} matches`);
-            searchResults.textContent = `Found ${{searchResults_contacts.length}} contact(s) matching "${{searchTerm}}"`;
-            
-            displayContacts(searchResults_contacts);
+                // Search DynamoDB via API
+                const response = await fetch(`${{API_URL}}/contacts/search`, {{
+                    method: 'POST',
+                    headers: {{'Content-Type': 'application/json'}},
+                    body: JSON.stringify({{ search_term: searchTerm }})
+                }});
+                
+                if (response.ok) {{
+                    const result = await response.json();
+                    const searchedContacts = result.contacts || [];
+                    
+                    console.log(`Found ${{searchedContacts.length}} contacts matching "${{searchTerm}}"`);
+                    
+                    // Apply category filter on search results if active
+                    const filterType = document.getElementById('filterType').value;
+                    const checkedBoxes = document.querySelectorAll('.filterCheckbox:checked');
+                    
+                    let finalContacts = searchedContacts;
+                    
+                    if (filterType && checkedBoxes.length > 0) {{
+                        const selectedValues = Array.from(checkedBoxes).map(cb => cb.value);
+                        finalContacts = searchedContacts.filter(contact => 
+                            contact[filterType] && selectedValues.includes(contact[filterType])
+                        );
+                        searchResults.textContent = `Found ${{finalContacts.length}} contact(s) matching "${{searchTerm}}" with selected filters`;
+                    }} else {{
+                        searchResults.textContent = `Found ${{finalContacts.length}} contact(s) matching "${{searchTerm}}"`;
+                    }}
+                    
+                    displayContacts(finalContacts);
+                }} else {{
+                    console.error('Search failed:', response.status);
+                    searchResults.textContent = 'Search failed. Please try again.';
+                }}
+            }} catch (error) {{
+                console.error('Search error:', error);
+                searchResults.textContent = 'Search error: ' + error.message;
+            }}
         }}
         
         function displayContacts(contacts) {{
@@ -1429,17 +1482,17 @@ def serve_web_ui(event):
             document.getElementById('csvUploadProgress').classList.remove('hidden');
             
             try {{
-                const text = await file.text();
-                const lines = text.split('\\n').filter(line => line.trim());
+            const text = await file.text();
+            const lines = text.split('\\n').filter(line => line.trim());
                 
                 console.log('Total lines in CSV:', lines.length);
-                
-                if (lines.length < 2) {{
-                    alert('CSV file must have at least a header row and one data row');
+            
+            if (lines.length < 2) {{
+                alert('CSV file must have at least a header row and one data row');
                     hideCSVProgress();
-                    return;
-                }}
-                
+                return;
+            }}
+            
                 // Better CSV parsing - handle quoted fields
                 function parseCSVLine(line) {{
                     const result = [];
@@ -1467,66 +1520,66 @@ def serve_web_ui(event):
                 
                 // Parse all contacts first
                 const allContacts = [];
-                for (let i = 1; i < lines.length; i++) {{
+            for (let i = 1; i < lines.length; i++) {{
                     const values = parseCSVLine(lines[i]);
-                    
+                
                     if (values.length !== headers.length) {{
                         console.warn(`Row ${{i}}: Column count mismatch. Got ${{values.length}}, expected ${{headers.length}}`);
                         continue;
                     }}
                 
-                    const contact = {{}};
-                    headers.forEach((header, index) => {{
-                        // Map CSV headers to contact fields
-                        const fieldMap = {{
-                            'email': 'email',
-                            'email_address': 'email',
+                const contact = {{}};
+                headers.forEach((header, index) => {{
+                    // Map CSV headers to contact fields
+                    const fieldMap = {{
+                        'email': 'email',
+                        'email_address': 'email',
                             'email address': 'email',
-                            'first_name': 'first_name',
-                            'firstname': 'first_name',
-                            'first': 'first_name',
-                            'last_name': 'last_name',
-                            'lastname': 'last_name',
-                            'last': 'last_name',
-                            'title': 'title',
-                            'entity_type': 'entity_type',
-                            'entitytype': 'entity_type',
-                            'state': 'state',
-                            'agency_name': 'agency_name',
-                            'agencyname': 'agency_name',
-                            'agency': 'agency_name',
-                            'sector': 'sector',
-                            'subsection': 'subsection',
-                            'phone': 'phone',
-                            'phone_number': 'phone',
-                            'ms_isac_member': 'ms_isac_member',
-                            'ms-isac': 'ms_isac_member',
-                            'msisac': 'ms_isac_member',
-                            'soc_call': 'soc_call',
-                            'soc': 'soc_call',
-                            'fusion_center': 'fusion_center',
-                            'fusion': 'fusion_center',
-                            'k12': 'k12',
-                            'k-12': 'k12',
-                            'water_wastewater': 'water_wastewater',
-                            'water/wastewater': 'water_wastewater',
-                            'water': 'water_wastewater',
-                            'weekly_rollup': 'weekly_rollup',
-                            'weekly': 'weekly_rollup',
-                            'rollup': 'weekly_rollup',
-                            'alternate_email': 'alternate_email',
-                            'alt_email': 'alternate_email',
-                            'region': 'region',
-                            'group': 'group'
-                        }};
-                        
-                        const fieldName = fieldMap[header];
-                        if (fieldName) {{
-                            contact[fieldName] = values[index];
-                        }}
-                    }});
+                        'first_name': 'first_name',
+                        'firstname': 'first_name',
+                        'first': 'first_name',
+                        'last_name': 'last_name',
+                        'lastname': 'last_name',
+                        'last': 'last_name',
+                        'title': 'title',
+                        'entity_type': 'entity_type',
+                        'entitytype': 'entity_type',
+                        'state': 'state',
+                        'agency_name': 'agency_name',
+                        'agencyname': 'agency_name',
+                        'agency': 'agency_name',
+                        'sector': 'sector',
+                        'subsection': 'subsection',
+                        'phone': 'phone',
+                        'phone_number': 'phone',
+                        'ms_isac_member': 'ms_isac_member',
+                        'ms-isac': 'ms_isac_member',
+                        'msisac': 'ms_isac_member',
+                        'soc_call': 'soc_call',
+                        'soc': 'soc_call',
+                        'fusion_center': 'fusion_center',
+                        'fusion': 'fusion_center',
+                        'k12': 'k12',
+                        'k-12': 'k12',
+                        'water_wastewater': 'water_wastewater',
+                        'water/wastewater': 'water_wastewater',
+                        'water': 'water_wastewater',
+                        'weekly_rollup': 'weekly_rollup',
+                        'weekly': 'weekly_rollup',
+                        'rollup': 'weekly_rollup',
+                        'alternate_email': 'alternate_email',
+                        'alt_email': 'alternate_email',
+                        'region': 'region',
+                        'group': 'group'
+                    }};
                     
-                    if (contact.email) {{
+                    const fieldName = fieldMap[header];
+                    if (fieldName) {{
+                        contact[fieldName] = values[index];
+                    }}
+                }});
+                
+                if (contact.email) {{
                         allContacts.push(contact);
                     }}
                 }}
@@ -1646,7 +1699,7 @@ def serve_web_ui(event):
                 
                 alert(message);
                 
-                loadContacts();
+            loadContacts();
                 loadGroupsFromDB(); // Refresh groups from uploaded contacts
                 
             }} catch (error) {{
@@ -1720,22 +1773,102 @@ def serve_web_ui(event):
             console.log(`Downloaded ${{window.failedContacts.length}} failed contacts to CSV file`);
         }}
         
-        function loadContactsForCampaign() {{
-            const selectedGroup = document.getElementById('targetGroup').value;
+        async function loadCampaignFilterValues() {{
+            const filterType = document.getElementById('campaignFilterType').value;
+            const filterValueContainer = document.getElementById('campaignFilterValueContainer');
+            const filterValueCheckboxes = document.getElementById('campaignFilterCheckboxes');
+            
+            if (!filterType) {{
+                // No filter type selected - will use all contacts
+                filterValueContainer.style.display = 'none';
+                updateCampaignContactCount();
+                return;
+            }}
+            
+            // Handle Test Group as a special preset filter
+            if (filterType === 'test_group') {{
+                filterValueContainer.style.display = 'none';
+                updateCampaignContactCount();
+                return;
+            }}
+            
+            // Auto-load contacts if not already loaded
+            if (allContacts.length === 0) {{
+                console.log('Contacts not loaded yet, loading now...');
+                await loadContacts();
+            }}
+            
+            // Get distinct values for selected field from loaded contacts
+            const distinctValues = [...new Set(
+                allContacts
+                    .map(c => c[filterType])
+                    .filter(v => v && v.trim() !== '')
+            )].sort();
+            
+            console.log(`Campaign filter: Found ${{distinctValues.length}} distinct values for ${{filterType}}`);
+            
+            // Populate filter value checkboxes
+            filterValueCheckboxes.innerHTML = '';
+            distinctValues.forEach((value, index) => {{
+                const checkboxDiv = document.createElement('div');
+                checkboxDiv.style.marginBottom = '5px';
+                checkboxDiv.innerHTML = `
+                    <label style="display: flex; align-items: center; padding: 8px; cursor: pointer; border-radius: 4px; transition: background 0.2s;" onmouseover="this.style.background='#e0e7ff'" onmouseout="this.style.background='transparent'">
+                        <input type="checkbox" class="campaignFilterCheckbox" value="${{value}}" onchange="updateCampaignContactCount()" style="margin-right: 10px; width: auto;">
+                        <span>${{value}}</span>
+                    </label>
+                `;
+                filterValueCheckboxes.appendChild(checkboxDiv);
+            }});
+            
+            filterValueContainer.style.display = 'block';
+            updateCampaignContactCount();
+        }}
+        
+        function updateCampaignContactCount() {{
+            const filterType = document.getElementById('campaignFilterType').value;
+            const checkedBoxes = document.querySelectorAll('.campaignFilterCheckbox:checked');
+            const filterCount = document.getElementById('campaignFilterCount');
+            
             let targetContacts = allContacts;
             
-            if (selectedGroup) {{
-                targetContacts = allContacts.filter(contact => contact.group === selectedGroup);
+            // Handle Test Group special filter
+            if (filterType === 'test_group') {{
+                targetContacts = allContacts.filter(contact => 
+                    contact.group && contact.group.toLowerCase() === 'test'
+                );
+                filterCount.textContent = `${{targetContacts.length}} contact(s) in Test Group will receive this campaign`;
+                filterCount.style.color = '#f59e0b';
+                filterCount.style.fontWeight = '600';
+                return;
             }}
             
-            const contactCount = document.getElementById('contactCount');
-            if (targetContacts.length > 0) {{
-                contactCount.textContent = `${{targetContacts.length}} contact(s) selected`;
-                contactCount.style.display = 'inline-block';
+            // Apply filter if selected
+            if (filterType && checkedBoxes.length > 0) {{
+                const selectedValues = Array.from(checkedBoxes).map(cb => cb.value);
+                targetContacts = allContacts.filter(contact => 
+                    contact[filterType] && selectedValues.includes(contact[filterType])
+                );
+                filterCount.textContent = `${{targetContacts.length}} contact(s) will receive this campaign (${{checkedBoxes.length}} filter(s) selected)`;
+                filterCount.style.color = '#6b7280';
+                filterCount.style.fontWeight = 'normal';
             }} else {{
-                contactCount.textContent = 'No contacts selected';
-                contactCount.style.display = 'inline-block';
+                filterCount.textContent = `${{allContacts.length}} contact(s) will receive this campaign (All Contacts)`;
+                filterCount.style.color = '#6b7280';
+                filterCount.style.fontWeight = 'normal';
             }}
+        }}
+        
+        function selectAllCampaignFilters() {{
+            const checkboxes = document.querySelectorAll('.campaignFilterCheckbox');
+            checkboxes.forEach(cb => cb.checked = true);
+            updateCampaignContactCount();
+        }}
+        
+        function clearAllCampaignFilters() {{
+            const checkboxes = document.querySelectorAll('.campaignFilterCheckbox');
+            checkboxes.forEach(cb => cb.checked = false);
+            updateCampaignContactCount();
         }}
         
         // Attachment handling
@@ -1873,17 +2006,39 @@ def serve_web_ui(event):
                 button.classList.add('loading');
                 button.disabled = true;
                 
-            const targetGroup = document.getElementById('targetGroup').value;
+            // Get target contacts based on selected filter
+            const campaignFilterType = document.getElementById('campaignFilterType').value;
+            const campaignCheckedBoxes = document.querySelectorAll('.campaignFilterCheckbox:checked');
             
-            // Get target contacts based on selected group
             let targetContacts = allContacts;
-            if (targetGroup) {{
-                targetContacts = allContacts.filter(contact => contact.group === targetGroup);
+            let filterDescription = 'All Contacts';
+            
+            // Auto-load contacts if not already loaded
+            if (allContacts.length === 0) {{
+                throw new Error('Please load contacts first by going to the Contacts tab.');
+            }}
+            
+            // Handle Test Group special filter
+            if (campaignFilterType === 'test_group') {{
+                targetContacts = allContacts.filter(contact => 
+                    contact.group && contact.group.toLowerCase() === 'test'
+                );
+                filterDescription = 'Test Group (group = Test)';
+            }}
+            // Apply filter if checkboxes are selected
+            else if (campaignFilterType && campaignCheckedBoxes.length > 0) {{
+                const selectedValues = Array.from(campaignCheckedBoxes).map(cb => cb.value);
+                targetContacts = allContacts.filter(contact => 
+                    contact[campaignFilterType] && selectedValues.includes(contact[campaignFilterType])
+                );
+                filterDescription = `${{campaignFilterType}}: ${{selectedValues.join(', ')}}`;
             }}
             
             if (targetContacts.length === 0) {{
-                throw new Error('No contacts found for the selected group. Please add contacts or select a different group.');
+                throw new Error('No contacts match the selected filters. Please adjust your filter or select "All Contacts".');
             }}
+            
+            console.log(`Campaign will be sent to ${{targetContacts.length}} contacts (${{filterDescription}})`);
             
             // Get content from Quill editor
             const emailBody = quillEditor.root.innerHTML;
@@ -1892,7 +2047,12 @@ def serve_web_ui(event):
                 campaign_name: document.getElementById('campaignName').value,
                 subject: document.getElementById('subject').value,
                 body: emailBody,
-                target_group: targetGroup || null,
+                filter_type: campaignFilterType || null,
+                filter_values: campaignFilterType && campaignCheckedBoxes.length > 0 
+                    ? Array.from(campaignCheckedBoxes).map(cb => cb.value)
+                    : null,
+                filter_description: filterDescription,
+                target_contacts: targetContacts.map(c => c.email),  // Send email list to backend
                 attachments: campaignAttachments  // Include attachments
             }};
                 
@@ -1942,7 +2102,7 @@ def serve_web_ui(event):
                     </div>
                     <div style="background: var(--gray-50); padding: 16px; border-radius: 8px; margin-top: 20px;">
                         <p style="margin: 0; color: var(--gray-700);"><strong>Campaign ID:</strong> ${{result.campaign_id}}</p>
-                        <p style="margin: 5px 0 0 0; color: var(--gray-700);"><strong>Target Group:</strong> ${{targetGroup || 'All Groups'}}</p>
+                        <p style="margin: 5px 0 0 0; color: var(--gray-700);"><strong>Target Contacts:</strong> ${{filterDescription}}</p>
                         <p style="margin: 5px 0 0 0; color: var(--gray-700);"><strong>Queue:</strong> ${{result.queue_name || 'bulk-email-queue'}}</p>
                         <p style="margin: 10px 0 0 0; color: var(--gray-600); font-size: 0.9rem;">Check CloudWatch Logs to monitor email processing status</p>
                     </div>
@@ -2149,6 +2309,61 @@ def get_contacts(headers):
         contacts.append(contact)
     
     return {'statusCode': 200, 'headers': headers, 'body': json.dumps({'contacts': contacts})}
+
+def search_contacts(body, headers):
+    """Search contacts by name in DynamoDB"""
+    try:
+        search_term = body.get('search_term', '').lower()
+        
+        if not search_term:
+            return {'statusCode': 400, 'headers': headers, 'body': json.dumps({'error': 'Search term required'})}
+        
+        # Scan contacts table (DynamoDB doesn't support LIKE, so we need to scan and filter)
+        response = contacts_table.scan()
+        all_contacts = response.get('Items', [])
+        
+        # Handle pagination for large datasets
+        while 'LastEvaluatedKey' in response:
+            response = contacts_table.scan(ExclusiveStartKey=response['LastEvaluatedKey'])
+            all_contacts.extend(response.get('Items', []))
+        
+        # Filter contacts by name
+        matched_contacts = []
+        for contact in all_contacts:
+            first_name = (contact.get('first_name') or '').lower()
+            last_name = (contact.get('last_name') or '').lower()
+            full_name = f"{first_name} {last_name}".strip()
+            
+            if (search_term in first_name or 
+                search_term in last_name or 
+                search_term in full_name):
+                # Convert Decimal types to appropriate Python types
+                clean_contact = {}
+                for key, value in contact.items():
+                    if isinstance(value, Decimal):
+                        clean_contact[key] = int(value)
+                    else:
+                        clean_contact[key] = value
+                matched_contacts.append(clean_contact)
+        
+        print(f"Name search '{search_term}': found {len(matched_contacts)} contacts")
+        
+        return {
+            'statusCode': 200,
+            'headers': headers,
+            'body': json.dumps({
+                'contacts': matched_contacts,
+                'count': len(matched_contacts),
+                'search_term': search_term
+            })
+        }
+    except Exception as e:
+        print(f"Search error: {str(e)}")
+        return {
+            'statusCode': 500,
+            'headers': headers,
+            'body': json.dumps({'error': str(e)})
+        }
 
 def get_groups(headers):
     """Get distinct groups from contacts - optimized for large datasets"""
@@ -2406,22 +2621,27 @@ def send_campaign(body, headers):
         
         config = config_response['Item']
         
-        # Get contacts (filter by group if specified)
-        contacts_response = contacts_table.scan()
-        all_contacts = contacts_response['Items']
+        # Get target contacts from frontend filter
+        target_contact_emails = body.get('target_contacts', [])
+        filter_description = body.get('filter_description', 'All Contacts')
         
-        # Filter by target group if specified
-        target_group = body.get('target_group')
-        if target_group:
-            contacts = [c for c in all_contacts if c.get('group') == target_group]
-            print(f"Filtering contacts by group: {target_group}, found {len(contacts)} contacts")
-        else:
-            contacts = all_contacts
-            print(f"Using all contacts: {len(contacts)} contacts")
+        if not target_contact_emails:
+            return {'statusCode': 400, 'headers': headers, 'body': json.dumps({'error': 'No target contacts specified'})}
+        
+        # Retrieve full contact records for the target emails
+        contacts = []
+        for email in target_contact_emails:
+            try:
+                contact_response = contacts_table.get_item(Key={'email': email})
+                if 'Item' in contact_response:
+                    contacts.append(contact_response['Item'])
+            except Exception as e:
+                print(f"Error retrieving contact {email}: {str(e)}")
+        
+        print(f"Campaign targeting {len(contacts)} contacts ({filter_description})")
         
         if not contacts:
-            group_msg = f" for group '{target_group}'" if target_group else ""
-            return {'statusCode': 400, 'headers': headers, 'body': json.dumps({'error': f'No contacts found{group_msg} to send campaign'})}
+            return {'statusCode': 400, 'headers': headers, 'body': json.dumps({'error': 'No valid contacts found'})}
         
         campaign_id = f"campaign_{int(datetime.now().timestamp())}"
         
@@ -2431,23 +2651,29 @@ def send_campaign(body, headers):
         # Save complete campaign data to DynamoDB
         print(f"Saving campaign {campaign_id} to DynamoDB with {len(attachments)} attachments")
         campaign_item = {
-            'campaign_id': campaign_id,
-            'campaign_name': body.get('campaign_name', 'Bulk Campaign'),
-            'subject': body.get('subject', ''),
-            'body': body.get('body', ''),
-            'from_email': config.get('from_email', ''),
-            'email_service': config.get('email_service', 'ses'),
-            'aws_region': config.get('aws_region', 'us-gov-west-1'),
-            'aws_secret_name': config.get('aws_secret_name', ''),
-            'smtp_server': config.get('smtp_server', ''),
-            'smtp_port': int(config.get('smtp_port', 25)) if config.get('smtp_port') else 25,
-            'status': 'queued',
-            'total_contacts': len(contacts),
-            'queued_count': 0,
-            'sent_count': 0,
-            'failed_count': 0,
-            'created_at': datetime.now().isoformat()
+                'campaign_id': campaign_id,
+                'campaign_name': body.get('campaign_name', 'Bulk Campaign'),
+                'subject': body.get('subject', ''),
+                'body': body.get('body', ''),
+                'from_email': config.get('from_email', ''),
+                'email_service': config.get('email_service', 'ses'),
+                'aws_region': config.get('aws_region', 'us-gov-west-1'),
+                'aws_secret_name': config.get('aws_secret_name', ''),
+                'smtp_server': config.get('smtp_server', ''),
+                'smtp_port': int(config.get('smtp_port', 25)) if config.get('smtp_port') else 25,
+                'status': 'queued',
+                'total_contacts': len(contacts),
+                'queued_count': 0,
+                'sent_count': 0,
+                'failed_count': 0,
+            'created_at': datetime.now().isoformat(),
+            'filter_description': filter_description
         }
+        
+        # Add filter information if present
+        if body.get('filter_type'):
+            campaign_item['filter_type'] = body.get('filter_type')
+            campaign_item['filter_values'] = body.get('filter_values', [])
         
         # Add attachments if present
         if attachments:
@@ -2521,7 +2747,7 @@ def send_campaign(body, headers):
                 'success': True,
                 'campaign_id': campaign_id,
                 'message': 'Campaign queued successfully',
-                'target_group': target_group,
+                'filter_description': filter_description,
                 'total_contacts': len(contacts),
                 'queued_count': queued_count,
                 'failed_to_queue': failed_to_queue,
