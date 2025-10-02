@@ -725,6 +725,12 @@ def serve_web_ui(event):
                 <strong>Example:</strong> john@example.com,John,Doe,IT Director,State Government,CA,Dept of Tech,Government,IT,555-0100,Yes,Yes,No,No,No,Yes,john.alt@example.com,West,State CISOs
             </div> -->
             
+            <div class="form-group" style="margin-top: 20px;">
+                <label>🔎 Search by Name:</label>
+                <input type="text" id="nameSearch" placeholder="Search by first or last name..." oninput="searchContactsByName()" style="margin-bottom: 10px;">
+                <small id="searchResults" style="color: #6b7280;"></small>
+            </div>
+            
             <div style="overflow-x: auto;">
             <table id="contactsTable">
                 <thead>
@@ -1102,14 +1108,16 @@ def serve_web_ui(event):
             
             const filterType = document.getElementById('filterType').value;
             const filterValueSelect = document.getElementById('filterValue');
+            const searchTerm = document.getElementById('nameSearch').value.trim().toLowerCase();
             
             let filteredContacts = allContacts;
             
+            // Apply category filter
             if (filterType && filterValueSelect.selectedOptions.length > 0) {{
                 // Get all selected values from multi-select
                 const selectedValues = Array.from(filterValueSelect.selectedOptions).map(opt => opt.value);
                 
-                filteredContacts = allContacts.filter(contact => 
+                filteredContacts = filteredContacts.filter(contact => 
                     contact[filterType] && selectedValues.includes(contact[filterType])
                 );
                 
@@ -1118,9 +1126,26 @@ def serve_web_ui(event):
                 // Show all contacts when no filter type selected
                 console.log(`Showing all contacts: ${{filteredContacts.length}}`);
             }} else {{
-                // Filter type selected but no values chosen - show nothing
-                filteredContacts = [];
-                console.log('No filter values selected - showing empty table');
+                // Filter type selected but no values chosen - show all until values selected
+                console.log('Filter type selected but no values chosen - showing all');
+            }}
+            
+            // Apply name search on top of category filter
+            if (searchTerm) {{
+                filteredContacts = filteredContacts.filter(contact => {{
+                    const firstName = (contact.first_name || '').toLowerCase();
+                    const lastName = (contact.last_name || '').toLowerCase();
+                    const fullName = `${{firstName}} ${{lastName}}`.trim();
+                    
+                    return firstName.includes(searchTerm) || 
+                           lastName.includes(searchTerm) || 
+                           fullName.includes(searchTerm);
+                }});
+                
+                const searchResults = document.getElementById('searchResults');
+                searchResults.textContent = `Found ${{filteredContacts.length}} contact(s) matching "${{searchTerm}}"`;
+            }} else {{
+                document.getElementById('searchResults').textContent = '';
             }}
             
             displayContacts(filteredContacts);
@@ -1130,6 +1155,55 @@ def serve_web_ui(event):
             const filterValue = document.getElementById('filterValue');
             filterValue.selectedIndex = -1; // Clear all selections
             applyContactFilter();
+        }}
+        
+        async function searchContactsByName() {{
+            const searchTerm = document.getElementById('nameSearch').value.trim().toLowerCase();
+            const searchResults = document.getElementById('searchResults');
+            
+            // Auto-load contacts if not already loaded
+            if (allContacts.length === 0 && searchTerm) {{
+                console.log('Auto-loading contacts for search...');
+                await loadContacts();
+                return; // loadContacts will trigger this function again via applyContactFilter
+            }}
+            
+            if (!searchTerm) {{
+                // Empty search - apply current filter or show all
+                searchResults.textContent = '';
+                applyContactFilter();
+                return;
+            }}
+            
+            // Get currently filtered contacts (respect existing filters)
+            const filterType = document.getElementById('filterType').value;
+            const filterValueSelect = document.getElementById('filterValue');
+            
+            let baseContacts = allContacts;
+            
+            // Apply existing filter first
+            if (filterType && filterValueSelect.selectedOptions.length > 0) {{
+                const selectedValues = Array.from(filterValueSelect.selectedOptions).map(opt => opt.value);
+                baseContacts = allContacts.filter(contact => 
+                    contact[filterType] && selectedValues.includes(contact[filterType])
+                );
+            }}
+            
+            // Then apply name search on filtered results
+            const searchResults_contacts = baseContacts.filter(contact => {{
+                const firstName = (contact.first_name || '').toLowerCase();
+                const lastName = (contact.last_name || '').toLowerCase();
+                const fullName = `${{firstName}} ${{lastName}}`.trim();
+                
+                return firstName.includes(searchTerm) || 
+                       lastName.includes(searchTerm) || 
+                       fullName.includes(searchTerm);
+            }});
+            
+            console.log(`Name search "${{searchTerm}}": ${{searchResults_contacts.length}} matches`);
+            searchResults.textContent = `Found ${{searchResults_contacts.length}} contact(s) matching "${{searchTerm}}"`;
+            
+            displayContacts(searchResults_contacts);
         }}
         
         function displayContacts(contacts) {{
