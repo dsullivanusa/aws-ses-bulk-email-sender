@@ -672,7 +672,6 @@ def serve_web_ui(event):
                             <th>Email</th>
                             <th>Name</th>
                             <th>Group</th>
-                            <th>State</th>
                             <th>Agency</th>
                             <th>Actions</th>
                         </tr>
@@ -997,7 +996,6 @@ def serve_web_ui(event):
                     <td>${{contact.email}}</td>
                         <td>${{fullName}}</td>
                         <td>${{contact.group || ''}}</td>
-                        <td>${{contact.state || ''}}</td>
                         <td>${{contact.agency_name || ''}}</td>
                         <td>
                             <button class="btn-danger" onclick="deleteContact('${{contact.email}}')">Delete</button>
@@ -1007,7 +1005,7 @@ def serve_web_ui(event):
                 `;
             }});
             }} else {{
-                tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: var(--gray-500); padding: 40px;">No contacts found. Add some contacts to get started!</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: var(--gray-500); padding: 40px;">No contacts found. Add some contacts to get started!</td></tr>';
             }}
         }}
         
