@@ -568,10 +568,13 @@ def serve_web_ui(event):
             
             <div id="addContactForm" class="hidden card">
                 <h3>Add Contact</h3>
+                <p style="margin: 0 0 15px 0; padding: 10px; background: #e0f2fe; border-left: 4px solid #0284c7; border-radius: 4px; color: #0c4a6e;">
+                    <strong>Required:</strong> Email Address is required. All other fields are optional.
+                </p>
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
                     <input type="email" id="newEmail" placeholder="Email Address *" required>
-                    <input type="text" id="newFirstName" placeholder="First Name *" required>
-                    <input type="text" id="newLastName" placeholder="Last Name *" required>
+                    <input type="text" id="newFirstName" placeholder="First Name" required>
+                    <input type="text" id="newLastName" placeholder="Last Name" required>
                     <input type="text" id="newTitle" placeholder="Title">
                     <input type="text" id="newEntityType" placeholder="Entity Type">
                     <input type="text" id="newState" placeholder="State">
