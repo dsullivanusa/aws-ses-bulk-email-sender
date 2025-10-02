@@ -5,7 +5,7 @@
 The email campaign system now supports **file attachments** using AWS S3. Users can attach PDF, DOC, images, and other files to their email campaigns.
 
 ### Key Features:
-- ✅ **10 MB limit per email** (all attachments combined)
+- ✅ **40 MB limit per email** (all attachments combined - AWS SES v2)
 - ✅ **Multiple file support** - Attach multiple files at once
 - ✅ **Automatic S3 upload** - Files stored in `jcdc-ses-contact-list` bucket
 - ✅ **Real-time validation** - Size checks before upload
@@ -15,7 +15,7 @@ The email campaign system now supports **file attachments** using AWS S3. Users 
 
 ### Frontend Features:
 1. **File Upload UI** in Send Campaign tab
-2. **10 MB Warning** - Clear message about limit
+2. **40 MB Warning** - Clear message about limit
 3. **Upload Progress** - Shows files being uploaded
 4. **File List Display** - Shows attached files with size
 5. **Remove Button** - Remove individual attachments
@@ -149,7 +149,7 @@ jcdc-ses-contact-list/
 │ Attachments (Optional):                  │
 │ ┌────────────────────────────────────┐  │
 │ │ ⚠️ Important: Maximum total size    │  │
-│ │ is 10 MB per email (including all   │  │
+│ │ is 40 MB per email (including all   │  │
 │ │ attachments). Supported formats:    │  │
 │ │ PDF, DOC, DOCX, XLS, XLSX, PNG,     │  │
 │ │ JPG, TXT, CSV                       │  │
@@ -163,7 +163,7 @@ jcdc-ses-contact-list/
 │ 📎 chart.png               [Remove]      │
 │    453.5 KB                              │
 │                                          │
-│ Total size: 1.65 MB / 10 MB ✓            │
+│ Total size: 1.65 MB / 40 MB ✓            │
 │                                          │
 │ [Send Campaign] [Clear Form]             │
 └─────────────────────────────────────────┘
@@ -173,15 +173,15 @@ jcdc-ses-contact-list/
 
 ### Client-Side (JavaScript):
 - Checks total size before upload
-- Prevents uploads > 10 MB
+- Prevents uploads > 40 MB
 - Shows warning if limit exceeded
 
 ### Example:
 ```javascript
-// User tries to add 8 MB file when 5 MB already attached
-Total: 13 MB > 10 MB limit
-→ Alert: "Total attachment size exceeds 10 MB limit.
-         Current total: 13.00 MB
+// User tries to add 30 MB file when 15 MB already attached
+Total: 45 MB > 40 MB limit
+→ Alert: "Total attachment size exceeds 40 MB limit.
+         Current total: 45.00 MB
          Please remove some files."
 ```
 
@@ -191,7 +191,7 @@ Total: 13 MB > 10 MB limit
 - **Documents:** PDF, DOC, DOCX, TXT
 - **Spreadsheets:** XLS, XLSX, CSV
 - **Images:** PNG, JPG, JPEG, GIF
-- **Archives:** ZIP (if under 10 MB)
+- **Archives:** ZIP (if under 40 MB)
 
 ### Size Guidelines:
 - **PDF:** Typically 500 KB - 5 MB
@@ -271,7 +271,7 @@ python add_attachment_endpoint.py
 **Solution:** Update `email_worker_lambda.py` with S3 fetch code (see above)
 
 ### Issue 4: Size Limit Exceeded
-**Cause:** Total attachments > 10 MB
+**Cause:** Total attachments > 40 MB
 
 **Solution:** 
 - Remove some files
@@ -360,7 +360,7 @@ aws s3api put-bucket-lifecycle-configuration \
 - [ ] `/upload-attachment` endpoint deployed
 - [ ] Upload single file (PDF)
 - [ ] Upload multiple files
-- [ ] Test 10 MB limit warning
+- [ ] Test 40 MB limit warning
 - [ ] Remove attachment works
 - [ ] Clear form clears attachments
 - [ ] Send campaign with attachments
@@ -373,7 +373,7 @@ aws s3api put-bucket-lifecycle-configuration \
 
 ✅ **Implemented:**
 - S3 bucket integration (`jcdc-ses-contact-list`)
-- File upload UI with 10 MB limit warning
+- File upload UI with 40 MB limit validation
 - Base64 upload to S3
 - Attachment metadata in DynamoDB
 - Size validation and display

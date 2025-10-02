@@ -9,7 +9,7 @@ import json
 
 # Configuration
 REGION = 'us-gov-west-1'
-API_NAME = 'bulk-mail-api'
+API_NAME = 'bulk-email-api'
 LAMBDA_FUNCTION_NAME = 'bulk-email-api-function'
 
 def add_attachment_endpoint():

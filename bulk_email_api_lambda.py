@@ -97,6 +97,8 @@ def serve_web_ui(event):
     html_content = f"""<!DOCTYPE html>
 <html>
 <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>CISA Email Campaign Management System</title>
     
     <!-- Quill Rich Text Editor -->
@@ -522,60 +524,60 @@ def serve_web_ui(event):
         </div>
         
         <div class="tabs">
-            <div class="tab active" onclick="showTab('config', this)">Email Config</div>
-            <div class="tab" onclick="showTab('contacts', this)">Contacts</div>
-            <div class="tab" onclick="showTab('campaign', this)">Send Campaign</div>
+            <div class="tab active" onclick="showTab('config', this)">⚙️ Email Config</div>
+            <div class="tab" onclick="showTab('contacts', this)">👥 Contacts</div>
+            <div class="tab" onclick="showTab('campaign', this)">📧 Send Campaign</div>
         </div>
         
         <div id="config" class="tab-content active">
-            <h2>Email Configuration</h2>
+            <h2>⚙️ Email Configuration</h2>
                 <div class="form-group">
-                    <label>AWS Region:</label>
+                    <label>🌍 AWS Region:</label>
                     <input type="text" id="awsRegion" value="us-gov-west-1">
             </div>
             
             <div class="form-group">
-                <label>From Email:</label>
+                <label>📧 From Email:</label>
                 <input type="email" id="fromEmail">
             </div>
             <div class="form-group">
-                <label>Emails per minute:</label>
+                <label>⏱️ Emails per minute:</label>
                 <input type="number" id="emailsPerMinute" value="60">
             </div>
             <div style="display: flex; gap: 10px; margin-top: 20px;">
-                <button onclick="saveConfig()">Save Configuration</button>
+                <button onclick="saveConfig()">💾 Save Configuration</button>
                 <!-- <button onclick="loadConfig()" style="background: #007bff;">Test Load Config</button> -->
             </div>
         </div>
         
         <div id="contacts" class="tab-content">
-            <h2>Contact Management</h2>
+            <h2>👥 Contact Management</h2>
             <div class="form-group">
-                <label>Filter by Group:</label>
+                <label>🔍 Filter by Group:</label>
                 <select id="groupFilter" onchange="filterContactsByGroup()">
                     <option value="">All Groups</option>
                 </select>
                 <!-- <button onclick="loadAllContacts()">Load All Contacts</button> -->
             </div>
-            <button onclick="loadContacts()">Load Contacts</button>
-            <button class="btn-success" onclick="showAddContact()">Add Contact</button>
+            <button onclick="loadContacts()">🔄 Load Contacts</button>
+            <button class="btn-success" onclick="showAddContact()">➕ Add Contact</button>
             <input type="file" id="csvFile" accept=".csv" style="display: none;" onchange="uploadCSV()">
-            <button onclick="document.getElementById('csvFile').click()">Upload CSV (Batch)</button>
+            <button onclick="document.getElementById('csvFile').click()">📤 Upload CSV (Batch)</button>
             
             <!-- CSV Upload Progress Bar -->
             <div id="csvUploadProgress" class="hidden" style="margin-top: 20px; padding: 20px; background: #f8f9fa; border-radius: 8px; border: 1px solid #dee2e6;">
-                <h4 style="margin: 0 0 10px 0;">CSV Import Progress</h4>
+                <h4 style="margin: 0 0 10px 0;">📊 CSV Import Progress</h4>
                 <div style="background: #e9ecef; border-radius: 4px; height: 30px; overflow: hidden; margin-bottom: 10px;">
                     <div id="csvProgressBar" style="background: linear-gradient(90deg, #10b981, #059669); height: 100%; width: 0%; transition: width 0.3s; display: flex; align-items: center; justify-content: center; color: white; font-weight: 600; font-size: 14px;"></div>
                 </div>
                 <div id="csvProgressText" style="font-size: 14px; color: #6b7280;"></div>
-                <button id="csvCancelButton" onclick="cancelCSVUpload()" style="margin-top: 10px; background: #ef4444;">Cancel Import</button>
+                <button id="csvCancelButton" onclick="cancelCSVUpload()" style="margin-top: 10px; background: #ef4444;">⛔ Cancel Import</button>
             </div>
             
             <div id="addContactForm" class="hidden card">
-                <h3>Add Contact</h3>
+                <h3>➕ Add Contact</h3>
                 <p style="margin: 0 0 15px 0; padding: 10px; background: #e0f2fe; border-left: 4px solid #0284c7; border-radius: 4px; color: #0c4a6e;">
-                    <strong>Required:</strong> Email Address is required. All other fields are optional.
+                    <strong>📋 Required:</strong> Email Address is required. All other fields are optional.
                 </p>
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
                     <input type="email" id="newEmail" placeholder="Email Address *" required>
@@ -623,13 +625,13 @@ def serve_web_ui(event):
                     <input type="text" id="newGroup" placeholder="Group">
                 </div>
                 <div style="margin-top: 20px;">
-                    <button class="btn-success" onclick="addContact()">Add</button>
-                <button onclick="hideAddContact()">Cancel</button>
+                    <button class="btn-success" onclick="addContact()">✅ Add</button>
+                <button onclick="hideAddContact()">❌ Cancel</button>
                 </div>
             </div>
             
             <div id="editContactForm" class="hidden card">
-                <h3>Edit Contact</h3>
+                <h3>✏️ Edit Contact</h3>
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
                     <input type="email" id="editEmail" placeholder="Email Address *" required readonly>
                     <input type="text" id="editFirstName" placeholder="First Name *" required>
@@ -676,8 +678,8 @@ def serve_web_ui(event):
                     <input type="text" id="editGroup" placeholder="Group">
                 </div>
                 <div style="margin-top: 20px;">
-                    <button class="btn-success" onclick="saveContactEdit()">Save Changes</button>
-                    <button onclick="hideEditContact()">Cancel</button>
+                    <button class="btn-success" onclick="saveContactEdit()">💾 Save Changes</button>
+                    <button onclick="hideEditContact()">❌ Cancel</button>
                 </div>
             </div>
             
@@ -703,33 +705,33 @@ def serve_web_ui(event):
         </div>
         
         <div id="campaign" class="tab-content">
-            <h2>Send Campaign</h2>
+            <h2>📧 Send Campaign</h2>
             <div id="formStatus" class="form-status" style="display: none; padding: 10px; margin-bottom: 15px; border-radius: 4px; background: #fff3cd; border: 1px solid #ffeaa7; color: #856404;"></div>
             <div class="form-group">
-                <label>Target Group:</label>
+                <label>🎯 Target Group:</label>
                 <select id="targetGroup" onchange="loadContactsForCampaign()">
                     <option value="">All Groups</option>
                 </select>
                 <span id="contactCount" class="contact-count"></span>
             </div>
             <div class="form-group">
-                <label>Campaign Name:</label>
+                <label>📝 Campaign Name:</label>
                 <input type="text" id="campaignName">
             </div>
             <div class="form-group">
-                <label>Subject:</label>
+                <label>📨 Subject:</label>
                 <input type="text" id="subject" placeholder="Hello {{{{first_name}}}}">
             </div>
             <div class="form-group">
-                <label>Email Body:</label>
+                <label>📄 Email Body:</label>
                 <div id="body" style="min-height: 200px; background: white;"></div>
                 <small>Available placeholders: {{{{first_name}}}}, {{{{last_name}}}}, {{{{email}}}}, {{{{title}}}}, {{{{entity_type}}}}, {{{{state}}}}, {{{{agency_name}}}}, {{{{sector}}}}, {{{{subsection}}}}, {{{{phone}}}}, {{{{ms_isac_member}}}}, {{{{soc_call}}}}, {{{{fusion_center}}}}, {{{{k12}}}}, {{{{water_wastewater}}}}, {{{{weekly_rollup}}}}, {{{{alternate_email}}}}, {{{{region}}}}, {{{{group}}}}</small>
             </div>
             
             <div class="form-group">
-                <label>Attachments (Optional):</label>
+                <label>📎 Attachments (Optional):</label>
                 <div style="margin-bottom: 10px; padding: 12px; background: #fef3c7; border-left: 4px solid #f59e0b; border-radius: 4px;">
-                    <strong>⚠️ Important:</strong> Maximum total size is <strong>10 MB per email</strong> (including all attachments). 
+                    <strong>Important:</strong> Maximum total size is <strong>40 MB per email</strong> (including all attachments). 
                     Supported formats: PDF, DOC, DOCX, XLS, XLSX, PNG, JPG, TXT, CSV
                 </div>
                 <input type="file" id="attachmentFiles" multiple style="display: none;" onchange="handleAttachmentUpload()">
@@ -741,8 +743,8 @@ def serve_web_ui(event):
             </div>
             
             <div style="display: flex; gap: 15px; margin-top: 20px;">
-            <button class="btn-success" onclick="sendCampaign()">Send Campaign</button>
-                <button onclick="clearCampaignForm()">Clear Form</button>
+            <button class="btn-success" onclick="sendCampaign()">🚀 Send Campaign</button>
+                <button onclick="clearCampaignForm()">🗑️ Clear Form</button>
             </div>
             
             <div id="campaignResult" class="result hidden"></div>
@@ -1043,9 +1045,9 @@ def serve_web_ui(event):
                         <td>${{contact.group || ''}}</td>
                         <td>${{contact.agency_name || ''}}</td>
                         <td>
-                            <button class="btn-danger" onclick="deleteContact('${{contact.email}}')">Delete</button>
-                            <button class="btn-info" onclick="viewContact('${{contact.email}}')">View</button>
-                            <button class="btn-warning" onclick="editContact('${{contact.email}}')">Edit</button>
+                            <button class="btn-danger" onclick="deleteContact('${{contact.email}}')">🗑️ Delete</button>
+                            <button class="btn-info" onclick="viewContact('${{contact.email}}')">👁️ View</button>
+                            <button class="btn-warning" onclick="editContact('${{contact.email}}')">✏️ Edit</button>
                         </td>
                 `;
             }});
@@ -1563,7 +1565,7 @@ def serve_web_ui(event):
         
         // Attachment handling
         let campaignAttachments = [];
-        const MAX_ATTACHMENT_SIZE = 10 * 1024 * 1024; // 10 MB in bytes
+        const MAX_ATTACHMENT_SIZE = 40 * 1024 * 1024; // 40 MB in bytes (AWS SES v2 limit)
         
         async function handleAttachmentUpload() {{
             const fileInput = document.getElementById('attachmentFiles');
@@ -1578,7 +1580,7 @@ def serve_web_ui(event):
             }}
             
             if (totalSize > MAX_ATTACHMENT_SIZE) {{
-                alert(`Total attachment size exceeds 10 MB limit.\\nCurrent total: ${{(totalSize / 1024 / 1024).toFixed(2)}} MB\\nPlease remove some files.`);
+                alert(`Total attachment size exceeds 40 MB limit.\\nCurrent total: ${{(totalSize / 1024 / 1024).toFixed(2)}} MB\\nPlease remove some files.`);
                 fileInput.value = ''; // Clear selection
                 return;
             }}
@@ -1663,17 +1665,16 @@ def serve_web_ui(event):
             container.innerHTML = campaignAttachments.map((att, index) => `
                 <div style="display: flex; align-items: center; justify-content: space-between; padding: 8px; background: #f3f4f6; border-radius: 4px; margin-bottom: 8px;">
                     <div style="display: flex; align-items: center; gap: 10px;">
-                        <span style="font-size: 20px;">📎</span>
                         <div>
-                            <div style="font-weight: 500;">${{att.filename}}</div>
-                            <div style="font-size: 12px; color: #6b7280;">${{(att.size / 1024).toFixed(1)}} KB</div>
+                            <div style="font-weight: 500;">📎 ${{att.filename}}</div>
+                            <div style="font-size: 12px; color: #6b7280;">💾 ${{(att.size / 1024).toFixed(1)}} KB</div>
                         </div>
                     </div>
-                    <button onclick="removeAttachment(${{index}})" style="background: #ef4444; padding: 6px 12px; font-size: 14px;">Remove</button>
+                    <button onclick="removeAttachment(${{index}})" style="background: #ef4444; padding: 6px 12px; font-size: 14px;">🗑️ Remove</button>
                 </div>
             `).join('');
             
-            sizeDiv.innerHTML = `<strong>Total size:</strong> ${{totalSizeMB}} MB / 10 MB ${{totalSize > MAX_ATTACHMENT_SIZE ? '<span style="color: #ef4444;">⚠️ Exceeds limit!</span>' : '✓'}}`;
+            sizeDiv.innerHTML = `<strong>📊 Total size:</strong> ${{totalSizeMB}} MB / 40 MB ${{totalSize > MAX_ATTACHMENT_SIZE ? '<span style="color: #ef4444;">❌ Exceeds limit!</span>' : '<span style="color: #10b981;">✅ OK</span>'}}`;
         }}
         
         function removeAttachment(index) {{
@@ -1728,7 +1729,7 @@ def serve_web_ui(event):
                 // Validate attachment size
                 const totalAttachmentSize = campaignAttachments.reduce((sum, att) => sum + att.size, 0);
                 if (totalAttachmentSize > MAX_ATTACHMENT_SIZE) {{
-                    throw new Error(`Attachments exceed 10 MB limit (${{(totalAttachmentSize / 1024 / 1024).toFixed(2)}} MB)`);
+                    throw new Error(`Attachments exceed 40 MB limit (${{(totalAttachmentSize / 1024 / 1024).toFixed(2)}} MB)`);
                 }}
             
             const response = await fetch(`${{API_URL}}/campaign`, {{
