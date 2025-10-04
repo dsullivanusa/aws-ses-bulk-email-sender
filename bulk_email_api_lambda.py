@@ -2895,11 +2895,6 @@ def send_campaign(body, headers, event=None):
                 'subject': body.get('subject', ''),
                 'body': body.get('body', ''),
                 'from_email': config.get('from_email', ''),
-                'email_service': config.get('email_service', 'ses'),
-                'aws_region': config.get('aws_region', 'us-gov-west-1'),
-                'aws_secret_name': config.get('aws_secret_name', ''),
-                'smtp_server': config.get('smtp_server', ''),
-                'smtp_port': int(config.get('smtp_port', 25)) if config.get('smtp_port') else 25,
                 'status': 'queued',
                 'total_contacts': len(contacts),
                 'queued_count': 0,
@@ -2907,13 +2902,11 @@ def send_campaign(body, headers, event=None):
                 'failed_count': 0,
             'created_at': datetime.now().isoformat(),
             'sent_at': None,  # Will be updated when emails are actually sent
-            'launched_by': launched_by,
-            'filter_description': filter_description
+            'launched_by': launched_by
         }
         
-        # Add filter information if present
-        if body.get('filter_type'):
-            campaign_item['filter_type'] = body.get('filter_type')
+        # Add filter values if present (keep for tracking which contacts were targeted)
+        if body.get('filter_values'):
             campaign_item['filter_values'] = body.get('filter_values', [])
         
         # Add attachments if present

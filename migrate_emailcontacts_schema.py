@@ -177,11 +177,8 @@ def migrate_emailcontacts_table():
                     ],
                     'Projection': {
                         'ProjectionType': 'ALL'
-                    },
-                    'ProvisionedThroughput': {
-                        'ReadCapacityUnits': 5,
-                        'WriteCapacityUnits': 5
                     }
+                    # ProvisionedThroughput not needed with PAY_PER_REQUEST
                 }
             ],
             BillingMode='PAY_PER_REQUEST'

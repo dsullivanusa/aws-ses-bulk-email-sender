@@ -54,9 +54,11 @@ View and manage records in a spreadsheet-like interface.
 
 **Features:**
 - **Load All Records**: Fetch all records from selected table
+- **Edit Selected**: Open record in edit tab (or double-click row)
 - **Delete Selected**: Remove a single record
-- **Edit Selected**: Open record in edit tab
+- **Delete All Rows**: Remove ALL records from table (with double confirmation)
 - **Export to CSV**: Save current view to CSV file
+- **Right-Click Menu**: Context menu with Edit, Delete, Copy options
 
 **Quick Search:**
 - Select field to search
@@ -191,7 +193,17 @@ Perform operations on multiple records.
 4. Confirm deletion
 ```
 
-**Multiple Records:**
+**All Records in Table:**
+```
+1. Browse tab → Select table
+2. Click "💥 Delete All Rows"
+3. Review count
+4. Confirm deletion (first warning)
+5. Type table name to confirm (second warning)
+6. All records deleted with progress tracking
+```
+
+**Multiple Records (Filtered):**
 ```
 1. Bulk Operations tab
 2. Enter filter attribute and value
@@ -359,13 +371,19 @@ Perform operations on multiple records.
 - Check network connection
 - Verify no rate limiting on AWS account
 
-## Keyboard Shortcuts
+## Keyboard Shortcuts & Mouse Actions
 
+### Keyboard Shortcuts:
 - **Ctrl+R**: Refresh current view
 - **Ctrl+F**: Focus search field
 - **Ctrl+S**: Save (when in Edit tab)
 - **Delete**: Delete selected record
 - **Escape**: Cancel/Clear current operation
+
+### Mouse Actions:
+- **Double-Click Row**: Open record in Edit tab
+- **Right-Click Row**: Show context menu (Edit, Delete, Copy)
+- **Single Click Row**: View details in detail panel
 
 ## Advanced Features
 

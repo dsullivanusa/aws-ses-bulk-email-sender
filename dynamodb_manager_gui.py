@@ -131,10 +131,12 @@ class DynamoDBManagerGUI:
         
         ttk.Button(toolbar, text="🔄 Load All Records", 
                   command=self.load_all_records).pack(side=tk.LEFT, padx=5)
-        ttk.Button(toolbar, text="🗑️ Delete Selected", 
-                  command=self.delete_selected_record).pack(side=tk.LEFT, padx=5)
         ttk.Button(toolbar, text="✏️ Edit Selected", 
                   command=self.edit_selected_record).pack(side=tk.LEFT, padx=5)
+        ttk.Button(toolbar, text="🗑️ Delete Selected", 
+                  command=self.delete_selected_record).pack(side=tk.LEFT, padx=5)
+        ttk.Button(toolbar, text="💥 Delete All Rows", 
+                  command=self.delete_all_rows).pack(side=tk.LEFT, padx=5)
         ttk.Button(toolbar, text="📥 Export to CSV", 
                   command=self.export_to_csv).pack(side=tk.LEFT, padx=5)
         
@@ -181,6 +183,15 @@ class DynamoDBManagerGUI:
         
         # Bind selection event
         self.tree.bind('<<TreeviewSelect>>', self.on_tree_select)
+        self.tree.bind('<Double-Button-1>', lambda e: self.edit_selected_record())
+        self.tree.bind('<Button-3>', self.show_context_menu)  # Right-click
+        
+        # Create context menu
+        self.context_menu = tk.Menu(self.root, tearoff=0)
+        self.context_menu.add_command(label="✏️ Edit Record", command=self.edit_selected_record)
+        self.context_menu.add_command(label="🗑️ Delete Record", command=self.delete_selected_record)
+        self.context_menu.add_separator()
+        self.context_menu.add_command(label="📋 Copy to Clipboard", command=self.copy_record_to_clipboard)
         
         # Detail view
         detail_frame = ttk.LabelFrame(browse_frame, text="📝 Record Details", padding="10")
@@ -598,6 +609,113 @@ class DynamoDBManagerGUI:
         except Exception as e:
             messagebox.showerror("Error", f"Failed to delete record:\n{str(e)}")
     
+    def delete_all_rows(self):
+        """Delete all rows from the current table"""
+        if not self.current_table:
+            messagebox.showwarning("No Table", "Please select a table first")
+            return
+        
+        # Load all records to get count
+        try:
+            table = self.dynamodb.Table(self.current_table)
+            response = table.scan(Select='COUNT')
+            item_count = response.get('Count', 0)
+            
+            # Handle pagination for accurate count
+            while 'LastEvaluatedKey' in response:
+                response = table.scan(Select='COUNT', ExclusiveStartKey=response['LastEvaluatedKey'])
+                item_count += response.get('Count', 0)
+            
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to count records:\n{str(e)}")
+            return
+        
+        if item_count == 0:
+            messagebox.showinfo("Empty Table", "Table has no records to delete")
+            return
+        
+        # First warning
+        if not messagebox.askyesno("⚠️ WARNING: Delete All Rows",
+            f"This will DELETE ALL {item_count:,} records from table:\n"
+            f"{self.current_table}\n\n"
+            f"⚠️ THIS CANNOT BE UNDONE!\n\n"
+            f"Are you sure you want to continue?",
+            icon='warning'):
+            return
+        
+        # Second confirmation - require typing table name
+        from tkinter import simpledialog
+        typed_name = simpledialog.askstring(
+            "Final Confirmation",
+            f"Type the table name '{self.current_table}' to confirm deletion:",
+            parent=self.root
+        )
+        
+        if typed_name != self.current_table:
+            messagebox.showinfo("Cancelled", "Table name doesn't match. Deletion cancelled.")
+            return
+        
+        # Delete all records
+        try:
+            self.status_var.set("Deleting all records...")
+            self.root.update_idletasks()
+            
+            # Scan and delete in batches
+            response = table.scan()
+            items = response.get('Items', [])
+            
+            deleted_count = 0
+            error_count = 0
+            
+            # Process first batch
+            with table.batch_writer() as batch:
+                for item in items:
+                    try:
+                        # Build key from schema
+                        key = {}
+                        for key_name in self.table_schema['keys']:
+                            key[key_name] = item[key_name]
+                        batch.delete_item(Key=key)
+                        deleted_count += 1
+                    except Exception as e:
+                        error_count += 1
+            
+            # Handle pagination
+            while 'LastEvaluatedKey' in response:
+                response = table.scan(ExclusiveStartKey=response['LastEvaluatedKey'])
+                items = response.get('Items', [])
+                
+                with table.batch_writer() as batch:
+                    for item in items:
+                        try:
+                            key = {}
+                            for key_name in self.table_schema['keys']:
+                                key[key_name] = item[key_name]
+                            batch.delete_item(Key=key)
+                            deleted_count += 1
+                        except Exception as e:
+                            error_count += 1
+                
+                # Update progress
+                self.status_var.set(f"Deleted {deleted_count:,} records...")
+                self.root.update_idletasks()
+            
+            # Clear display
+            self.tree.delete(*self.tree.get_children())
+            self.current_data = []
+            self.record_count_label.config(text="Records: 0")
+            
+            messagebox.showinfo("Complete",
+                f"Delete All Rows Complete!\n\n"
+                f"Deleted: {deleted_count:,} records\n"
+                f"Errors: {error_count}")
+            
+            self.status_var.set(f"Deleted all {deleted_count:,} records from {self.current_table}")
+            
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to delete all rows:\n{str(e)}")
+            self.status_var.set("Error deleting rows")
+    
     def edit_selected_record(self):
         """Load selected record into edit tab"""
         if not self.selected_item:
@@ -942,6 +1060,29 @@ class DynamoDBManagerGUI:
             
         except Exception as e:
             messagebox.showerror("Error", f"Export failed:\n{str(e)}")
+    
+    def show_context_menu(self, event):
+        """Show right-click context menu"""
+        # Select item under cursor
+        item_id = self.tree.identify_row(event.y)
+        if item_id:
+            self.tree.selection_set(item_id)
+            self.context_menu.post(event.x_root, event.y_root)
+    
+    def copy_record_to_clipboard(self):
+        """Copy selected record JSON to clipboard"""
+        if not self.selected_item:
+            messagebox.showwarning("No Selection", "Please select a record first")
+            return
+        
+        try:
+            json_str = json.dumps(self.selected_item, indent=2, cls=DecimalEncoder)
+            self.root.clipboard_clear()
+            self.root.clipboard_append(json_str)
+            messagebox.showinfo("Copied", "Record JSON copied to clipboard")
+            self.status_var.set("Record copied to clipboard")
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to copy:\n{str(e)}")
     
     def refresh_table_info(self):
         """Refresh table information"""
