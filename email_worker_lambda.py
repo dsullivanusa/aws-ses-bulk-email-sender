@@ -116,14 +116,20 @@ def lambda_handler(event, context):
                 results['successful'] += 1
                 logger.info(f"[Message {idx}] SUCCESS: Email sent to {contact_email}")
                 
-                # Update campaign sent count
+                # Update campaign sent count and timestamp
                 try:
+                    # Update sent_count and set sent_at timestamp if first email
                     campaigns_table.update_item(
                         Key={'campaign_id': campaign_id},
-                        UpdateExpression="SET sent_count = sent_count + :inc",
-                        ExpressionAttributeValues={':inc': 1}
+                        UpdateExpression="SET sent_count = sent_count + :inc, sent_at = if_not_exists(sent_at, :timestamp), #status = :status",
+                        ExpressionAttributeNames={'#status': 'status'},
+                        ExpressionAttributeValues={
+                            ':inc': 1,
+                            ':timestamp': datetime.now().isoformat(),
+                            ':status': 'sending'
+                        }
                     )
-                    logger.debug(f"[Message {idx}] Campaign stats updated (sent_count incremented)")
+                    logger.debug(f"[Message {idx}] Campaign stats updated (sent_count incremented, sent_at set)")
                 except Exception as e:
                     logger.warning(f"[Message {idx}] Could not update campaign stats: {str(e)}")
             else:

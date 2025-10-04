@@ -32,6 +32,19 @@ ATTACHMENTS_BUCKET = 'jcdc-ses-contact-list'
 # If not set, it will automatically use the API Gateway URL
 CUSTOM_API_URL = os.environ.get('CUSTOM_API_URL', None)
 
+# Cognito configuration (optional authentication)
+def load_cognito_config():
+    """Load Cognito configuration if available"""
+    try:
+        s3 = boto3.client('s3', region_name='us-gov-west-1')
+        obj = s3.get_object(Bucket=ATTACHMENTS_BUCKET, Key='cognito_config.json')
+        config = json.loads(obj['Body'].read().decode('utf-8'))
+        return config if config.get('enabled', False) else None
+    except:
+        return None  # Cognito not configured or disabled
+
+COGNITO_CONFIG = load_cognito_config()
+
 def lambda_handler(event, context):
     """Bulk Email API with Web UI"""
     
@@ -77,7 +90,7 @@ def lambda_handler(event, context):
         elif path == '/upload-attachment' and method == 'POST':
             return upload_attachment(body, headers)
         elif path == '/campaign' and method == 'POST':
-            return send_campaign(body, headers)
+            return send_campaign(body, headers, event)
         elif path == '/campaign/{campaign_id}' and method == 'GET':
             campaign_id = event['pathParameters']['campaign_id']
             return get_campaign_status(campaign_id, headers)
@@ -508,6 +521,31 @@ def serve_web_ui(event):
             }}
         }}
         
+        /* Searching Indicator */
+        .searching-indicator {{
+            display: inline-block;
+            margin-left: 12px;
+            padding: 6px 12px;
+            background: linear-gradient(135deg, #3b82f6, #2563eb);
+            color: white;
+            border-radius: 6px;
+            font-size: 13px;
+            font-weight: 600;
+            transition: opacity 0.3s ease-in-out;
+            box-shadow: 0 2px 8px rgba(59, 130, 246, 0.3);
+        }}
+        .searching-indicator.show {{
+            opacity: 1 !important;
+            animation: pulse 1.5s ease-in-out infinite;
+        }}
+        .searching-indicator.hide {{
+            opacity: 0 !important;
+        }}
+        @keyframes pulse {{
+            0%, 100% {{ opacity: 1; }}
+            50% {{ opacity: 0.6; }}
+        }}
+        
         /* Loading and Animation States */
         .loading {{
             opacity: 0.7;
@@ -586,14 +624,14 @@ def serve_web_ui(event):
                         <option value="water_wastewater">Water/Wastewater</option>
                         <option value="weekly_rollup">Weekly Rollup</option>
                         <option value="region">Region</option>
-                    </select>
+                </select>
                     <div id="filterValueContainer" style="display: none;">
                         <div style="max-height: 300px; overflow-y: auto; padding: 12px; background: #f9fafb; border-radius: 8px; border: 1px solid #e5e7eb;">
                             <div style="margin-bottom: 12px; padding-bottom: 10px; border-bottom: 1px solid #e5e7eb; display: flex; justify-content: space-between; align-items: center;">
                                 <div>
                                     <button onclick="selectAllFilterValues()" style="padding: 6px 12px; font-size: 13px; background: #10b981; margin-right: 8px;">✅ Select All</button>
                                     <button onclick="clearAllFilterValues()" style="padding: 6px 12px; font-size: 13px; background: #ef4444;">❌ Clear All</button>
-                                </div>
+            </div>
                                 <small style="color: #6b7280; margin: 0;">Click checkboxes to load filtered contacts</small>
                             </div>
                             <div id="filterValueCheckboxes"></div>
@@ -733,7 +771,10 @@ def serve_web_ui(event):
             
             <div class="form-group" style="margin-top: 20px;">
                 <label>🔎 Search by Name:</label>
-                <input type="text" id="nameSearch" placeholder="Search by first or last name..." oninput="debouncedSearch()" style="margin-bottom: 10px;">
+                <div style="position: relative;">
+                    <input type="text" id="nameSearch" placeholder="Search by first or last name..." oninput="debouncedSearch()" style="margin-bottom: 10px;">
+                    <span id="searchingIndicator" class="searching-indicator" style="opacity: 0;">🔍 Searching DynamoDB...</span>
+                </div>
                 <small id="searchResults" style="color: #6b7280;"></small>
             </div>
             
@@ -787,6 +828,11 @@ def serve_web_ui(event):
                         <small style="display: block; margin-top: 8px; color: #6b7280;" id="campaignFilterCount"></small>
                     </div>
                 </div>
+            </div>
+            <div class="form-group">
+                <label>👤 Your Name:</label>
+                <input type="text" id="userName" placeholder="Enter your name (saved in browser)" onchange="saveUserName()">
+                <small style="color: #6b7280;">This will be recorded as who launched the campaign. Your name is saved in your browser.</small>
             </div>
             <div class="form-group">
                 <label>📝 Campaign Name:</label>
@@ -1251,17 +1297,19 @@ def serve_web_ui(event):
         function debouncedSearch() {{
             clearTimeout(searchTimeout);
             const searchTerm = document.getElementById('nameSearch').value.trim();
+            const searchResults = document.getElementById('searchResults');
             
             if (!searchTerm) {{
-                // If empty, clear immediately
+                // If empty, clear immediately and hide indicator
+                hideSearchingIndicator();
                 searchContactsByName();
                 return;
             }}
             
-            // Show "Typing..." indicator
-            const searchResults = document.getElementById('searchResults');
+            // Show "Typing..." while user is still typing
             if (searchTerm.length >= 2) {{
                 searchResults.textContent = 'Typing...';
+                searchResults.style.color = '#9ca3af';
             }}
             
             // Wait 500ms after user stops typing, then search
@@ -1284,22 +1332,28 @@ def serve_web_ui(event):
         async function searchContactsByName() {{
             const searchTerm = document.getElementById('nameSearch').value.trim();
             const searchResults = document.getElementById('searchResults');
+            const searchingIndicator = document.getElementById('searchingIndicator');
             
             if (!searchTerm) {{
                 // Empty search - apply current filter or show all
                 searchResults.textContent = '';
+                hideSearchingIndicator();
                 applyContactFilter();
                 return;
             }}
             
             if (searchTerm.length < 2) {{
                 searchResults.textContent = 'Enter at least 2 characters to search';
+                hideSearchingIndicator();
                 return;
             }}
             
             try {{
                 console.log(`Searching DynamoDB for: "${{searchTerm}}"`);
-                searchResults.textContent = 'Searching...';
+                
+                // Show searching indicator with fade-in
+                showSearchingIndicator();
+                searchResults.textContent = '';
                 
                 // Search DynamoDB via API
                 const response = await fetch(`${{API_URL}}/contacts/search`, {{
@@ -1330,15 +1384,35 @@ def serve_web_ui(event):
                         searchResults.textContent = `Found ${{finalContacts.length}} contact(s) matching "${{searchTerm}}"`;
                     }}
                     
+                    searchResults.style.color = '#10b981';  // Green for success
                     displayContacts(finalContacts);
+                    
+                    // Hide searching indicator with fade-out
+                    hideSearchingIndicator();
                 }} else {{
                     console.error('Search failed:', response.status);
                     searchResults.textContent = 'Search failed. Please try again.';
+                    searchResults.style.color = '#ef4444';  // Red for error
+                    hideSearchingIndicator();
                 }}
             }} catch (error) {{
                 console.error('Search error:', error);
                 searchResults.textContent = 'Search error: ' + error.message;
+                searchResults.style.color = '#ef4444';  // Red for error
+                hideSearchingIndicator();
             }}
+        }}
+        
+        function showSearchingIndicator() {{
+            const indicator = document.getElementById('searchingIndicator');
+            indicator.classList.remove('hide');
+            indicator.classList.add('show');
+        }}
+        
+        function hideSearchingIndicator() {{
+            const indicator = document.getElementById('searchingIndicator');
+            indicator.classList.remove('show');
+            indicator.classList.add('hide');
         }}
         
         function displayContacts(contacts) {{
@@ -2137,10 +2211,14 @@ def serve_web_ui(event):
             // Get content from Quill editor
             const emailBody = quillEditor.root.innerHTML;
             
+            // Get user name from form
+            const userName = document.getElementById('userName').value.trim() || 'Web User';
+            
             const campaign = {{
                 campaign_name: document.getElementById('campaignName').value,
                 subject: document.getElementById('subject').value,
                 body: emailBody,
+                launched_by: userName,  // Send user identity to backend
                 filter_type: campaignFilterType || null,
                 filter_values: campaignFilterType && campaignCheckedBoxes.length > 0 
                     ? Array.from(campaignCheckedBoxes).map(cb => cb.value)
@@ -2274,10 +2352,28 @@ def serve_web_ui(event):
             }}
         }}
         
+        // User identity management (browser localStorage)
+        function saveUserName() {{
+            const userName = document.getElementById('userName').value.trim();
+            if (userName) {{
+                localStorage.setItem('emailCampaignUserName', userName);
+                console.log('User name saved:', userName);
+            }}
+        }}
+        
+        function loadUserName() {{
+            const savedName = localStorage.getItem('emailCampaignUserName');
+            if (savedName) {{
+                document.getElementById('userName').value = savedName;
+                console.log('User name loaded from browser:', savedName);
+            }}
+        }}
+        
         window.onload = () => {{
             // Initialize UI and load configuration
             loadConfig();
             loadGroupsFromDB();  // Load groups on page load
+            loadUserName();  // Load saved user name from browser
             console.log('Web UI loaded successfully');
         }};
     </script>
@@ -2745,7 +2841,7 @@ def delete_contact(event, headers):
     except Exception as e:
         return {'statusCode': 500, 'headers': headers, 'body': json.dumps({'error': str(e)})}
 
-def send_campaign(body, headers):
+def send_campaign(body, headers, event=None):
     """Send email campaign by saving to DynamoDB and queuing contacts to SQS"""
     try:
         # Get email configuration
@@ -2782,6 +2878,15 @@ def send_campaign(body, headers):
         # Get attachments
         attachments = body.get('attachments', [])
         
+        # Get user info from request context or body
+        launched_by = body.get('launched_by', 'Web User')
+        if 'requestContext' in event:
+            # Try to get user from API Gateway context
+            identity = event['requestContext'].get('identity', {})
+            source_ip = identity.get('sourceIp', 'Unknown')
+            user_agent = identity.get('userAgent', 'Unknown')
+            launched_by = f"{launched_by} (IP: {source_ip})"
+        
         # Save complete campaign data to DynamoDB
         print(f"Saving campaign {campaign_id} to DynamoDB with {len(attachments)} attachments")
         campaign_item = {
@@ -2801,6 +2906,8 @@ def send_campaign(body, headers):
                 'sent_count': 0,
                 'failed_count': 0,
             'created_at': datetime.now().isoformat(),
+            'sent_at': None,  # Will be updated when emails are actually sent
+            'launched_by': launched_by,
             'filter_description': filter_description
         }
         
@@ -2812,6 +2919,9 @@ def send_campaign(body, headers):
         # Add attachments if present
         if attachments:
             campaign_item['attachments'] = attachments
+        
+        # Store recipient email list for tracking
+        campaign_item['target_contacts'] = target_contact_emails
         
         campaigns_table.put_item(Item=campaign_item)
         print(f"Campaign {campaign_id} saved to DynamoDB")
