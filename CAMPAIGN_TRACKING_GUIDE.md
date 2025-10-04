@@ -103,7 +103,8 @@ python campaign_tracking_report.py export-all
 | Button | Function |
 |--------|----------|
 | 🔄 Refresh | Reload campaigns from DynamoDB |
-| 📥 Export Campaign to CSV | Export selected campaign recipients |
+| 📥 Export Campaign to CSV | Export selected campaign (full report with metadata) |
+| 📧 Export Email List Only | Export just the email addresses (one per row) |
 | 📊 Export All to CSV | Export all campaigns summary |
 | 🔍 Filter by Status | Show only campaigns with specific status |
 | 🗑️ Clear Filter | Show all campaigns |
@@ -118,10 +119,18 @@ python campaign_tracking_report.py export-all
 4. View details in tabs below
 
 **Export Recipient List:**
+
+*Option 1: Full Report*
 1. Select campaign from list
 2. Click "📥 Export Campaign to CSV"
 3. Choose filename and location
-4. CSV file includes campaign metadata and all recipient emails
+4. CSV includes campaign metadata + all recipient emails (with row numbers)
+
+*Option 2: Email List Only*
+1. Select campaign from list
+2. Click "📧 Export Email List Only"
+3. Choose filename and location
+4. CSV includes ONLY email addresses (one per row, no metadata)
 
 **Filter Campaigns:**
 1. Click "🔍 Filter by Status"
@@ -141,15 +150,16 @@ python campaign_tracking_report.py
 
 Menu Options:
 ```
-1. View All Campaigns (Summary)          - Table view of all campaigns
-2. View Campaign Details (by ID)         - Detailed single campaign view
-3. View Recent Campaigns (last 10)       - Most recent 10 campaigns
-4. Export Campaign Recipients to CSV     - Export single campaign
-5. Export All Campaigns Summary to CSV   - Export all campaigns
-6. Search Campaigns by Name              - Search by campaign name
-7. View Campaigns by Status              - Filter by status
-8. Change Region                         - Switch AWS region
-9. Exit                                  - Quit application
+1. View All Campaigns (Summary)           - Table view of all campaigns
+2. View Campaign Details (by ID)          - Detailed single campaign view
+3. View Recent Campaigns (last 10)        - Most recent 10 campaigns
+4. Export Campaign Recipients to CSV      - Export single campaign (full report)
+5. Export Email List Only                 - Export just email addresses
+6. Export All Campaigns Summary to CSV    - Export all campaigns
+7. Search Campaigns by Name               - Search by campaign name
+8. View Campaigns by Status               - Filter by status
+9. Change Region                          - Switch AWS region
+10. Exit                                  - Quit application
 ```
 
 ### Command-Line Usage
@@ -198,9 +208,14 @@ Failed:            0
 ================================================================================
 ```
 
-**Export Campaign:**
+**Export Campaign (Full Report):**
 ```bash
 python campaign_tracking_report.py export campaign_1234567890 my_report.csv
+```
+
+**Export Email List Only:**
+```bash
+python campaign_tracking_report.py export-emails campaign_1234567890 email_list.csv
 ```
 
 **Export All Campaigns:**
@@ -233,6 +248,29 @@ Recipient Email Addresses
 2,user2@example.com
 ...
 ```
+
+### Email List Only Export
+
+**Format:**
+```csv
+Email Addresses for Campaign: Weekly Security Update
+Campaign ID: campaign_1234567890
+Total Recipients: 150
+Exported: 2025-10-04 11:00:00
+
+Email Address
+user1@example.com
+user2@example.com
+user3@example.com
+...
+```
+
+**Use Case:**
+- Import into another system
+- Create mailing list
+- Verify recipients
+- Generate distribution list
+- Bulk operations on email addresses
 
 ### All Campaigns Summary Export
 

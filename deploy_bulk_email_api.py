@@ -2,6 +2,7 @@ import boto3
 import zipfile
 import json
 import time
+import os
 
 def deploy_bulk_email_api():
     """Deploy complete bulk email solution with API Gateway"""
@@ -55,6 +56,11 @@ def deploy_bulk_email_api():
     
     # Create Lambda function
     function_name = 'bulk-email-api-function'
+    
+    # Delete old zip file if exists
+    if os.path.exists('bulk_email_api_lambda.zip'):
+        os.remove('bulk_email_api_lambda.zip')
+        print("Deleted old bulk_email_api_lambda.zip")
     
     with zipfile.ZipFile('bulk_email_api_lambda.zip', 'w') as zip_file:
         zip_file.write('bulk_email_api_lambda.py', 'lambda_function.py')

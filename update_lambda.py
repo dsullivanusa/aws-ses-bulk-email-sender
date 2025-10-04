@@ -16,6 +16,11 @@ def update_lambda_functions():
     # Update web UI Lambda
     web_ui_functions = [name for name in function_names if 'vpc-smtp-web-ui' in name]
     if web_ui_functions:
+        # Delete old zip file if exists
+        if os.path.exists('web_ui_lambda.zip'):
+            os.remove('web_ui_lambda.zip')
+            print("Deleted old web_ui_lambda.zip")
+        
         with zipfile.ZipFile('web_ui_lambda.zip', 'w') as zip_file:
             zip_file.write('web_ui_lambda.py', 'lambda_function.py')
         
@@ -40,6 +45,11 @@ def update_lambda_functions():
             break
     
     if smtp_functions:
+        # Delete old zip file if exists
+        if os.path.exists('vpc_smtp_lambda.zip'):
+            os.remove('vpc_smtp_lambda.zip')
+            print("Deleted old vpc_smtp_lambda.zip")
+        
         with zipfile.ZipFile('vpc_smtp_lambda.zip', 'w') as zip_file:
             zip_file.write('vpc_smtp_lambda_function.py', 'lambda_function.py')
         

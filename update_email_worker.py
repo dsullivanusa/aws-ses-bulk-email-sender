@@ -6,6 +6,7 @@ Update Email Worker Lambda Function with S3 Attachment Support
 import boto3
 import zipfile
 import json
+import os
 
 REGION = 'us-gov-west-1'
 FUNCTION_NAME = 'email-worker-function'  # Change if your function has a different name
@@ -23,6 +24,12 @@ def update_email_worker():
     
     # Create deployment package
     print("📦 Creating deployment package...")
+    
+    # Delete old zip file if exists
+    if os.path.exists('email_worker_lambda.zip'):
+        os.remove('email_worker_lambda.zip')
+        print("Deleted old email_worker_lambda.zip")
+    
     with zipfile.ZipFile('email_worker_lambda.zip', 'w') as zip_file:
         zip_file.write('email_worker_lambda.py', 'lambda_function.py')
     print("✓ Package created")

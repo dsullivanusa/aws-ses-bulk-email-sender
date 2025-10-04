@@ -6,6 +6,11 @@ import os
 def create_lambda_deployment_package():
     """Create deployment package for Lambda function"""
     
+    # Delete old zip file if exists
+    if os.path.exists('lambda_function.zip'):
+        os.remove('lambda_function.zip')
+        print("Deleted old lambda_function.zip")
+    
     # Create zip file
     with zipfile.ZipFile('lambda_function.zip', 'w') as zip_file:
         zip_file.write('lambda_email_sender.py', 'lambda_function.py')

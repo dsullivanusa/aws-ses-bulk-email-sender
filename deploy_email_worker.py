@@ -8,6 +8,7 @@ import boto3
 import zipfile
 import json
 import time
+import os
 
 def deploy_email_worker_lambda():
     """Deploy the email worker Lambda function"""
@@ -117,6 +118,12 @@ def deploy_email_worker_lambda():
     function_name = 'email-worker-function'
     
     print(f"\n📦 Creating deployment package...")
+    
+    # Delete old zip file if exists
+    if os.path.exists('email_worker_lambda.zip'):
+        os.remove('email_worker_lambda.zip')
+        print("Deleted old email_worker_lambda.zip")
+    
     with zipfile.ZipFile('email_worker_lambda.zip', 'w') as zip_file:
         zip_file.write('email_worker_lambda.py', 'lambda_function.py')
     print(f"✓ Package created")
