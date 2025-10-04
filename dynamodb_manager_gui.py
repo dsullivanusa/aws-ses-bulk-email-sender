@@ -40,10 +40,8 @@ class DynamoDBManagerGUI:
         # Project tables
         self.project_tables = [
             'EmailContacts',
-            'EmailContactsNew',
             'EmailCampaigns',
-            'EmailConfig',
-            'SMTPConfig'
+            'EmailConfig'
         ]
         
         # Setup UI
@@ -123,7 +121,7 @@ class DynamoDBManagerGUI:
         self.notebook.add(browse_frame, text="📊 Browse Data")
         
         browse_frame.columnconfigure(0, weight=1)
-        browse_frame.rowconfigure(1, weight=1)
+        browse_frame.rowconfigure(3, weight=1)  # Tree frame row
         
         # Toolbar
         toolbar = ttk.Frame(browse_frame)
@@ -162,9 +160,18 @@ class DynamoDBManagerGUI:
         ttk.Button(search_frame, text="❌ Clear", 
                   command=self.clear_search).pack(side=tk.LEFT, padx=5)
         
+        # Legend for key indicators
+        legend_frame = ttk.Frame(browse_frame)
+        legend_frame.grid(row=2, column=0, sticky=(tk.W, tk.E), pady=(5, 5))
+        
+        legend_label = ttk.Label(legend_frame, 
+            text="Legend: 🔑 = Primary Key (PK=Partition, SK=Sort) | 🔍 = Global Secondary Index (GSI)",
+            font=('Arial', 8, 'italic'), foreground='#666666')
+        legend_label.pack(side=tk.LEFT, padx=5)
+        
         # Treeview with scrollbars
         tree_frame = ttk.Frame(browse_frame)
-        tree_frame.grid(row=2, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
+        tree_frame.grid(row=3, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
         tree_frame.columnconfigure(0, weight=1)
         tree_frame.rowconfigure(0, weight=1)
         
@@ -193,9 +200,18 @@ class DynamoDBManagerGUI:
         self.context_menu.add_separator()
         self.context_menu.add_command(label="📋 Copy to Clipboard", command=self.copy_record_to_clipboard)
         
+        # Legend for key indicators
+        legend_frame = ttk.Frame(browse_frame)
+        legend_frame.grid(row=2, column=0, sticky=(tk.W, tk.E), pady=(5, 5))
+        
+        legend_label = ttk.Label(legend_frame, 
+            text="Legend: 🔑 = Primary Key (PK=Partition, SK=Sort) | 🔍 = Global Secondary Index (GSI)",
+            font=('Arial', 8, 'italic'), foreground='#666666')
+        legend_label.pack(side=tk.LEFT, padx=5)
+        
         # Detail view
         detail_frame = ttk.LabelFrame(browse_frame, text="📝 Record Details", padding="10")
-        detail_frame.grid(row=3, column=0, sticky=(tk.W, tk.E), pady=(10, 0))
+        detail_frame.grid(row=4, column=0, sticky=(tk.W, tk.E), pady=(10, 0))
         detail_frame.columnconfigure(0, weight=1)
         
         self.detail_text = scrolledtext.ScrolledText(detail_frame, height=8, wrap=tk.WORD,
@@ -438,17 +454,41 @@ class DynamoDBManagerGUI:
             self.update_search_fields()
     
     def get_table_schema(self):
-        """Get table schema/key information"""
+        """Get table schema/key information including GSIs"""
         try:
             client = boto3.client('dynamodb', region_name=self.region)
             response = client.describe_table(TableName=self.current_table)
             
             table_info = response['Table']
             key_schema = table_info['KeySchema']
+            attribute_definitions = table_info.get('AttributeDefinitions', [])
+            gsi_list = table_info.get('GlobalSecondaryIndexes', [])
+            
+            # Primary keys
+            primary_keys = [k['AttributeName'] for k in key_schema]
+            primary_key_types = {k['AttributeName']: k['KeyType'] for k in key_schema}
+            
+            # GSI keys
+            gsi_keys = []
+            gsi_key_info = {}
+            for gsi in gsi_list:
+                gsi_name = gsi['IndexName']
+                for key in gsi['KeySchema']:
+                    attr_name = key['AttributeName']
+                    if attr_name not in gsi_keys:
+                        gsi_keys.append(attr_name)
+                    gsi_key_info[attr_name] = gsi_name
+            
+            # All defined attributes
+            all_attributes = [attr['AttributeName'] for attr in attribute_definitions]
             
             self.table_schema = {
-                'keys': [k['AttributeName'] for k in key_schema],
-                'key_types': {k['AttributeName']: k['KeyType'] for k in key_schema}
+                'keys': primary_keys,
+                'key_types': primary_key_types,
+                'gsi_keys': gsi_keys,
+                'gsi_info': gsi_key_info,
+                'all_attributes': all_attributes,
+                'attribute_types': {attr['AttributeName']: attr['AttributeType'] for attr in attribute_definitions}
             }
             
             # Update query tab with primary key
@@ -497,40 +537,104 @@ class DynamoDBManagerGUI:
             self.current_data = items
             self.display_data(items)
             self.record_count_label.config(text=f"Records: {len(items)}")
-            self.status_var.set(f"Loaded {len(items)} records from {self.current_table}")
+            
+            if len(items) == 0:
+                self.status_var.set(f"Table '{self.current_table}' is empty (0 records). Schema displayed.")
+            else:
+                self.status_var.set(f"Loaded {len(items)} records from {self.current_table}")
             
         except Exception as e:
             messagebox.showerror("Error", f"Failed to load records:\n{str(e)}")
             self.status_var.set("Error loading records")
     
     def display_data(self, items):
-        """Display data in treeview"""
+        """Display data in treeview with schema information"""
         # Clear existing
         self.tree.delete(*self.tree.get_children())
         
-        if not items:
-            self.status_var.set("No records to display")
-            return
-        
-        # Get all unique columns
+        # Get columns from items or schema
         columns = set()
-        for item in items:
-            columns.update(item.keys())
-        columns = sorted(list(columns))
+        if items:
+            # Get columns from actual data
+            for item in items:
+                columns.update(item.keys())
+            columns = sorted(list(columns))
+        else:
+            # No items - get columns from table schema
+            if self.table_schema and 'all_attributes' in self.table_schema:
+                columns = sorted(self.table_schema['all_attributes'])
+            else:
+                # Try to get from a sample scan
+                try:
+                    table = self.dynamodb.Table(self.current_table)
+                    sample = table.scan(Limit=1)
+                    if sample.get('Items'):
+                        columns = sorted(list(sample['Items'][0].keys()))
+                    else:
+                        columns = sorted(self.table_schema.get('all_attributes', []))
+                except:
+                    columns = []
+        
+        if not columns:
+            self.status_var.set("No schema information available")
+            return
         
         # Configure treeview
         self.tree['columns'] = columns
         self.tree['show'] = 'tree headings'
         
-        # Column headers
+        # Column headers with key indicators
         self.tree.heading('#0', text='#')
         self.tree.column('#0', width=50, anchor='center')
         
         for col in columns:
-            self.tree.heading(col, text=col)
+            # Build header with key indicators
+            header_text = col
+            
+            # Check if primary key
+            if self.table_schema and col in self.table_schema.get('keys', []):
+                key_type = self.table_schema.get('key_types', {}).get(col, '')
+                if key_type == 'HASH':
+                    header_text = f"🔑 {col} (PK)"  # Primary partition key
+                elif key_type == 'RANGE':
+                    header_text = f"🔑 {col} (SK)"  # Sort key
+            
+            # Check if GSI key
+            elif self.table_schema and col in self.table_schema.get('gsi_keys', []):
+                gsi_name = self.table_schema.get('gsi_info', {}).get(col, '')
+                header_text = f"🔍 {col} (GSI)"
+            
+            self.tree.heading(col, text=header_text)
             self.tree.column(col, width=150, anchor='w')
         
-        # Insert data
+        # Insert data if available
+        if not items:
+            # Insert a helper row to show schema
+            schema_values = []
+            for col in columns:
+                # Build description for each attribute
+                if self.table_schema and col in self.table_schema.get('keys', []):
+                    key_type = self.table_schema.get('key_types', {}).get(col, '')
+                    if key_type == 'HASH':
+                        schema_values.append('(Primary Key)')
+                    elif key_type == 'RANGE':
+                        schema_values.append('(Sort Key)')
+                elif self.table_schema and col in self.table_schema.get('gsi_keys', []):
+                    gsi_name = self.table_schema.get('gsi_info', {}).get(col, '')
+                    schema_values.append(f'(GSI: {gsi_name})')
+                else:
+                    attr_type = self.table_schema.get('attribute_types', {}).get(col, '')
+                    if attr_type:
+                        schema_values.append(f'({attr_type})')
+                    else:
+                        schema_values.append('(attribute)')
+            
+            self.tree.insert('', 'end', text='Schema', values=schema_values, tags=('schema',))
+            self.tree.tag_configure('schema', background='#f0f0f0', foreground='#666666', font=('Arial', 9, 'italic'))
+            
+            self.status_var.set(f"No records in table. Showing {len(columns)} schema attributes.")
+            return
+        
         for idx, item in enumerate(items, 1):
             values = []
             for col in columns:
