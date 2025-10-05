@@ -74,7 +74,7 @@ def lambda_handler(event, context):
         elif path == '/config' and method == 'GET':
             return get_email_config(headers)
         elif path == '/contacts' and method == 'GET':
-            return get_contacts(headers)
+            return get_contacts(headers, event)
         elif path == '/contacts' and method == 'POST':
             return add_contact(body, headers)
         elif path == '/contacts' and method == 'PUT':
@@ -605,22 +605,23 @@ def serve_web_ui(event):
             <div class="form-group">
                 <label>🔍 Contact Filter:</label>
                 <div style="display: grid; grid-template-columns: 1fr 2fr; gap: 10px; align-items: start;">
-                    <select id="filterType" onchange="loadFilterValues()" title="Select a filter type - you can change this anytime">
-                        <option value="">All Contacts</option>
-                        <option value="group">Group</option>
-                        <option value="entity_type">Entity Type</option>
-                        <option value="state">State</option>
-                        <option value="agency_name">Agency Name</option>
-                        <option value="sector">Sector</option>
-                        <option value="subsection">Subsection</option>
-                        <option value="ms_isac_member">MS-ISAC Member</option>
-                        <option value="soc_call">SOC Call</option>
-                        <option value="fusion_center">Fusion Center</option>
-                        <option value="k12">K-12</option>
-                        <option value="water_wastewater">Water/Wastewater</option>
-                        <option value="weekly_rollup">Weekly Rollup</option>
-                        <option value="region">Region</option>
-                </select>
+                    <div style="position: relative; z-index: 100;">
+                        <select id="filterType" onchange="loadFilterValues()" title="Select a filter type - you can change this anytime" style="width: 100%; cursor: pointer;">
+                            <option value="">All Contacts</option>
+                            <option value="entity_type">Entity Type</option>
+                            <option value="state">State</option>
+                            <option value="agency_name">Agency Name</option>
+                            <option value="sector">Sector</option>
+                            <option value="subsection">Subsection</option>
+                            <option value="ms_isac_member">MS-ISAC Member</option>
+                            <option value="soc_call">SOC Call</option>
+                            <option value="fusion_center">Fusion Center</option>
+                            <option value="k12">K-12</option>
+                            <option value="water_wastewater">Water/Wastewater</option>
+                            <option value="weekly_rollup">Weekly Rollup</option>
+                            <option value="region">Region</option>
+                        </select>
+                    </div>
                     <div id="filterValueContainer" style="display: none;">
                         <div style="max-height: 300px; overflow-y: auto; padding: 12px; background: #f9fafb; border-radius: 8px; border: 1px solid #e5e7eb;">
                             <div style="margin-bottom: 12px; padding-bottom: 10px; border-bottom: 1px solid #e5e7eb; display: flex; justify-content: space-between; align-items: center;">
@@ -699,7 +700,6 @@ def serve_web_ui(event):
                     </select>
                     <input type="email" id="newAlternateEmail" placeholder="Alternate Email">
                     <input type="text" id="newRegion" placeholder="Region">
-                    <input type="text" id="newGroup" placeholder="Group">
                 </div>
                 <div style="margin-top: 20px;">
                     <button class="btn-success" onclick="addContact()">✅ Add</button>
@@ -752,7 +752,6 @@ def serve_web_ui(event):
                     </select>
                     <input type="email" id="editAlternateEmail" placeholder="Alternate Email">
                     <input type="text" id="editRegion" placeholder="Region">
-                    <input type="text" id="editGroup" placeholder="Group">
                 </div>
                 <div style="margin-top: 20px;">
                     <button class="btn-success" onclick="saveContactEdit()">💾 Save Changes</button>
@@ -774,19 +773,38 @@ def serve_web_ui(event):
                 <small id="searchResults" style="color: #6b7280;"></small>
             </div>
             
+            <!-- Pagination Controls -->
+            <div style="display: flex; justify-content: space-between; align-items: center; margin: 20px 0; padding: 15px; background: #f9fafb; border-radius: 8px; border: 1px solid #e5e7eb;">
+                <div style="display: flex; gap: 10px; align-items: center;">
+                    <label style="font-weight: 600; color: #374151;">Page Size:</label>
+                    <select id="pageSize" onchange="changePageSize()" style="padding: 8px 12px; border-radius: 6px; border: 1px solid #d1d5db;">
+                        <option value="25" selected>25</option>
+                        <option value="50">50</option>
+                        <option value="100">100</option>
+                    </select>
+                    <span id="pageInfo" style="margin-left: 15px; color: #6b7280; font-weight: 500;">Page 1</span>
+                </div>
+                <div style="display: flex; gap: 10px;">
+                    <button id="prevPageBtn" onclick="previousPage()" disabled style="padding: 8px 16px; background: #6b7280; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 500;">⬅️ Previous</button>
+                    <button id="nextPageBtn" onclick="nextPage()" disabled style="padding: 8px 16px; background: #3b82f6; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 500;">Next ➡️</button>
+                </div>
+            </div>
+            
             <div style="overflow-x: auto;">
             <table id="contactsTable">
                 <thead>
                         <tr>
-                            <th>Email Address</th>
-                            <th>Name</th>
-                            <th>Group</th>
+                            <th>First Name</th>
+                            <th>Last Name</th>
                             <th>Agency</th>
-                            <th>Actions</th>
                         </tr>
                 </thead>
                 <tbody id="contactsBody"></tbody>
             </table>
+            </div>
+            
+            <div style="margin-top: 15px; padding: 10px; background: #f3f4f6; border-radius: 6px; text-align: center;">
+                <span id="recordCount" style="color: #6b7280; font-size: 14px;"></span>
             </div>
         </div>
         
@@ -796,23 +814,24 @@ def serve_web_ui(event):
             <div class="form-group">
                 <label>🎯 Target Contacts:</label>
                 <div style="display: grid; grid-template-columns: 1fr 2fr; gap: 10px; align-items: start;">
-                    <select id="campaignFilterType" onchange="loadCampaignFilterValues()">
-                        <option value="">All Contacts</option>
-                        <option value="test_group">🧪 Test Group Only</option>
-                        <option value="group">Group</option>
-                        <option value="entity_type">Entity Type</option>
-                        <option value="state">State</option>
-                        <option value="agency_name">Agency Name</option>
-                        <option value="sector">Sector</option>
-                        <option value="subsection">Subsection</option>
-                        <option value="ms_isac_member">MS-ISAC Member</option>
-                        <option value="soc_call">SOC Call</option>
-                        <option value="fusion_center">Fusion Center</option>
-                        <option value="k12">K-12</option>
-                        <option value="water_wastewater">Water/Wastewater</option>
-                        <option value="weekly_rollup">Weekly Rollup</option>
-                        <option value="region">Region</option>
-                </select>
+                    <div style="position: relative; z-index: 100;">
+                        <select id="campaignFilterType" onchange="loadCampaignFilterValues()" style="width: 100%; cursor: pointer;">
+                            <option value="">All Contacts</option>
+                            <option value="test_group">🧪 Test Group Only</option>
+                            <option value="entity_type">Entity Type</option>
+                            <option value="state">State</option>
+                            <option value="agency_name">Agency Name</option>
+                            <option value="sector">Sector</option>
+                            <option value="subsection">Subsection</option>
+                            <option value="ms_isac_member">MS-ISAC Member</option>
+                            <option value="soc_call">SOC Call</option>
+                            <option value="fusion_center">Fusion Center</option>
+                            <option value="k12">K-12</option>
+                            <option value="water_wastewater">Water/Wastewater</option>
+                            <option value="weekly_rollup">Weekly Rollup</option>
+                            <option value="region">Region</option>
+                        </select>
+                    </div>
                     <div id="campaignFilterValueContainer" style="display: none;">
                         <div style="max-height: 300px; overflow-y: auto; padding: 12px; background: #f9fafb; border-radius: 8px; border: 1px solid #e5e7eb;">
                             <div style="margin-bottom: 12px; padding-bottom: 10px; border-bottom: 1px solid #e5e7eb;">
@@ -973,6 +992,15 @@ def serve_web_ui(event):
         let userSessionId = Math.random().toString(36).substr(2, 9);
         console.log('User session ID:', userSessionId);
         
+        // Pagination state
+        let paginationState = {{
+            currentPage: 1,
+            pageSize: 25,
+            paginationKeys: [null], // Stack of LastEvaluatedKeys for each page
+            hasNextPage: false,
+            displayedContacts: []
+        }};
+        
         
         function showFormStatus(message, type = 'warning') {{
             const statusDiv = document.getElementById('formStatus');
@@ -1039,19 +1067,39 @@ def serve_web_ui(event):
             displayAttachments();
         }};
         
-        async function loadContacts() {{
-            console.log('loadContacts called');
+        async function loadContacts(resetPagination = true) {{
+            console.log('loadContacts called, resetPagination:', resetPagination);
             const button = event?.target || document.querySelector('button[onclick="loadContacts()"]');
-            const originalText = button?.textContent || 'Load Contacts';
+            const originalText = button?.textContent || '🔄 Load Contacts';
+            
+            if (resetPagination) {{
+                // Reset pagination to first page
+                paginationState = {{
+                    currentPage: 1,
+                    pageSize: parseInt(document.getElementById('pageSize').value) || 25,
+                    paginationKeys: [null],
+                    hasNextPage: false,
+                    displayedContacts: []
+                }};
+            }}
             
             try {{
                 if (button) {{
-                    button.textContent = 'Loading...';
+                    button.textContent = '⏳ Loading...';
                     button.disabled = true;
                 }}
                 
-                console.log('Fetching contacts from:', `${{API_URL}}/contacts`);
-                const response = await fetch(`${{API_URL}}/contacts`);
+                // Get the pagination key for the current page
+                const paginationKey = paginationState.paginationKeys[paginationState.currentPage - 1];
+                
+                // Build URL with pagination parameters
+                let url = `${{API_URL}}/contacts?limit=${{paginationState.pageSize}}`;
+                if (paginationKey) {{
+                    url += `&lastKey=${{encodeURIComponent(JSON.stringify(paginationKey))}}`;
+                }}
+                
+                console.log('Fetching contacts from:', url);
+                const response = await fetch(url);
                 console.log('Contacts response status:', response.status);
                 
                 if (!response.ok) {{
@@ -1061,14 +1109,22 @@ def serve_web_ui(event):
                 const result = await response.json();
                 console.log('Contacts result:', result);
                 
-                allContacts = result.contacts || [];
-                console.log('Loaded contacts count:', allContacts.length);
-                console.log('First contact:', allContacts[0]);
+                paginationState.displayedContacts = result.contacts || [];
+                paginationState.hasNextPage = result.lastEvaluatedKey ? true : false;
                 
-                applyContactFilter();
+                // Store the lastEvaluatedKey for the next page
+                if (result.lastEvaluatedKey && paginationState.paginationKeys.length === paginationState.currentPage) {{
+                    paginationState.paginationKeys.push(result.lastEvaluatedKey);
+                }}
+                
+                console.log('Loaded contacts count:', paginationState.displayedContacts.length);
+                console.log('Has next page:', paginationState.hasNextPage);
+                
+                displayContacts(paginationState.displayedContacts);
+                updatePaginationControls();
                 
                 if (button) {{
-                    button.textContent = 'Loaded';
+                    button.textContent = '✅ Loaded';
                     setTimeout(() => {{
                         button.textContent = originalText;
                     }}, 1500);
@@ -1077,7 +1133,7 @@ def serve_web_ui(event):
             }} catch (error) {{
                 console.error('Error loading contacts:', error);
                 const tbody = document.getElementById('contactsBody');
-                tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: var(--danger-color); padding: 40px;">Error loading contacts: ' + error.message + '</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="3" style="text-align: center; color: var(--danger-color); padding: 40px;">Error loading contacts: ' + error.message + '</td></tr>';
                 
                 if (button) {{
                     button.textContent = 'Error';
@@ -1090,6 +1146,45 @@ def serve_web_ui(event):
                     button.disabled = false;
                 }}
             }}
+        }}
+        
+        function updatePaginationControls() {{
+            // Update page info
+            document.getElementById('pageInfo').textContent = `Page ${{paginationState.currentPage}}`;
+            
+            // Update prev button
+            const prevBtn = document.getElementById('prevPageBtn');
+            prevBtn.disabled = paginationState.currentPage === 1;
+            prevBtn.style.background = paginationState.currentPage === 1 ? '#9ca3af' : '#6b7280';
+            prevBtn.style.cursor = paginationState.currentPage === 1 ? 'not-allowed' : 'pointer';
+            
+            // Update next button
+            const nextBtn = document.getElementById('nextPageBtn');
+            nextBtn.disabled = !paginationState.hasNextPage;
+            nextBtn.style.background = !paginationState.hasNextPage ? '#9ca3af' : '#3b82f6';
+            nextBtn.style.cursor = !paginationState.hasNextPage ? 'not-allowed' : 'pointer';
+        }}
+        
+        async function nextPage() {{
+            if (!paginationState.hasNextPage) return;
+            
+            paginationState.currentPage++;
+            await loadContacts(false);
+        }}
+        
+        async function previousPage() {{
+            if (paginationState.currentPage === 1) return;
+            
+            paginationState.currentPage--;
+            await loadContacts(false);
+        }}
+        
+        async function changePageSize() {{
+            const newPageSize = parseInt(document.getElementById('pageSize').value);
+            paginationState.pageSize = newPageSize;
+            
+            // Reset to first page with new page size
+            await loadContacts(true);
         }}
         
         async function loadAllContacts() {{
@@ -1417,22 +1512,21 @@ def serve_web_ui(event):
             if (contacts && contacts.length > 0) {{
                 contacts.forEach(contact => {{
                 const row = tbody.insertRow();
-                    const fullName = `${{contact.first_name || ''}} ${{contact.last_name || ''}}`.trim();
                 row.innerHTML = `
-                    <td>${{contact.email}}</td>
-                        <td>${{fullName}}</td>
-                        <td>${{contact.group || ''}}</td>
-                        <td>${{contact.agency_name || ''}}</td>
-                        <td>
-                            <button class="btn-danger" onclick="deleteContact('${{contact.email}}')">🗑️ Delete</button>
-                            <button class="btn-info" onclick="viewContact('${{contact.email}}')">👁️ View</button>
-                            <button class="btn-warning" onclick="editContact('${{contact.email}}')">✏️ Edit</button>
-                        </td>
+                    <td>${{contact.first_name || ''}}</td>
+                    <td>${{contact.last_name || ''}}</td>
+                    <td>${{contact.agency_name || ''}}</td>
                 `;
             }});
             }} else {{
-                tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: var(--gray-500); padding: 40px;">No contacts found. Add some contacts to get started!</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="3" style="text-align: center; color: var(--gray-500); padding: 40px;">No contacts found. Add some contacts to get started!</td></tr>';
             }}
+            
+            // Update record count
+            const recordCount = document.getElementById('recordCount');
+            const startRecord = ((paginationState.currentPage - 1) * paginationState.pageSize) + 1;
+            const endRecord = startRecord + contacts.length - 1;
+            recordCount.textContent = `Showing records ${{startRecord}} - ${{endRecord}}`;
         }}
         
         function showAddContact() {{
@@ -1469,7 +1563,6 @@ def serve_web_ui(event):
             document.getElementById('editWeeklyRollup').value = contact.weekly_rollup || '';
             document.getElementById('editAlternateEmail').value = contact.alternate_email || '';
             document.getElementById('editRegion').value = contact.region || '';
-            document.getElementById('editGroup').value = contact.group || '';
             
             // Show edit form
             document.getElementById('editContactForm').classList.remove('hidden');
@@ -1499,8 +1592,7 @@ def serve_web_ui(event):
                 water_wastewater: document.getElementById('editWaterWastewater').value,
                 weekly_rollup: document.getElementById('editWeeklyRollup').value,
                 alternate_email: document.getElementById('editAlternateEmail').value,
-                region: document.getElementById('editRegion').value,
-                group: document.getElementById('editGroup').value
+                region: document.getElementById('editRegion').value
             }};
             
             try {{
@@ -1544,8 +1636,7 @@ def serve_web_ui(event):
                 water_wastewater: document.getElementById('newWaterWastewater').value,
                 weekly_rollup: document.getElementById('newWeeklyRollup').value,
                 alternate_email: document.getElementById('newAlternateEmail').value,
-                region: document.getElementById('newRegion').value,
-                group: document.getElementById('newGroup').value
+                region: document.getElementById('newRegion').value
             }};
             
             const response = await fetch(`${{API_URL}}/contacts`, {{
@@ -1578,7 +1669,6 @@ def serve_web_ui(event):
                 document.getElementById('newWeeklyRollup').value = '';
                 document.getElementById('newAlternateEmail').value = '';
                 document.getElementById('newRegion').value = '';
-                document.getElementById('newGroup').value = '';
             }}
         }}
         
@@ -2475,20 +2565,53 @@ def get_email_config(headers):
         print(f"Config retrieval error: {str(e)}")
         return {'statusCode': 500, 'headers': headers, 'body': json.dumps({'error': str(e)})}
 
-def get_contacts(headers):
-    """Get all contacts"""
-    response = contacts_table.scan()
-    contacts = []
-    for item in response['Items']:
-        contact = {}
-        for key, value in item.items():
-            if isinstance(value, Decimal):
-                contact[key] = int(value)
-            else:
-                contact[key] = value
-        contacts.append(contact)
+def get_contacts(headers, event=None):
+    """Get contacts with pagination support"""
+    try:
+        # Get pagination parameters from query string
+        query_params = event.get('queryStringParameters', {}) if event else {}
+        limit = int(query_params.get('limit', 25)) if query_params else 25
+        last_key_str = query_params.get('lastKey') if query_params else None
+        
+        # Build scan parameters
+        scan_params = {'Limit': limit}
+        
+        # Add ExclusiveStartKey if provided
+        if last_key_str:
+            try:
+                import json as json_lib
+                last_key = json_lib.loads(last_key_str)
+                scan_params['ExclusiveStartKey'] = last_key
+            except:
+                pass  # Invalid lastKey, ignore
+        
+        # Scan contacts table with pagination
+        response = contacts_table.scan(**scan_params)
+        
+        contacts = []
+        for item in response.get('Items', []):
+            contact = {}
+            for key, value in item.items():
+                if isinstance(value, Decimal):
+                    contact[key] = int(value)
+                else:
+                    contact[key] = value
+            contacts.append(contact)
+        
+        # Build response with pagination info
+        result = {
+            'contacts': contacts,
+            'count': len(contacts)
+        }
+        
+        # Include lastEvaluatedKey if there are more items
+        if 'LastEvaluatedKey' in response:
+            result['lastEvaluatedKey'] = response['LastEvaluatedKey']
+        
+        return {'statusCode': 200, 'headers': headers, 'body': json.dumps(result, cls=DecimalEncoder)}
     
-    return {'statusCode': 200, 'headers': headers, 'body': json.dumps({'contacts': contacts})}
+    except Exception as e:
+        return {'statusCode': 500, 'headers': headers, 'body': json.dumps({'error': str(e)})}
 
 def search_contacts(body, headers):
     """Search contacts by name in DynamoDB"""
