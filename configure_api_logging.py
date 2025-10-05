@@ -11,14 +11,21 @@ def configure_api_logging():
     # Get API Gateway
     apis = apigateway.get_rest_apis()
     api_id = None
+    api_name = 'bulk-email-api'
+    
     for api in apis['items']:
-        if api['name'] == 'vpc-smtp-bulk-email-api':
+        if api['name'] == api_name:
             api_id = api['id']
             break
     
     if not api_id:
-        print("API Gateway not found")
+        print(f"❌ API Gateway '{api_name}' not found")
+        print("\nAvailable APIs:")
+        for api in apis['items']:
+            print(f"  - {api['name']} (ID: {api['id']})")
         return
+    
+    print(f"✅ Found API Gateway: {api_name} (ID: {api_id})")
     
     # Create CloudWatch log group
     log_group_name = f'/aws/apigateway/{api_id}'
@@ -164,7 +171,7 @@ def configure_api_logging():
             mode='overwrite',
             body=json.dumps({
                 "swagger": "2.0",
-                "info": {"title": "vpc-smtp-bulk-email-api"},
+                "info": {"title": "bulk-email-api"},
                 "x-amazon-apigateway-request-validators": {},
                 "x-amazon-apigateway-gateway-responses": {},
                 "x-amazon-apigateway-policy": {},
@@ -191,10 +198,30 @@ def configure_api_logging():
     except Exception as e:
         print(f"X-Ray tracing error: {e}")
     
-    print(f"API Gateway logging configured for {api_id}")
-    print(f"Log group: {log_group_name}")
-    print("X-Ray tracing enabled")
-    print("Custom log format includes source IP and all context variables")
+    print("\n" + "="*80)
+    print("✅ API GATEWAY LOGGING CONFIGURED SUCCESSFULLY!")
+    print("="*80)
+    print(f"\nAPI ID:           {api_id}")
+    print(f"Log Group:        {log_group_name}")
+    print(f"Stage:            prod")
+    print(f"Log Level:        INFO")
+    print(f"Data Trace:       Enabled (full request/response)")
+    print(f"CloudWatch Logs:  Enabled")
+    print(f"X-Ray Tracing:    Enabled")
+    print(f"Metrics:          Enabled")
+    print("\n📊 Custom Log Format Includes:")
+    print("  - Source IP")
+    print("  - User Agent")
+    print("  - Request/Response details")
+    print("  - Latency metrics")
+    print("  - Integration status")
+    print("  - Error messages")
+    print("  - Cognito identity")
+    print("  - X-Ray trace ID")
+    print("\n🔍 View logs in CloudWatch:")
+    print(f"  AWS Console → CloudWatch → Log Groups → {log_group_name}")
+    print("="*80)
 
 if __name__ == "__main__":
+    print("\n🔧 Configuring API Gateway Logging...\n")
     configure_api_logging()
