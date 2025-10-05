@@ -1606,7 +1606,7 @@ def serve_web_ui(event):
                 if (result.success) {{
                     hideEditContact();
                     loadContacts(); // Refresh the contacts list
-                    loadGroupsFromDB(); // Refresh groups in case group changed
+                    // loadGroupsFromDB(); // Disabled - groups feature removed
                     alert('Contact updated successfully!');
                 }} else {{
                     alert('Error updating contact: ' + (result.error || 'Unknown error'));
@@ -1649,7 +1649,7 @@ def serve_web_ui(event):
             if (result.success) {{
                 hideAddContact();
                 loadContacts();
-                loadGroupsFromDB(); // Refresh groups in case new group added
+                // loadGroupsFromDB(); // Disabled - groups feature removed
                 // Clear form
                 document.getElementById('newEmail').value = '';
                 document.getElementById('newFirstName').value = '';
@@ -1941,7 +1941,7 @@ def serve_web_ui(event):
                 alert(message);
                 
             loadContacts();
-                loadGroupsFromDB(); // Refresh groups from uploaded contacts
+                // loadGroupsFromDB(); // Disabled - groups feature removed
                 
             }} catch (error) {{
                 console.error('CSV upload error:', error);
@@ -2454,7 +2454,7 @@ def serve_web_ui(event):
         window.onload = () => {{
             // Initialize UI and load configuration
             loadConfig();
-            loadGroupsFromDB();  // Load groups on page load
+            // loadGroupsFromDB();  // Disabled - groups feature removed
             loadUserName();  // Load saved user name from browser
             console.log('Web UI loaded successfully');
         }};
