@@ -79,6 +79,8 @@ def lambda_handler(event, context):
             return get_email_config(headers)
         elif path == '/contacts' and method == 'GET':
             return get_contacts(headers, event)
+        elif path == '/contacts/distinct' and method == 'GET':
+            return get_distinct_values(headers, event)
         elif path == '/contacts' and method == 'POST':
             return add_contact(body, headers)
         elif path == '/contacts' and method == 'PUT':
@@ -218,34 +220,34 @@ def serve_web_ui(event):
         .tab {{ 
             flex: 1; 
             padding: 16px 24px; 
-            background: linear-gradient(135deg, #cbd5e1, #94a3b8);
+            background: white;
             cursor: pointer; 
             text-align: center; 
             border-radius: 8px; 
             transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); 
             font-weight: 600; 
-            color: #1e293b;
+            color: #1e40af;
             position: relative;
             overflow: hidden;
             z-index: 10;
             pointer-events: auto;
             user-select: none;
-            border: 2px solid #94a3b8;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            border: 2px solid #3b82f6;
+            box-shadow: 0 2px 4px rgba(59, 130, 246, 0.1);
         }}
         .tab:hover {{ 
-            background: linear-gradient(135deg, #3b82f6, #2563eb); 
-            color: white;
+            background: linear-gradient(135deg, #dbeafe, #bfdbfe); 
+            color: #1e40af;
             transform: translateY(-1px);
             border-color: #2563eb;
-            box-shadow: 0 4px 8px rgba(59, 130, 246, 0.3);
+            box-shadow: 0 4px 8px rgba(59, 130, 246, 0.2);
         }}
         .tab.active {{ 
-            background: linear-gradient(135deg, #10b981, #059669); 
+            background: linear-gradient(135deg, #1e40af, #1e3a8a); 
             color: white; 
-            box-shadow: 0 6px 12px rgba(16, 185, 129, 0.4);
+            box-shadow: 0 6px 12px rgba(30, 64, 175, 0.4);
             transform: translateY(-2px);
-            border-color: #059669;
+            border-color: #1e3a8a;
         }}
         .tab.active::before {{
             content: '';
@@ -2826,13 +2828,82 @@ def serve_web_ui(event):
         let selectedFilterValues = {{}};  // {{filterType: [values]}}
         
         async function selectFilterType(filterType) {{
-            console.log('Filter type selected:', filterType);
-            currentFilterType = filterType;
+            console.log('Filter type selected:', filterType, 'Current type:', currentFilterType);
             
-            // Update button styles
+            // Allow toggling off by clicking the same button
+            if (currentFilterType === filterType && filterType !== '') {{
+                console.log('Toggling off current filter type');
+                currentFilterType = '';
+                document.getElementById('availableValuesArea').style.display = 'none';
+                updateButtonStyles('');
+                return;
+            }}
+            
+            currentFilterType = filterType;
+            updateButtonStyles(filterType);
+            
+            if (!filterType || filterType === '') {{
+                // "All" selected - hide available values area
+                document.getElementById('availableValuesArea').style.display = 'none';
+                return;
+            }}
+            
+            // Show loading message
+            const availableValuesList = document.getElementById('availableValuesList');
+            availableValuesList.innerHTML = '<div style="padding: 20px; text-align: center; color: #6b7280;"><span style="font-size: 14px;">⏳ Loading values from DynamoDB...</span></div>';
+            document.getElementById('availableCount').textContent = 'Querying database...';
+            document.getElementById('availableValuesArea').style.display = 'block';
+            
+            try {{
+                console.log(`Querying DynamoDB for distinct values of field: ${{filterType}}`);
+                
+                // Call the backend API to get distinct values from DynamoDB
+                const response = await fetch(`${{API_URL}}/contacts/distinct?field=${{encodeURIComponent(filterType)}}`);
+                
+                if (!response.ok) {{
+                    throw new Error(`HTTP ${{response.status}}: ${{response.statusText}}`);
+                }}
+                
+                const result = await response.json();
+                const distinctValues = result.values || [];
+                
+                console.log(`Received ${{distinctValues.length}} distinct values for ${{filterType}} from DynamoDB`);
+                
+                if (distinctValues.length === 0) {{
+                    availableValuesList.innerHTML = '<div style="padding: 20px; text-align: center; color: #9ca3af;"><span style="font-size: 13px;">No values found for this field</span></div>';
+                    document.getElementById('availableCount').textContent = 'No values available';
+                    return;
+                }}
+                
+                // Display available values as clickable buttons
+                availableValuesList.innerHTML = '';
+                
+                distinctValues.forEach(value => {{
+                    const btn = document.createElement('button');
+                    btn.className = 'available-value-btn';
+                    btn.textContent = value;
+                    btn.onclick = () => addFilterValue(filterType, value);
+                    btn.style.cssText = 'padding: 6px 12px; background: white; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 12px; cursor: pointer; transition: all 0.2s; color: #374151;';
+                    btn.onmouseover = () => {{ btn.style.background = '#eff6ff'; btn.style.borderColor = '#6366f1'; }};
+                    btn.onmouseout = () => {{ btn.style.background = 'white'; btn.style.borderColor = '#cbd5e1'; }};
+                    availableValuesList.appendChild(btn);
+                }});
+                
+                document.getElementById('availableCount').textContent = `${{distinctValues.length}} values available`;
+                
+            }} catch (error) {{
+                console.error('Error loading distinct values:', error);
+                availableValuesList.innerHTML = `<div style="padding: 20px; text-align: center; color: #ef4444;"><span style="font-size: 13px;">❌ Error loading values: ${{error.message}}</span></div>`;
+                document.getElementById('availableCount').textContent = 'Error loading values';
+            }}
+        }}
+        
+        function updateButtonStyles(filterType) {{
+            // Update button styles based on selected filter type
             document.querySelectorAll('.filter-type-btn').forEach(btn => {{
                 const btnFilter = btn.getAttribute('data-filter');
-                if (btnFilter === filterType) {{
+                if (btnFilter === filterType && filterType !== '') {{
+                    // Selected filter type (not "All")
                     btn.style.background = '#6366f1';
                     btn.style.borderColor = '#6366f1';
                     btn.style.color = 'white';
@@ -2842,50 +2913,12 @@ def serve_web_ui(event):
                     btn.style.borderColor = '#10b981';
                     btn.style.color = 'white';
                 }} else {{
+                    // Unselected buttons
                     btn.style.background = 'white';
                     btn.style.borderColor = '#e5e7eb';
                     btn.style.color = '#374151';
                 }}
             }});
-            
-            if (!filterType || filterType === '') {{
-                // "All" selected - hide available values area
-                document.getElementById('availableValuesArea').style.display = 'none';
-                return;
-            }}
-            
-            // Load contacts if not already loaded
-            if (allContacts.length === 0) {{
-                console.log('Loading contacts to get filter values...');
-                await loadContacts();
-            }}
-            
-            // Get unique values for the selected filter type
-            const distinctValues = [...new Set(
-                allContacts
-                    .map(c => c[filterType])
-                    .filter(v => v && v.trim() !== '')
-            )].sort();
-            
-            console.log(`Found ${{distinctValues.length}} distinct values for ${{filterType}}`);
-            
-            // Display available values as clickable buttons
-            const availableValuesList = document.getElementById('availableValuesList');
-            availableValuesList.innerHTML = '';
-            
-            distinctValues.forEach(value => {{
-                const btn = document.createElement('button');
-                btn.className = 'available-value-btn';
-                btn.textContent = value;
-                btn.onclick = () => addFilterValue(filterType, value);
-                btn.style.cssText = 'padding: 6px 12px; background: white; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 12px; cursor: pointer; transition: all 0.2s; color: #374151;';
-                btn.onmouseover = () => {{ btn.style.background = '#eff6ff'; btn.style.borderColor = '#6366f1'; }};
-                btn.onmouseout = () => {{ btn.style.background = 'white'; btn.style.borderColor = '#cbd5e1'; }};
-                availableValuesList.appendChild(btn);
-            }});
-            
-            document.getElementById('availableCount').textContent = `${{distinctValues.length}} values available`;
-            document.getElementById('availableValuesArea').style.display = 'block';
         }}
         
         function addFilterValue(filterType, value) {{
@@ -2975,8 +3008,8 @@ def serve_web_ui(event):
             selectedFilterValues = {{}};
             currentFilterType = '';
             
-            // Reset "All" button
-            selectFilterType('');
+            // Reset button styles to "All"
+            updateButtonStyles('');
             
             // Hide available values
             document.getElementById('availableValuesArea').style.display = 'none';
@@ -3164,6 +3197,79 @@ def get_contacts(headers, event=None):
     
     except Exception as e:
         print(f"Error in get_contacts: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return {'statusCode': 500, 'headers': headers, 'body': json.dumps({'error': str(e)})}
+
+def get_distinct_values(headers, event):
+    """Get distinct values for a specific field from DynamoDB"""
+    try:
+        # Get field name from query parameters
+        query_params = event.get('queryStringParameters') or {}
+        field_name = query_params.get('field')
+        
+        if not field_name:
+            return {'statusCode': 400, 'headers': headers, 'body': json.dumps({'error': 'field parameter is required'})}
+        
+        print(f"Getting distinct values for field: {field_name}")
+        
+        # Scan the entire table to get all values for the field
+        distinct_values = set()
+        last_evaluated_key = None
+        scan_count = 0
+        
+        while True:
+            scan_params = {
+                'ProjectionExpression': field_name,
+                'Select': 'SPECIFIC_ATTRIBUTES'
+            }
+            
+            if last_evaluated_key:
+                scan_params['ExclusiveStartKey'] = last_evaluated_key
+            
+            try:
+                response = contacts_table.scan(**scan_params)
+            except Exception as e:
+                # Field might not exist in schema, return empty
+                print(f"Error scanning for field {field_name}: {str(e)}")
+                return {'statusCode': 200, 'headers': headers, 'body': json.dumps({'values': [], 'count': 0})}
+            
+            # Extract values from items
+            for item in response.get('Items', []):
+                if field_name in item:
+                    value = item[field_name]
+                    # Convert Decimal to int/float if needed
+                    if isinstance(value, Decimal):
+                        value = int(value) if value % 1 == 0 else float(value)
+                    # Only add non-empty values
+                    if value is not None and str(value).strip() != '':
+                        distinct_values.add(str(value))
+            
+            scan_count += 1
+            print(f"Scan iteration {scan_count}: Found {len(response.get('Items', []))} items, {len(distinct_values)} distinct values so far")
+            
+            # Check if there are more items to scan
+            last_evaluated_key = response.get('LastEvaluatedKey')
+            if not last_evaluated_key:
+                break
+        
+        # Convert set to sorted list
+        values_list = sorted(list(distinct_values))
+        
+        print(f"Found {len(values_list)} distinct values for {field_name}")
+        
+        return {
+            'statusCode': 200,
+            'headers': headers,
+            'body': json.dumps({
+                'field': field_name,
+                'values': values_list,
+                'count': len(values_list)
+            })
+        }
+    
+    except Exception as e:
+        print(f"Error in get_distinct_values: {str(e)}")
         import traceback
         traceback.print_exc()
         return {'statusCode': 500, 'headers': headers, 'body': json.dumps({'error': str(e)})}
