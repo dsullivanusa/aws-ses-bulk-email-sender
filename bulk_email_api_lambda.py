@@ -3242,11 +3242,29 @@ def get_distinct_values(headers, event):
         # Map frontend field names to actual DynamoDB field names
         # Try multiple variations for case-insensitive matching
         field_variations = [
-            field_name_requested,  # Try as-is first
-            field_name_requested.capitalize(),  # Try capitalized (state -> State)
-            field_name_requested.upper(),  # Try uppercase (state -> STATE)
-            field_name_requested.lower(),  # Try lowercase (State -> state)
+            field_name_requested,  # Try as-is first (state)
+            field_name_requested.capitalize(),  # Try capitalized (State)
+            field_name_requested.upper(),  # Try uppercase (STATE)
+            field_name_requested.lower(),  # Try lowercase (state)
+            field_name_requested.title(),  # Try title case (State)
+            field_name_requested.replace('_', ''),  # Try without underscore (statename)
+            field_name_requested.replace('_', '').capitalize(),  # Try without underscore capitalized (Statename)
         ]
+        
+        # Add common field name variations
+        common_mappings = {{
+            'state': ['State', 'state', 'STATE', 'state_name', 'State_Name', 'stateName'],
+            'region': ['Region', 'region', 'REGION', 'region_name', 'Region_Name', 'regionName'],
+            'agency_name': ['Agency_Name', 'agency_name', 'AgencyName', 'agencyName', 'Agency', 'agency'],
+            'entity_type': ['Entity_Type', 'entity_type', 'EntityType', 'entityType', 'Entity', 'entity'],
+        }}
+        
+        if field_name_requested in common_mappings:
+            field_variations.extend(common_mappings[field_name_requested])
+        
+        # Remove duplicates while preserving order
+        seen = set()
+        field_variations = [x for x in field_variations if not (x in seen or seen.add(x))]
         
         # Scan the entire table to get all values for the field
         distinct_values = set()
@@ -3258,8 +3276,10 @@ def get_distinct_values(headers, event):
         for attempted_field in field_variations:
             try:
                 # Try a single scan with this field name
+                # Use ExpressionAttributeNames to handle reserved words like "state", "region", "name", etc.
                 test_scan = contacts_table.scan(
-                    ProjectionExpression=attempted_field,
+                    ProjectionExpression='#field',
+                    ExpressionAttributeNames={{'#field': attempted_field}},
                     Select='SPECIFIC_ATTRIBUTES',
                     Limit=1
                 )
@@ -3267,22 +3287,33 @@ def get_distinct_values(headers, event):
                 field_name = attempted_field
                 print(f"✓ Found field in DynamoDB as: {field_name}")
                 break
-            except Exception:
+            except Exception as e:
                 continue
         
         if not field_name:
             print(f"❌ Field '{field_name_requested}' not found in any variation")
+            print(f"Tried variations: {', '.join(field_variations[:10])}")  # Show first 10
+            
+            # Get a sample item to show available fields
+            sample_scan = contacts_table.scan(Limit=1)
+            available_fields = []
+            if sample_scan.get('Items'):
+                available_fields = list(sample_scan['Items'][0].keys())
+            
+            print(f"Available fields in table: {', '.join(sorted(available_fields[:20]))}")
+            
             return {'statusCode': 200, 'headers': headers, 'body': json.dumps({
                 'field': field_name_requested,
                 'values': [],
                 'count': 0,
-                'error': f'Field not found. Tried: {", ".join(field_variations)}'
+                'error': f'Field not found. Tried: {", ".join(field_variations[:5])}... Available fields: {", ".join(sorted(available_fields[:10]))}'
             })}
         
         # Now scan with the correct field name
         while True:
             scan_params = {
-                'ProjectionExpression': field_name,
+                'ProjectionExpression': '#field',
+                'ExpressionAttributeNames': {'#field': field_name},
                 'Select': 'SPECIFIC_ATTRIBUTES'
             }
             
