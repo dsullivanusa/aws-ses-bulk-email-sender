@@ -215,29 +215,34 @@ def serve_web_ui(event):
         .tab {{ 
             flex: 1; 
             padding: 16px 24px; 
-            background: transparent; 
+            background: linear-gradient(135deg, #cbd5e1, #94a3b8);
             cursor: pointer; 
             text-align: center; 
             border-radius: 8px; 
             transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); 
             font-weight: 600; 
-            color: var(--gray-600);
+            color: #1e293b;
             position: relative;
             overflow: hidden;
             z-index: 10;
             pointer-events: auto;
             user-select: none;
+            border: 2px solid #94a3b8;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
         }}
         .tab:hover {{ 
-            background: rgba(99, 102, 241, 0.1); 
-            color: var(--primary-color);
+            background: linear-gradient(135deg, #3b82f6, #2563eb); 
+            color: white;
             transform: translateY(-1px);
+            border-color: #2563eb;
+            box-shadow: 0 4px 8px rgba(59, 130, 246, 0.3);
         }}
         .tab.active {{ 
-            background: linear-gradient(135deg, var(--primary-color), var(--primary-dark)); 
+            background: linear-gradient(135deg, #10b981, #059669); 
             color: white; 
-            box-shadow: var(--shadow-lg);
+            box-shadow: 0 6px 12px rgba(16, 185, 129, 0.4);
             transform: translateY(-2px);
+            border-color: #059669;
         }}
         .tab.active::before {{
             content: '';
@@ -604,15 +609,27 @@ def serve_web_ui(event):
         #contactsTable th {{
             position: sticky;
             top: 0;
-            background: #f3f4f6;
+            background: linear-gradient(135deg, #1e40af, #1e3a8a);
+            color: white;
             z-index: 10;
-            font-weight: 600;
-            padding: 12px 8px;
-            border-bottom: 2px solid #e5e7eb;
+            font-weight: 700;
+            font-size: 13px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            padding: 14px 10px;
+            border-bottom: 3px solid #3b82f6;
+            border-right: 1px solid #1e3a8a;
+            text-shadow: 0 1px 2px rgba(0,0,0,0.3);
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
         }}
         #contactsTable td {{
             border-bottom: 1px solid #e5e7eb;
-            padding: 4px 8px;
+            border-right: 1px solid #f3f4f6;
+            padding: 8px 10px;
+            background: white;
+        }}
+        #contactsTable tr:hover td {{
+            background: #eff6ff;
         }}
     </style>
 </head>
@@ -858,7 +875,7 @@ def serve_web_ui(event):
                             <th style="min-width: 130px;">Weekly Rollup</th>
                             <th style="min-width: 200px;">Alt Email</th>
                             <th style="min-width: 100px;">Region</th>
-                            <th style="min-width: 100px; position: sticky; right: 0; background: white;">Actions</th>
+                            <th style="min-width: 100px; position: sticky; right: 0; background: linear-gradient(135deg, #1e40af, #1e3a8a); box-shadow: -2px 0 4px rgba(0,0,0,0.2);">Actions</th>
                         </tr>
                 </thead>
                 <tbody id="contactsBody"></tbody>
@@ -1583,7 +1600,7 @@ def serve_web_ui(event):
                 const row = tbody.insertRow();
                 row.setAttribute('data-email', contact.email);
                 row.innerHTML = `
-                    <td style="background: #f9fafb; font-weight: 500;">${{contact.email || ''}}</td>
+                    <td style="background: #dbeafe; font-weight: 600; color: #1e40af; border-right: 2px solid #60a5fa;">${{contact.email || ''}}</td>
                     <td contenteditable="true" data-field="first_name" class="editable-cell">${{contact.first_name || ''}}</td>
                     <td contenteditable="true" data-field="last_name" class="editable-cell">${{contact.last_name || ''}}</td>
                     <td contenteditable="true" data-field="title" class="editable-cell">${{contact.title || ''}}</td>
@@ -1601,8 +1618,8 @@ def serve_web_ui(event):
                     <td contenteditable="true" data-field="weekly_rollup" class="editable-cell yes-no-cell">${{contact.weekly_rollup || ''}}</td>
                     <td contenteditable="true" data-field="alternate_email" class="editable-cell">${{contact.alternate_email || ''}}</td>
                     <td contenteditable="true" data-field="region" class="editable-cell">${{contact.region || ''}}</td>
-                    <td style="position: sticky; right: 0; background: white;">
-                        <button onclick="saveContactRow('${{contact.email}}')" class="btn-success" style="padding: 4px 8px; font-size: 12px;">💾 Save</button>
+                    <td style="position: sticky; right: 0; background: #f8fafc; border-left: 2px solid #cbd5e1; box-shadow: -2px 0 4px rgba(0,0,0,0.05);">
+                        <button onclick="saveContactRow('${{contact.email}}')" class="btn-success" style="padding: 6px 12px; font-size: 12px; font-weight: 600;">💾 Save</button>
                     </td>
                 `;
                 
