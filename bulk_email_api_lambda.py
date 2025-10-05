@@ -120,6 +120,9 @@ def serve_web_ui(event):
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>CISA Email Campaign Management System</title>
     
+    <!-- Favicon to prevent 403 error -->
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📧</text></svg>">
+    
     <!-- Quill Rich Text Editor -->
     <link href="https://cdn.quilljs.com/1.3.6/quill.snow.css" rel="stylesheet">
     <script src="https://cdn.quilljs.com/1.3.6/quill.js"></script>
@@ -1626,7 +1629,8 @@ def serve_web_ui(event):
                     <td contenteditable="true" data-field="alternate_email" class="editable-cell">${{contact.alternate_email || ''}}</td>
                     <td contenteditable="true" data-field="region" class="editable-cell">${{contact.region || ''}}</td>
                     <td style="position: sticky; right: 0; background: #f8fafc; border-left: 2px solid #cbd5e1; box-shadow: -2px 0 4px rgba(0,0,0,0.05);">
-                        <button onclick="saveContactRow('${{contact.email}}')" class="btn-success" style="padding: 6px 12px; font-size: 12px; font-weight: 600;">💾 Save</button>
+                        <button onclick="saveContactRow('${{contact.email}}')" class="btn-success" style="padding: 6px 12px; font-size: 12px; font-weight: 600; margin-right: 5px;">💾 Save</button>
+                        <button onclick="deleteContactRow('${{contact.contact_id || contact.email}}')" class="btn-danger" style="padding: 6px 12px; font-size: 12px; font-weight: 600; background: #ef4444;">🗑️ Delete</button>
                     </td>
                 `;
                 
@@ -1801,6 +1805,47 @@ def serve_web_ui(event):
                     saveBtn.textContent = '💾 Save';
                     saveBtn.disabled = false;
                 }}
+            }}
+        }}
+        
+        async function deleteContactRow(contactId) {{
+            try {{
+                // Confirm deletion
+                if (!confirm('Are you sure you want to delete this contact? This action cannot be undone.')) {{
+                    return;
+                }}
+                
+                console.log('Deleting contact:', contactId);
+                
+                const response = await fetch(`${{apiBaseUrl}}/contacts?contact_id=${{encodeURIComponent(contactId)}}`, {{
+                    method: 'DELETE',
+                    headers: {{
+                        'Content-Type': 'application/json'
+                    }}
+                }});
+                
+                console.log('Delete response status:', response.status);
+                
+                if (response.ok) {{
+                    alert('Contact deleted successfully!');
+                    // Remove the row from the table
+                    const row = document.querySelector(`tr[data-contact-id="${{contactId}}"]`);
+                    if (row) {{
+                        row.remove();
+                    }}
+                    // Update the record count
+                    const recordCount = document.getElementById('recordCount');
+                    if (recordCount) {{
+                        const currentCount = parseInt(recordCount.textContent.match(/\\d+/)[0] || 0);
+                        recordCount.textContent = `${{currentCount - 1}} records`;
+                    }}
+                }} else {{
+                    const errorData = await response.json();
+                    alert(`Failed to delete contact: ${{errorData.error || 'Unknown error'}}`);
+                }}
+            }} catch (error) {{
+                console.error('Error deleting contact:', error);
+                alert('Failed to delete contact. Please try again.');
             }}
         }}
         
@@ -3332,10 +3377,17 @@ def update_contact(body, headers):
 def delete_contact(event, headers):
     """Delete contact"""
     try:
-        email = event['queryStringParameters']['email']
-        contacts_table.delete_item(Key={'email': email})
+        # Get contact_id from query parameters
+        contact_id = event['queryStringParameters'].get('contact_id')
+        
+        if not contact_id:
+            return {'statusCode': 400, 'headers': headers, 'body': json.dumps({'error': 'contact_id is required'})}
+        
+        contacts_table.delete_item(Key={'contact_id': contact_id})
+        print(f"Deleted contact: {contact_id}")
         return {'statusCode': 200, 'headers': headers, 'body': json.dumps({'success': True})}
     except Exception as e:
+        print(f"Error deleting contact: {str(e)}")
         return {'statusCode': 500, 'headers': headers, 'body': json.dumps({'error': str(e)})}
 
 def send_campaign(body, headers, event=None):
