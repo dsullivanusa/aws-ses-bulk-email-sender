@@ -31,6 +31,10 @@ ATTACHMENTS_BUCKET = 'jcdc-ses-contact-list'
 # 3. Make sure your custom domain routes to this Lambda function
 # If not set, it will automatically use the API Gateway URL
 CUSTOM_API_URL = os.environ.get('CUSTOM_API_URL', None)
+###*** for NOW
+CUSTOM_API_URL = None
+### *** for NOW
+
 
 # Cognito configuration (optional authentication)
 def load_cognito_config():
@@ -2751,9 +2755,16 @@ def get_contacts(headers, event=None):
     """Get contacts with pagination support"""
     try:
         # Get pagination parameters from query string
-        query_params = event.get('queryStringParameters', {}) if event else {}
-        limit = int(query_params.get('limit', 25)) if query_params else 25
-        last_key_str = query_params.get('lastKey') if query_params else None
+        query_params = None
+        if event:
+            query_params = event.get('queryStringParameters')
+        
+        # Handle None query params
+        if query_params is None:
+            query_params = {}
+            
+        limit = int(query_params.get('limit', 25)) if query_params.get('limit') else 25
+        last_key_str = query_params.get('lastKey') if query_params.get('lastKey') else None
         
         # Build scan parameters
         scan_params = {'Limit': limit}
@@ -2788,11 +2799,21 @@ def get_contacts(headers, event=None):
         
         # Include lastEvaluatedKey if there are more items
         if 'LastEvaluatedKey' in response:
-            result['lastEvaluatedKey'] = response['LastEvaluatedKey']
+            # Convert Decimal types in lastEvaluatedKey
+            last_key = {}
+            for key, value in response['LastEvaluatedKey'].items():
+                if isinstance(value, Decimal):
+                    last_key[key] = int(value) if value % 1 == 0 else float(value)
+                else:
+                    last_key[key] = value
+            result['lastEvaluatedKey'] = last_key
         
         return {'statusCode': 200, 'headers': headers, 'body': json.dumps(result, cls=DecimalEncoder)}
     
     except Exception as e:
+        print(f"Error in get_contacts: {str(e)}")
+        import traceback
+        traceback.print_exc()
         return {'statusCode': 500, 'headers': headers, 'body': json.dumps({'error': str(e)})}
 
 def search_contacts(body, headers):
