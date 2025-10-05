@@ -127,10 +127,6 @@ def serve_web_ui(event):
     <link href="https://cdn.quilljs.com/1.3.6/quill.snow.css" rel="stylesheet">
     <script src="https://cdn.quilljs.com/1.3.6/quill.js"></script>
     
-    <!-- Choices.js for advanced select dropdowns -->
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/choices.js/public/assets/styles/choices.min.css">
-    <script src="https://cdn.jsdelivr.net/npm/choices.js/public/assets/scripts/choices.min.js"></script>
-    
     <style>
         /* Modern CSS Variables for Consistent Theming */
         :root {{
@@ -639,58 +635,39 @@ def serve_web_ui(event):
             background: #eff6ff;
         }}
         
-        /* Choices.js Custom Styling */
-        .choices {{
-            margin-bottom: 0;
-        }}
-        .choices__inner {{
-            background: #f9fafb;
-            border: 2px solid #e5e7eb;
-            border-radius: 8px;
-            padding: 8px 12px;
-            min-height: 44px;
-            font-size: 14px;
+        /* Filter Type Button Styling */
+        .filter-type-btn {{
             transition: all 0.2s ease;
+            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
         }}
-        .choices__inner:focus, .choices.is-focused .choices__inner {{
-            border-color: #6366f1;
-            background: white;
-            box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+        .filter-type-btn:hover {{
+            transform: translateY(-1px);
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
         }}
-        .choices__list--multiple .choices__item {{
-            background: #6366f1;
-            border: 1px solid #4f46e5;
-            border-radius: 6px;
-            padding: 4px 10px;
-            margin-right: 5px;
-            margin-bottom: 3px;
-            font-size: 13px;
+        .filter-type-btn:active {{
+            transform: translateY(0);
         }}
-        .choices__list--multiple .choices__item.is-highlighted {{
-            background: #4f46e5;
+        
+        /* Available Value Button Styling */
+        .available-value-btn:hover {{
+            transform: translateY(-1px);
+            box-shadow: 0 2px 4px rgba(99, 102, 241, 0.2);
         }}
-        .choices__list--dropdown {{
-            border: 2px solid #e5e7eb;
-            border-radius: 8px;
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-            margin-top: 4px;
-            z-index: 1000;
+        
+        /* Filter Tags Animation */
+        @keyframes slideIn {{
+            from {{
+                opacity: 0;
+                transform: translateX(-10px);
+            }}
+            to {{
+                opacity: 1;
+                transform: translateX(0);
+            }}
         }}
-        .choices__list--dropdown .choices__item--selectable {{
-            padding: 10px 14px;
-            font-size: 14px;
-        }}
-        .choices__list--dropdown .choices__item--selectable.is-highlighted {{
-            background: #eff6ff;
-            color: #1e40af;
-        }}
-        .choices[data-type*="select-multiple"] .choices__button {{
-            border-left: 1px solid rgba(255, 255, 255, 0.3);
-            margin-left: 6px;
-            padding-left: 8px;
-        }}
-        .choices__placeholder {{
-            opacity: 0.6;
+        
+        #selectedValuesTags > div {{
+            animation: slideIn 0.3s ease;
         }}
     </style>
 </head>
@@ -727,37 +704,74 @@ def serve_web_ui(event):
         <div id="contacts" class="tab-content">
             <h2>👥 Contact Management</h2>
             <div class="form-group">
-                <label>🔍 Contact Filter:</label>
-                <div style="display: grid; grid-template-columns: 1fr 2fr; gap: 15px; align-items: start;">
-                    <div>
-                        <label for="filterTypeChoice" style="display: block; margin-bottom: 5px; font-size: 13px; font-weight: 600; color: #374151;">Filter Type:</label>
-                        <select id="filterTypeChoice" name="filterType">
-                            <option value="">All Contacts</option>
-                            <option value="entity_type">Entity Type</option>
-                            <option value="state">State</option>
-                            <option value="agency_name">Agency</option>
-                            <option value="sector">Sector</option>
-                            <option value="subsection">Subsection</option>
-                            <option value="ms_isac_member">MS-ISAC Member</option>
-                            <option value="soc_call">SOC Call</option>
-                            <option value="fusion_center">Fusion Center</option>
-                            <option value="k12">K-12</option>
-                            <option value="water_wastewater">Water/Wastewater</option>
-                            <option value="weekly_rollup">Weekly Rollup</option>
-                            <option value="region">Region</option>
-                        </select>
-                    </div>
-                    <div>
-                        <label for="filterValueChoice" style="display: block; margin-bottom: 5px; font-size: 13px; font-weight: 600; color: #374151;">Filter Values:</label>
-                        <select id="filterValueChoice" name="filterValue" multiple>
-                            <option value="" disabled>Select a filter type first</option>
-                        </select>
-                        <small style="display: block; margin-top: 8px; color: #6b7280;" id="filterCount"></small>
+                <label style="font-size: 16px; font-weight: 700; color: #1f2937; margin-bottom: 12px; display: block;">🔍 Contact Filter</label>
+                
+                <!-- Filter Type Selection (Buttons/Checkboxes) -->
+                <div style="margin-bottom: 15px;">
+                    <label style="display: block; margin-bottom: 8px; font-size: 13px; font-weight: 600; color: #374151;">Select Filter Category:</label>
+                    <div id="filterTypeButtons" style="display: flex; flex-wrap: wrap; gap: 8px;">
+                        <button class="filter-type-btn" data-filter="" onclick="selectFilterType('')" style="padding: 8px 16px; border: 2px solid #10b981; background: #10b981; color: white; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.2s;">
+                            ✅ All
+                        </button>
+                        <button class="filter-type-btn" data-filter="entity_type" onclick="selectFilterType('entity_type')" style="padding: 8px 16px; border: 2px solid #e5e7eb; background: white; color: #374151; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.2s;">
+                            Entity Type
+                        </button>
+                        <button class="filter-type-btn" data-filter="state" onclick="selectFilterType('state')" style="padding: 8px 16px; border: 2px solid #e5e7eb; background: white; color: #374151; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.2s;">
+                            State
+                        </button>
+                        <button class="filter-type-btn" data-filter="agency_name" onclick="selectFilterType('agency_name')" style="padding: 8px 16px; border: 2px solid #e5e7eb; background: white; color: #374151; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.2s;">
+                            Agency
+                        </button>
+                        <button class="filter-type-btn" data-filter="sector" onclick="selectFilterType('sector')" style="padding: 8px 16px; border: 2px solid #e5e7eb; background: white; color: #374151; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.2s;">
+                            Sector
+                        </button>
+                        <button class="filter-type-btn" data-filter="subsection" onclick="selectFilterType('subsection')" style="padding: 8px 16px; border: 2px solid #e5e7eb; background: white; color: #374151; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.2s;">
+                            Sub-section
+                        </button>
+                        <button class="filter-type-btn" data-filter="ms_isac_member" onclick="selectFilterType('ms_isac_member')" style="padding: 8px 16px; border: 2px solid #e5e7eb; background: white; color: #374151; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.2s;">
+                            MS-ISAC Member
+                        </button>
+                        <button class="filter-type-btn" data-filter="soc_call" onclick="selectFilterType('soc_call')" style="padding: 8px 16px; border: 2px solid #e5e7eb; background: white; color: #374151; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.2s;">
+                            SOC Call
+                        </button>
+                        <button class="filter-type-btn" data-filter="fusion_center" onclick="selectFilterType('fusion_center')" style="padding: 8px 16px; border: 2px solid #e5e7eb; background: white; color: #374151; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.2s;">
+                            Fusion Center
+                        </button>
+                        <button class="filter-type-btn" data-filter="k12" onclick="selectFilterType('k12')" style="padding: 8px 16px; border: 2px solid #e5e7eb; background: white; color: #374151; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.2s;">
+                            K-12
+                        </button>
+                        <button class="filter-type-btn" data-filter="water_wastewater" onclick="selectFilterType('water_wastewater')" style="padding: 8px 16px; border: 2px solid #e5e7eb; background: white; color: #374151; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.2s;">
+                            Water/Wastewater
+                        </button>
+                        <button class="filter-type-btn" data-filter="weekly_rollup" onclick="selectFilterType('weekly_rollup')" style="padding: 8px 16px; border: 2px solid #e5e7eb; background: white; color: #374151; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.2s;">
+                            Weekly Rollup
+                        </button>
+                        <button class="filter-type-btn" data-filter="region" onclick="selectFilterType('region')" style="padding: 8px 16px; border: 2px solid #e5e7eb; background: white; color: #374151; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.2s;">
+                            Region
+                        </button>
                     </div>
                 </div>
-                <div style="margin-top: 12px;">
-                    <button onclick="applyContactFilter()" class="btn-primary" style="padding: 8px 16px; font-weight: 600;">🔍 Apply Filter</button>
-                    <button onclick="clearContactFilter()" class="btn-secondary" style="padding: 8px 16px; font-weight: 600; background: #6b7280; margin-left: 10px;">🔄 Clear Filter</button>
+                
+                <!-- Available Values Area (shown when a filter type is selected) -->
+                <div id="availableValuesArea" style="display: none; margin-bottom: 15px;">
+                    <label style="display: block; margin-bottom: 8px; font-size: 13px; font-weight: 600; color: #374151;">Available Values (click to add):</label>
+                    <div id="availableValuesList" style="max-height: 200px; overflow-y: auto; padding: 12px; background: #f9fafb; border: 2px solid #e5e7eb; border-radius: 8px; display: flex; flex-wrap: wrap; gap: 6px;">
+                        <!-- Dynamic value buttons will appear here -->
+                    </div>
+                    <small id="availableCount" style="display: block; margin-top: 6px; color: #6b7280;"></small>
+                </div>
+                
+                <!-- Selected Filter Values (tags with remove buttons) -->
+                <div id="selectedValuesArea" style="margin-bottom: 15px;">
+                    <label style="display: block; margin-bottom: 8px; font-size: 13px; font-weight: 600; color: #374151;">Filter Values:</label>
+                    <div id="selectedValuesTags" style="min-height: 44px; padding: 10px; background: white; border: 2px solid #e5e7eb; border-radius: 8px; display: flex; flex-wrap: wrap; gap: 8px; align-items: center;">
+                        <small style="color: #9ca3af; font-style: italic;">No filters selected - showing all contacts</small>
+                    </div>
+                </div>
+                
+                <div style="display: flex; gap: 10px;">
+                    <button onclick="applyContactFilter()" class="btn-primary" style="padding: 10px 20px; font-weight: 600; font-size: 14px;">🔍 Apply Filter</button>
+                    <button onclick="clearAllFilters()" class="btn-secondary" style="padding: 10px 20px; font-weight: 600; font-size: 14px; background: #6b7280;">🔄 Clear All</button>
                 </div>
             </div>
             <button onclick="loadContacts()">🔄 Load Contacts</button>
@@ -1364,144 +1378,69 @@ def serve_web_ui(event):
             }}
         }}
         
-        async function loadFilterValuesForChoices(filterType) {{
-            console.log('Loading filter values for:', filterType);
-            
-            if (!filterType || filterType === '') {{
-                // No filter type selected - disable and clear value dropdown
-                if (filterValueChoice) {{
-                    filterValueChoice.clearStore();
-                    filterValueChoice.disable();
-                }}
-                document.getElementById('filterCount').textContent = '';
-                return;
-            }}
-            
-            // Auto-load contacts if not already loaded
-            if (allContacts.length === 0) {{
-                console.log('Contacts not loaded yet, loading now...');
-                await loadContacts();
-            }}
-            
-            // Get distinct values for selected field from loaded contacts
-            const distinctValues = [...new Set(
-                allContacts
-                    .map(c => c[filterType])
-                    .filter(v => v && v.trim() !== '')
-            )].sort();
-            
-            console.log(`Found ${{distinctValues.length}} distinct values for ${{filterType}}`);
-            
-            // Clear and populate the filter value dropdown
-            if (filterValueChoice) {{
-                filterValueChoice.clearStore();
-                filterValueChoice.setChoices(
-                    distinctValues.map(value => ({{
-                        value: value,
-                        label: value,
-                        selected: false
-                    }})),
-                    'value',
-                    'label',
-                    true
-                );
-                filterValueChoice.enable();
-            }}
-            
-            document.getElementById('filterCount').textContent = `${{distinctValues.length}} values available`;
-        }}
-        
         async function loadContactsWithFilter() {{
-            // This function is kept for compatibility but now uses Choices.js
-            const filterType = filterTypeChoice ? filterTypeChoice.getValue(true) : '';
-            const selectedValues = filterValueChoice ? filterValueChoice.getValue(true) : [];
-            
-            if (!filterType || selectedValues.length === 0) {{
-                // No filter active - load all contacts
-                await loadContacts();
-                return;
-            }}
-            
-            try {{
-                console.log(`Querying DynamoDB for ${{filterType}} IN [${{selectedValues.join(', ')}}]...`);
-                
-                // Load all contacts from DynamoDB
-                const response = await fetch(`${{API_URL}}/contacts`);
-                
-                if (response.ok) {{
-                    const result = await response.json();
-                    allContacts = result.contacts || [];
-                    
-                    // Filter based on selection
-                    const filteredContacts = allContacts.filter(contact => 
-                        contact[filterType] && selectedValues.includes(contact[filterType])
-                    );
-                    
-                    console.log(`Loaded ${{allContacts.length}} total contacts, ${{filteredContacts.length}} match filter`);
-                    
-                    updateFilterCount();
-                    displayContacts(filteredContacts);
-                }} else {{
-                    console.error('Failed to load contacts:', response.status);
-                }}
-            }} catch (error) {{
-                console.error('Error loading contacts with filter:', error);
-            }}
+            // Legacy function - now just loads all contacts and applies filter
+            await loadContacts();
+            await applyContactFilter();
         }}
         
         async function applyContactFilter() {{
-            console.log('Applying contact filter with Choices.js...');
+            console.log('Applying contact filter...', selectedFilterValues);
             
             // Auto-load contacts if not already loaded
             if (allContacts.length === 0) {{
                 console.log('Auto-loading contacts for filter...');
                 await loadContacts();
-                return; // loadContacts will call applyContactFilter when done
+                return;
             }}
-            
-            // Get selected filter type and values from Choices.js
-            const filterType = filterTypeChoice ? filterTypeChoice.getValue(true) : '';
-            const selectedValues = filterValueChoice ? filterValueChoice.getValue(true) : [];
             
             let filteredContacts = allContacts;
             
-            // Apply filter if type and values are selected
-            if (filterType && selectedValues.length > 0) {{
-                filteredContacts = filteredContacts.filter(contact => 
-                    contact[filterType] && selectedValues.includes(contact[filterType])
-                );
+            // Check if any filters are selected
+            const hasFilters = Object.keys(selectedFilterValues).length > 0;
+            
+            if (hasFilters) {{
+                // Apply all selected filters (AND logic across filter types)
+                filteredContacts = allContacts.filter(contact => {{
+                    // Contact must match ALL filter types that have selected values
+                    for (const [filterType, values] of Object.entries(selectedFilterValues)) {{
+                        if (values && values.length > 0) {{
+                            const contactValue = contact[filterType];
+                            // If contact doesn't have a value or it's not in selected values, exclude it
+                            if (!contactValue || !values.includes(contactValue)) {{
+                                return false;
+                            }}
+                        }}
+                    }}
+                    return true;
+                }});
                 
-                console.log(`Filtered by ${{filterType}} IN [${{selectedValues.join(', ')}}]: ${{filteredContacts.length}} contacts`);
-                document.getElementById('filterCount').textContent = `Showing ${{filteredContacts.length}} of ${{allContacts.length}} contacts`;
-            }} else if (!filterType || filterType === '') {{
-                // Show all contacts when no filter type selected
-                console.log(`Showing all contacts: ${{filteredContacts.length}}`);
-                document.getElementById('filterCount').textContent = '';
+                console.log(`Filtered contacts: ${{filteredContacts.length}} of ${{allContacts.length}}`);
+                
+                // Update status message
+                const filterCount = Object.values(selectedFilterValues).reduce((sum, vals) => sum + vals.length, 0);
+                const statusMsg = document.createElement('small');
+                statusMsg.style.cssText = 'color: #059669; font-weight: 600;';
+                statusMsg.textContent = `Showing ${{filteredContacts.length}} of ${{allContacts.length}} contacts (${{filterCount}} filter(s) applied)`;
+                
+                const tagsContainer = document.getElementById('selectedValuesTags');
+                const existingStatus = tagsContainer.querySelector('.filter-status');
+                if (existingStatus) existingStatus.remove();
+                
+                statusMsg.className = 'filter-status';
+                tagsContainer.appendChild(statusMsg);
             }} else {{
-                // Filter type selected but no values selected - show all
-                console.log('Filter type selected but no values selected - showing all');
-                document.getElementById('filterCount').textContent = `Showing all ${{allContacts.length}} contacts`;
+                // No filters selected - show all
+                console.log('No filters selected - showing all contacts');
             }}
             
             displayContacts(filteredContacts);
-        }}
-        
-        function clearContactFilter() {{
-            console.log('Clearing contact filter...');
             
-            // Clear Choices.js selections
-            if (filterTypeChoice) {{
-                filterTypeChoice.setChoiceByValue('');
+            // Reset pagination
+            if (typeof paginationState !== 'undefined') {{
+                paginationState.currentPage = 1;
+                paginationState.lastKeys = [null];
             }}
-            if (filterValueChoice) {{
-                filterValueChoice.clearStore();
-                filterValueChoice.disable();
-            }}
-            
-            document.getElementById('filterCount').textContent = '';
-            
-            // Show all contacts
-            displayContacts(allContacts);
         }}
         
         
@@ -1532,15 +1471,8 @@ def serve_web_ui(event):
         }}
         
         function updateFilterCount() {{
-            // Updated for Choices.js - count is now handled in applyContactFilter
-            const filterCount = document.getElementById('filterCount');
-            const selectedValues = filterValueChoice ? filterValueChoice.getValue(true) : [];
-            
-            if (selectedValues.length > 0) {{
-                filterCount.textContent = `${{selectedValues.length}} filter value(s) selected`;
-            }} else {{
-                filterCount.textContent = '';
-            }}
+            // Legacy function - filter count is now displayed in the tags area
+            // This is kept for compatibility with old code
         }}
         
         async function searchContactsByName() {{
@@ -2889,47 +2821,171 @@ def serve_web_ui(event):
             }}
         }}
         
-        // Initialize Choices.js for contact filters
-        let filterTypeChoice = null;
-        let filterValueChoice = null;
+        // Contact filter state
+        let currentFilterType = '';
+        let selectedFilterValues = {{}};  // {{filterType: [values]}}
         
-        function initializeChoicesJS() {{
-            // Initialize Filter Type dropdown
-            const filterTypeElement = document.getElementById('filterTypeChoice');
-            if (filterTypeElement && !filterTypeChoice) {{
-                filterTypeChoice = new Choices(filterTypeElement, {{
-                    searchEnabled: false,
-                    itemSelectText: '',
-                    shouldSort: false,
-                    placeholder: true,
-                    placeholderValue: 'Select a filter type'
-                }});
-                
-                // Listen for changes
-                filterTypeElement.addEventListener('change', function(event) {{
-                    const selectedFilter = event.detail.value;
-                    console.log('Filter type changed to:', selectedFilter);
-                    loadFilterValuesForChoices(selectedFilter);
-                }});
+        async function selectFilterType(filterType) {{
+            console.log('Filter type selected:', filterType);
+            currentFilterType = filterType;
+            
+            // Update button styles
+            document.querySelectorAll('.filter-type-btn').forEach(btn => {{
+                const btnFilter = btn.getAttribute('data-filter');
+                if (btnFilter === filterType) {{
+                    btn.style.background = '#6366f1';
+                    btn.style.borderColor = '#6366f1';
+                    btn.style.color = 'white';
+                }} else if (filterType === '' && btnFilter === '') {{
+                    // "All" button selected
+                    btn.style.background = '#10b981';
+                    btn.style.borderColor = '#10b981';
+                    btn.style.color = 'white';
+                }} else {{
+                    btn.style.background = 'white';
+                    btn.style.borderColor = '#e5e7eb';
+                    btn.style.color = '#374151';
+                }}
+            }});
+            
+            if (!filterType || filterType === '') {{
+                // "All" selected - hide available values area
+                document.getElementById('availableValuesArea').style.display = 'none';
+                return;
             }}
             
-            // Initialize Filter Value dropdown (multi-select)
-            const filterValueElement = document.getElementById('filterValueChoice');
-            if (filterValueElement && !filterValueChoice) {{
-                filterValueChoice = new Choices(filterValueElement, {{
-                    removeItemButton: true,
-                    searchEnabled: true,
-                    itemSelectText: '',
-                    shouldSort: false,
-                    placeholder: true,
-                    placeholderValue: 'Select filter values',
-                    noResultsText: 'No values found',
-                    noChoicesText: 'No values available'
-                }});
-                
-                // Initially disable until a filter type is selected
-                filterValueChoice.disable();
+            // Load contacts if not already loaded
+            if (allContacts.length === 0) {{
+                console.log('Loading contacts to get filter values...');
+                await loadContacts();
             }}
+            
+            // Get unique values for the selected filter type
+            const distinctValues = [...new Set(
+                allContacts
+                    .map(c => c[filterType])
+                    .filter(v => v && v.trim() !== '')
+            )].sort();
+            
+            console.log(`Found ${{distinctValues.length}} distinct values for ${{filterType}}`);
+            
+            // Display available values as clickable buttons
+            const availableValuesList = document.getElementById('availableValuesList');
+            availableValuesList.innerHTML = '';
+            
+            distinctValues.forEach(value => {{
+                const btn = document.createElement('button');
+                btn.className = 'available-value-btn';
+                btn.textContent = value;
+                btn.onclick = () => addFilterValue(filterType, value);
+                btn.style.cssText = 'padding: 6px 12px; background: white; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 12px; cursor: pointer; transition: all 0.2s; color: #374151;';
+                btn.onmouseover = () => {{ btn.style.background = '#eff6ff'; btn.style.borderColor = '#6366f1'; }};
+                btn.onmouseout = () => {{ btn.style.background = 'white'; btn.style.borderColor = '#cbd5e1'; }};
+                availableValuesList.appendChild(btn);
+            }});
+            
+            document.getElementById('availableCount').textContent = `${{distinctValues.length}} values available`;
+            document.getElementById('availableValuesArea').style.display = 'block';
+        }}
+        
+        function addFilterValue(filterType, value) {{
+            console.log('Adding filter value:', filterType, value);
+            
+            // Initialize array if needed
+            if (!selectedFilterValues[filterType]) {{
+                selectedFilterValues[filterType] = [];
+            }}
+            
+            // Don't add duplicates
+            if (selectedFilterValues[filterType].includes(value)) {{
+                console.log('Value already selected');
+                return;
+            }}
+            
+            selectedFilterValues[filterType].push(value);
+            updateSelectedValuesTags();
+        }}
+        
+        function removeFilterValue(filterType, value) {{
+            console.log('Removing filter value:', filterType, value);
+            
+            if (selectedFilterValues[filterType]) {{
+                selectedFilterValues[filterType] = selectedFilterValues[filterType].filter(v => v !== value);
+                
+                // Remove filter type if no values left
+                if (selectedFilterValues[filterType].length === 0) {{
+                    delete selectedFilterValues[filterType];
+                }}
+            }}
+            
+            updateSelectedValuesTags();
+        }}
+        
+        function updateSelectedValuesTags() {{
+            const tagsContainer = document.getElementById('selectedValuesTags');
+            tagsContainer.innerHTML = '';
+            
+            let hasValues = false;
+            
+            // Display all selected values as tags
+            for (const [filterType, values] of Object.entries(selectedFilterValues)) {{
+                if (values && values.length > 0) {{
+                    hasValues = true;
+                    
+                    // Get filter type label
+                    const filterLabels = {{
+                        'entity_type': 'Entity Type',
+                        'state': 'State',
+                        'agency_name': 'Agency',
+                        'sector': 'Sector',
+                        'subsection': 'Sub-section',
+                        'ms_isac_member': 'MS-ISAC Member',
+                        'soc_call': 'SOC Call',
+                        'fusion_center': 'Fusion Center',
+                        'k12': 'K-12',
+                        'water_wastewater': 'Water/Wastewater',
+                        'weekly_rollup': 'Weekly Rollup',
+                        'region': 'Region'
+                    }};
+                    
+                    const label = filterLabels[filterType] || filterType;
+                    
+                    values.forEach(value => {{
+                        const tag = document.createElement('div');
+                        tag.style.cssText = 'display: inline-flex; align-items: center; gap: 6px; padding: 6px 10px; background: #6366f1; color: white; border-radius: 6px; font-size: 13px; font-weight: 500;';
+                        tag.innerHTML = `
+                            <span style="font-size: 11px; opacity: 0.9;">${{label}}:</span>
+                            <span>${{value}}</span>
+                            <button onclick="removeFilterValue('${{filterType}}', '${{value.replace(/'/g, "\\\\'")}}');" style="background: none; border: none; color: white; cursor: pointer; padding: 0 2px; font-size: 16px; line-height: 1; opacity: 0.8;" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.8'">
+                                ×
+                            </button>
+                        `;
+                        tagsContainer.appendChild(tag);
+                    }});
+                }}
+            }}
+            
+            if (!hasValues) {{
+                tagsContainer.innerHTML = '<small style="color: #9ca3af; font-style: italic;">No filters selected - showing all contacts</small>';
+            }}
+        }}
+        
+        function clearAllFilters() {{
+            console.log('Clearing all filters');
+            selectedFilterValues = {{}};
+            currentFilterType = '';
+            
+            // Reset "All" button
+            selectFilterType('');
+            
+            // Hide available values
+            document.getElementById('availableValuesArea').style.display = 'none';
+            
+            // Clear tags
+            updateSelectedValuesTags();
+            
+            // Show all contacts
+            displayContacts(allContacts);
         }}
         
         window.onload = () => {{
@@ -2937,9 +2993,6 @@ def serve_web_ui(event):
             loadConfig();
             // loadGroupsFromDB();  // Disabled - groups feature removed
             loadUserName();  // Load saved user name from browser
-            
-            // Initialize Choices.js
-            initializeChoicesJS();
             
             console.log('Web UI loaded successfully');
         }};
