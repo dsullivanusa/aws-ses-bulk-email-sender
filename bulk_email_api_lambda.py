@@ -3378,16 +3378,21 @@ def delete_contact(event, headers):
     """Delete contact"""
     try:
         # Get contact_id from query parameters
-        contact_id = event['queryStringParameters'].get('contact_id')
+        query_params = event.get('queryStringParameters') or {}
+        contact_id = query_params.get('contact_id')
+        
+        print(f"Delete request - contact_id: {contact_id}")
         
         if not contact_id:
             return {'statusCode': 400, 'headers': headers, 'body': json.dumps({'error': 'contact_id is required'})}
         
         contacts_table.delete_item(Key={'contact_id': contact_id})
-        print(f"Deleted contact: {contact_id}")
+        print(f"Successfully deleted contact: {contact_id}")
         return {'statusCode': 200, 'headers': headers, 'body': json.dumps({'success': True})}
     except Exception as e:
         print(f"Error deleting contact: {str(e)}")
+        import traceback
+        traceback.print_exc()
         return {'statusCode': 500, 'headers': headers, 'body': json.dumps({'error': str(e)})}
 
 def send_campaign(body, headers, event=None):
