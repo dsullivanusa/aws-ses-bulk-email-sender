@@ -21,6 +21,7 @@ def update_bulk_email_lambda():
         
         # Try multiple patterns to find the bulk email API function
         patterns = [
+            'bulk-email-api-function',
             'bulk-email',
             'BulkEmail',
             'bulk_email',

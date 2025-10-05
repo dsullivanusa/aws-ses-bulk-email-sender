@@ -35,6 +35,7 @@ def add_distinct_endpoint():
         function_names = [f['FunctionName'] for f in functions['Functions']]
         
         patterns = [
+            'bulk-email-api-function',
             'bulk-email',
             'BulkEmail',
             'bulk_email',

@@ -712,7 +712,7 @@ def serve_web_ui(event):
                 <div style="margin-bottom: 15px;">
                     <label style="display: block; margin-bottom: 8px; font-size: 13px; font-weight: 600; color: #374151;">Select Filter Category:</label>
                     <div id="filterTypeButtons" style="display: flex; flex-wrap: wrap; gap: 8px;">
-                        <button class="filter-type-btn" data-filter="" onclick="selectFilterType('')" style="padding: 8px 16px; border: 2px solid #10b981; background: #10b981; color: white; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.2s;">
+                        <button class="filter-type-btn" data-filter="" onclick="selectFilterType('')" style="padding: 8px 16px; border: 2px solid #e5e7eb; background: white; color: #374151; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.2s;">
                             ✅ All
                         </button>
                         <button class="filter-type-btn" data-filter="entity_type" onclick="selectFilterType('entity_type')" style="padding: 8px 16px; border: 2px solid #e5e7eb; background: white; color: #374151; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.2s;">
@@ -1407,7 +1407,7 @@ def serve_web_ui(event):
                     // Contact must match ALL filter types that have selected values
                     for (const [filterType, values] of Object.entries(selectedFilterValues)) {{
                         if (values && values.length > 0) {{
-                            const contactValue = contact[filterType];
+                            const contactValue = getFieldValue(contact, filterType);
                             // If contact doesn't have a value or it's not in selected values, exclude it
                             if (!contactValue || !values.includes(contactValue)) {{
                                 return false;
@@ -1528,9 +1528,10 @@ def serve_web_ui(event):
                     
                     if (filterType && checkedBoxes.length > 0) {{
                         const selectedValues = Array.from(checkedBoxes).map(cb => cb.value);
-                        finalContacts = searchedContacts.filter(contact => 
-                            contact[filterType] && selectedValues.includes(contact[filterType])
-                        );
+                        finalContacts = searchedContacts.filter(contact => {{
+                            const contactValue = getFieldValue(contact, filterType);
+                            return contactValue && selectedValues.includes(contactValue);
+                        }});
                         searchResults.textContent = `Found ${{finalContacts.length}} contact(s) matching "${{searchTerm}}" with selected filters`;
                     }} else {{
                         searchResults.textContent = `Found ${{finalContacts.length}} contact(s) matching "${{searchTerm}}"`;
@@ -2459,9 +2460,10 @@ def serve_web_ui(event):
             // Apply filter if selected
             if (filterType && checkedBoxes.length > 0) {{
                 const selectedValues = Array.from(checkedBoxes).map(cb => cb.value);
-                targetContacts = allContacts.filter(contact => 
-                    contact[filterType] && selectedValues.includes(contact[filterType])
-                );
+                targetContacts = allContacts.filter(contact => {{
+                    const contactValue = getFieldValue(contact, filterType);
+                    return contactValue && selectedValues.includes(contactValue);
+                }});
                 filterCount.textContent = `${{targetContacts.length}} contact(s) will receive this campaign (${{checkedBoxes.length}} filter(s) selected)`;
                 filterCount.style.color = '#6b7280';
                 filterCount.style.fontWeight = 'normal';
@@ -2824,18 +2826,36 @@ def serve_web_ui(event):
         }}
         
         // Contact filter state
-        let currentFilterType = '';
+        let currentFilterType = null;  // null = no filter selected, '' = "All" selected, other = specific filter
         let selectedFilterValues = {{}};  // {{filterType: [values]}}
+        
+        // Helper function to get field value case-insensitively
+        function getFieldValue(contact, fieldName) {{
+            // Try exact match first
+            if (contact[fieldName] !== undefined) {{
+                return contact[fieldName];
+            }}
+            
+            // Try case-insensitive search
+            const lowerFieldName = fieldName.toLowerCase();
+            for (const key in contact) {{
+                if (key.toLowerCase() === lowerFieldName) {{
+                    return contact[key];
+                }}
+            }}
+            
+            return null;
+        }}
         
         async function selectFilterType(filterType) {{
             console.log('Filter type selected:', filterType, 'Current type:', currentFilterType);
             
-            // Allow toggling off by clicking the same button
-            if (currentFilterType === filterType && filterType !== '') {{
+            // Allow toggling off by clicking the same button (including "All")
+            if (currentFilterType === filterType) {{
                 console.log('Toggling off current filter type');
-                currentFilterType = '';
+                currentFilterType = null;
                 document.getElementById('availableValuesArea').style.display = 'none';
-                updateButtonStyles('');
+                updateButtonStyles(null);  // Reset all buttons to unselected state
                 return;
             }}
             
@@ -2902,7 +2922,13 @@ def serve_web_ui(event):
             // Update button styles based on selected filter type
             document.querySelectorAll('.filter-type-btn').forEach(btn => {{
                 const btnFilter = btn.getAttribute('data-filter');
-                if (btnFilter === filterType && filterType !== '') {{
+                
+                if (filterType === null) {{
+                    // Nothing selected - all buttons unselected
+                    btn.style.background = 'white';
+                    btn.style.borderColor = '#e5e7eb';
+                    btn.style.color = '#374151';
+                }} else if (btnFilter === filterType && filterType !== '') {{
                     // Selected filter type (not "All")
                     btn.style.background = '#6366f1';
                     btn.style.borderColor = '#6366f1';
@@ -3006,10 +3032,10 @@ def serve_web_ui(event):
         function clearAllFilters() {{
             console.log('Clearing all filters');
             selectedFilterValues = {{}};
-            currentFilterType = '';
+            currentFilterType = null;
             
-            // Reset button styles to "All"
-            updateButtonStyles('');
+            // Reset all buttons to unselected state
+            updateButtonStyles(null);
             
             // Hide available values
             document.getElementById('availableValuesArea').style.display = 'none';
@@ -3206,18 +3232,54 @@ def get_distinct_values(headers, event):
     try:
         # Get field name from query parameters
         query_params = event.get('queryStringParameters') or {}
-        field_name = query_params.get('field')
+        field_name_requested = query_params.get('field')
         
-        if not field_name:
+        if not field_name_requested:
             return {'statusCode': 400, 'headers': headers, 'body': json.dumps({'error': 'field parameter is required'})}
         
-        print(f"Getting distinct values for field: {field_name}")
+        print(f"Getting distinct values for field: {field_name_requested}")
+        
+        # Map frontend field names to actual DynamoDB field names
+        # Try multiple variations for case-insensitive matching
+        field_variations = [
+            field_name_requested,  # Try as-is first
+            field_name_requested.capitalize(),  # Try capitalized (state -> State)
+            field_name_requested.upper(),  # Try uppercase (state -> STATE)
+            field_name_requested.lower(),  # Try lowercase (State -> state)
+        ]
         
         # Scan the entire table to get all values for the field
         distinct_values = set()
         last_evaluated_key = None
         scan_count = 0
+        field_name = None
         
+        # Try each field variation until we find one that works
+        for attempted_field in field_variations:
+            try:
+                # Try a single scan with this field name
+                test_scan = contacts_table.scan(
+                    ProjectionExpression=attempted_field,
+                    Select='SPECIFIC_ATTRIBUTES',
+                    Limit=1
+                )
+                # If we get here, the field exists!
+                field_name = attempted_field
+                print(f"✓ Found field in DynamoDB as: {field_name}")
+                break
+            except Exception:
+                continue
+        
+        if not field_name:
+            print(f"❌ Field '{field_name_requested}' not found in any variation")
+            return {'statusCode': 200, 'headers': headers, 'body': json.dumps({
+                'field': field_name_requested,
+                'values': [],
+                'count': 0,
+                'error': f'Field not found. Tried: {", ".join(field_variations)}'
+            })}
+        
+        # Now scan with the correct field name
         while True:
             scan_params = {
                 'ProjectionExpression': field_name,
