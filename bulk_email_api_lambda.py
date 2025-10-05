@@ -127,6 +127,10 @@ def serve_web_ui(event):
     <link href="https://cdn.quilljs.com/1.3.6/quill.snow.css" rel="stylesheet">
     <script src="https://cdn.quilljs.com/1.3.6/quill.js"></script>
     
+    <!-- Choices.js for advanced select dropdowns -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/choices.js/public/assets/styles/choices.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/choices.js/public/assets/scripts/choices.min.js"></script>
+    
     <style>
         /* Modern CSS Variables for Consistent Theming */
         :root {{
@@ -634,6 +638,60 @@ def serve_web_ui(event):
         #contactsTable tr:hover td {{
             background: #eff6ff;
         }}
+        
+        /* Choices.js Custom Styling */
+        .choices {{
+            margin-bottom: 0;
+        }}
+        .choices__inner {{
+            background: #f9fafb;
+            border: 2px solid #e5e7eb;
+            border-radius: 8px;
+            padding: 8px 12px;
+            min-height: 44px;
+            font-size: 14px;
+            transition: all 0.2s ease;
+        }}
+        .choices__inner:focus, .choices.is-focused .choices__inner {{
+            border-color: #6366f1;
+            background: white;
+            box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+        }}
+        .choices__list--multiple .choices__item {{
+            background: #6366f1;
+            border: 1px solid #4f46e5;
+            border-radius: 6px;
+            padding: 4px 10px;
+            margin-right: 5px;
+            margin-bottom: 3px;
+            font-size: 13px;
+        }}
+        .choices__list--multiple .choices__item.is-highlighted {{
+            background: #4f46e5;
+        }}
+        .choices__list--dropdown {{
+            border: 2px solid #e5e7eb;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            margin-top: 4px;
+            z-index: 1000;
+        }}
+        .choices__list--dropdown .choices__item--selectable {{
+            padding: 10px 14px;
+            font-size: 14px;
+        }}
+        .choices__list--dropdown .choices__item--selectable.is-highlighted {{
+            background: #eff6ff;
+            color: #1e40af;
+        }}
+        .choices[data-type*="select-multiple"] .choices__button {{
+            border-left: 1px solid rgba(255, 255, 255, 0.3);
+            margin-left: 6px;
+            padding-left: 8px;
+        }}
+        .choices__placeholder {{
+            opacity: 0.6;
+        }}
     </style>
 </head>
 <body>
@@ -670,13 +728,14 @@ def serve_web_ui(event):
             <h2>👥 Contact Management</h2>
             <div class="form-group">
                 <label>🔍 Contact Filter:</label>
-                <div style="display: grid; grid-template-columns: 1fr 2fr; gap: 10px; align-items: start;">
-                    <div style="position: relative; z-index: 100;">
-                        <select id="filterType" onchange="loadFilterValues()" title="Select a filter type - you can change this anytime" style="width: 100%; cursor: pointer;">
+                <div style="display: grid; grid-template-columns: 1fr 2fr; gap: 15px; align-items: start;">
+                    <div>
+                        <label for="filterTypeChoice" style="display: block; margin-bottom: 5px; font-size: 13px; font-weight: 600; color: #374151;">Filter Type:</label>
+                        <select id="filterTypeChoice" name="filterType">
                             <option value="">All Contacts</option>
                             <option value="entity_type">Entity Type</option>
                             <option value="state">State</option>
-                            <option value="agency_name">Agency Name</option>
+                            <option value="agency_name">Agency</option>
                             <option value="sector">Sector</option>
                             <option value="subsection">Subsection</option>
                             <option value="ms_isac_member">MS-ISAC Member</option>
@@ -688,19 +747,17 @@ def serve_web_ui(event):
                             <option value="region">Region</option>
                         </select>
                     </div>
-                    <div id="filterValueContainer" style="display: none;">
-                        <div style="max-height: 300px; overflow-y: auto; padding: 12px; background: #f9fafb; border-radius: 8px; border: 1px solid #e5e7eb;">
-                            <div style="margin-bottom: 12px; padding-bottom: 10px; border-bottom: 1px solid #e5e7eb; display: flex; justify-content: space-between; align-items: center;">
-                                <div>
-                                    <button onclick="selectAllFilterValues()" style="padding: 6px 12px; font-size: 13px; background: #10b981; margin-right: 8px;">✅ Select All</button>
-                                    <button onclick="clearAllFilterValues()" style="padding: 6px 12px; font-size: 13px; background: #ef4444;">❌ Clear All</button>
-            </div>
-                                <small style="color: #6b7280; margin: 0;">Click checkboxes to load filtered contacts</small>
-                            </div>
-                            <div id="filterValueCheckboxes"></div>
-                        </div>
+                    <div>
+                        <label for="filterValueChoice" style="display: block; margin-bottom: 5px; font-size: 13px; font-weight: 600; color: #374151;">Filter Values:</label>
+                        <select id="filterValueChoice" name="filterValue" multiple>
+                            <option value="" disabled>Select a filter type first</option>
+                        </select>
                         <small style="display: block; margin-top: 8px; color: #6b7280;" id="filterCount"></small>
                     </div>
+                </div>
+                <div style="margin-top: 12px;">
+                    <button onclick="applyContactFilter()" class="btn-primary" style="padding: 8px 16px; font-weight: 600;">🔍 Apply Filter</button>
+                    <button onclick="clearContactFilter()" class="btn-secondary" style="padding: 8px 16px; font-weight: 600; background: #6b7280; margin-left: 10px;">🔄 Clear Filter</button>
                 </div>
             </div>
             <button onclick="loadContacts()">🔄 Load Contacts</button>
@@ -1307,22 +1364,16 @@ def serve_web_ui(event):
             }}
         }}
         
-        async function loadFilterValues() {{
-            const filterType = document.getElementById('filterType').value;
-            const filterValueContainer = document.getElementById('filterValueContainer');
-            const filterValueCheckboxes = document.getElementById('filterValueCheckboxes');
-            const filterTypeDropdown = document.getElementById('filterType');
+        async function loadFilterValuesForChoices(filterType) {{
+            console.log('Loading filter values for:', filterType);
             
-            // Always keep filter type dropdown enabled
-            filterTypeDropdown.disabled = false;
-            
-            if (!filterType) {{
-                // No filter type selected - show all contacts
-                filterValueContainer.style.display = 'none';
-                // Clear search if switching to "All Contacts"
-                document.getElementById('nameSearch').value = '';
-                document.getElementById('searchResults').textContent = '';
-                applyContactFilter();
+            if (!filterType || filterType === '') {{
+                // No filter type selected - disable and clear value dropdown
+                if (filterValueChoice) {{
+                    filterValueChoice.clearStore();
+                    filterValueChoice.disable();
+                }}
+                document.getElementById('filterCount').textContent = '';
                 return;
             }}
             
@@ -1341,51 +1392,35 @@ def serve_web_ui(event):
             
             console.log(`Found ${{distinctValues.length}} distinct values for ${{filterType}}`);
             
-            // Populate filter value checkboxes
-            filterValueCheckboxes.innerHTML = '';
-            distinctValues.forEach((value, index) => {{
-                const checkboxDiv = document.createElement('div');
-                checkboxDiv.style.marginBottom = '5px';
-                checkboxDiv.innerHTML = `
-                    <label style="display: flex; align-items: center; padding: 8px; cursor: pointer; border-radius: 4px; transition: background 0.2s;" onmouseover="this.style.background='#e0e7ff'" onmouseout="this.style.background='transparent'">
-                        <input type="checkbox" class="filterCheckbox" value="${{value}}" onchange="onFilterCheckboxChange()" style="margin-right: 10px; width: auto;">
-                        <span>${{value}}</span>
-                    </label>
-                `;
-                filterValueCheckboxes.appendChild(checkboxDiv);
-            }});
-            
-            filterValueContainer.style.display = 'block';
-            updateFilterCount();
-        }}
-        
-        async function onFilterCheckboxChange() {{
-            const checkedBoxes = document.querySelectorAll('.filterCheckbox:checked');
-            
-            console.log(`Filter checkbox changed. ${{checkedBoxes.length}} selected`);
-            
-            // If any checkboxes are selected, load contacts from DynamoDB
-            if (checkedBoxes.length > 0) {{
-                console.log('Loading contacts from DynamoDB based on filter selection...');
-                await loadContactsWithFilter();
-            }} else {{
-                // No checkboxes selected - just update count
-                updateFilterCount();
-                displayContacts(allContacts);
+            // Clear and populate the filter value dropdown
+            if (filterValueChoice) {{
+                filterValueChoice.clearStore();
+                filterValueChoice.setChoices(
+                    distinctValues.map(value => ({{
+                        value: value,
+                        label: value,
+                        selected: false
+                    }})),
+                    'value',
+                    'label',
+                    true
+                );
+                filterValueChoice.enable();
             }}
+            
+            document.getElementById('filterCount').textContent = `${{distinctValues.length}} values available`;
         }}
         
         async function loadContactsWithFilter() {{
-            const filterType = document.getElementById('filterType').value;
-            const checkedBoxes = document.querySelectorAll('.filterCheckbox:checked');
+            // This function is kept for compatibility but now uses Choices.js
+            const filterType = filterTypeChoice ? filterTypeChoice.getValue(true) : '';
+            const selectedValues = filterValueChoice ? filterValueChoice.getValue(true) : [];
             
-            if (!filterType || checkedBoxes.length === 0) {{
+            if (!filterType || selectedValues.length === 0) {{
                 // No filter active - load all contacts
                 await loadContacts();
                 return;
             }}
-            
-            const selectedValues = Array.from(checkedBoxes).map(cb => cb.value);
             
             try {{
                 console.log(`Querying DynamoDB for ${{filterType}} IN [${{selectedValues.join(', ')}}]...`);
@@ -1415,14 +1450,7 @@ def serve_web_ui(event):
         }}
         
         async function applyContactFilter() {{
-            const searchTerm = document.getElementById('nameSearch').value.trim();
-            
-            // If there's a search term, always use DynamoDB search instead
-            if (searchTerm && searchTerm.length >= 2) {{
-                console.log('Search term detected - using DynamoDB search instead of local filter');
-                await searchContactsByName();
-                return;
-            }}
+            console.log('Applying contact filter with Choices.js...');
             
             // Auto-load contacts if not already loaded
             if (allContacts.length === 0) {{
@@ -1431,46 +1459,51 @@ def serve_web_ui(event):
                 return; // loadContacts will call applyContactFilter when done
             }}
             
-            const filterType = document.getElementById('filterType').value;
-            const checkedBoxes = document.querySelectorAll('.filterCheckbox:checked');
+            // Get selected filter type and values from Choices.js
+            const filterType = filterTypeChoice ? filterTypeChoice.getValue(true) : '';
+            const selectedValues = filterValueChoice ? filterValueChoice.getValue(true) : [];
             
             let filteredContacts = allContacts;
             
-            // Apply category filter from checked checkboxes
-            if (filterType && checkedBoxes.length > 0) {{
-                const selectedValues = Array.from(checkedBoxes).map(cb => cb.value);
-                
+            // Apply filter if type and values are selected
+            if (filterType && selectedValues.length > 0) {{
                 filteredContacts = filteredContacts.filter(contact => 
                     contact[filterType] && selectedValues.includes(contact[filterType])
                 );
                 
                 console.log(`Filtered by ${{filterType}} IN [${{selectedValues.join(', ')}}]: ${{filteredContacts.length}} contacts`);
-            }} else if (!filterType) {{
+                document.getElementById('filterCount').textContent = `Showing ${{filteredContacts.length}} of ${{allContacts.length}} contacts`;
+            }} else if (!filterType || filterType === '') {{
                 // Show all contacts when no filter type selected
                 console.log(`Showing all contacts: ${{filteredContacts.length}}`);
+                document.getElementById('filterCount').textContent = '';
             }} else {{
-                // Filter type selected but no checkboxes checked - show all
-                console.log('Filter type selected but no values checked - showing all');
+                // Filter type selected but no values selected - show all
+                console.log('Filter type selected but no values selected - showing all');
+                document.getElementById('filterCount').textContent = `Showing all ${{allContacts.length}} contacts`;
             }}
             
-            document.getElementById('searchResults').textContent = '';
-            updateFilterCount();
             displayContacts(filteredContacts);
         }}
         
-        async function selectAllFilterValues() {{
-            const checkboxes = document.querySelectorAll('.filterCheckbox');
-            checkboxes.forEach(cb => cb.checked = true);
-            await onFilterCheckboxChange();
+        function clearContactFilter() {{
+            console.log('Clearing contact filter...');
+            
+            // Clear Choices.js selections
+            if (filterTypeChoice) {{
+                filterTypeChoice.setChoiceByValue('');
+            }}
+            if (filterValueChoice) {{
+                filterValueChoice.clearStore();
+                filterValueChoice.disable();
+            }}
+            
+            document.getElementById('filterCount').textContent = '';
+            
+            // Show all contacts
+            displayContacts(allContacts);
         }}
         
-        async function clearAllFilterValues() {{
-            const checkboxes = document.querySelectorAll('.filterCheckbox');
-            checkboxes.forEach(cb => cb.checked = false);
-            updateFilterCount();
-            // When cleared, show all contacts or apply just category filter
-            await applyContactFilter();
-        }}
         
         // Debounce search to avoid too many API calls while typing
         let searchTimeout;
@@ -1499,13 +1532,14 @@ def serve_web_ui(event):
         }}
         
         function updateFilterCount() {{
-            const checkedBoxes = document.querySelectorAll('.filterCheckbox:checked');
+            // Updated for Choices.js - count is now handled in applyContactFilter
             const filterCount = document.getElementById('filterCount');
+            const selectedValues = filterValueChoice ? filterValueChoice.getValue(true) : [];
             
-            if (checkedBoxes.length > 0) {{
-                filterCount.textContent = `${{checkedBoxes.length}} filter(s) selected`;
+            if (selectedValues.length > 0) {{
+                filterCount.textContent = `${{selectedValues.length}} filter value(s) selected`;
             }} else {{
-                filterCount.textContent = 'No filters selected - showing all';
+                filterCount.textContent = '';
             }}
         }}
         
@@ -2855,11 +2889,58 @@ def serve_web_ui(event):
             }}
         }}
         
+        // Initialize Choices.js for contact filters
+        let filterTypeChoice = null;
+        let filterValueChoice = null;
+        
+        function initializeChoicesJS() {{
+            // Initialize Filter Type dropdown
+            const filterTypeElement = document.getElementById('filterTypeChoice');
+            if (filterTypeElement && !filterTypeChoice) {{
+                filterTypeChoice = new Choices(filterTypeElement, {{
+                    searchEnabled: false,
+                    itemSelectText: '',
+                    shouldSort: false,
+                    placeholder: true,
+                    placeholderValue: 'Select a filter type'
+                }});
+                
+                // Listen for changes
+                filterTypeElement.addEventListener('change', function(event) {{
+                    const selectedFilter = event.detail.value;
+                    console.log('Filter type changed to:', selectedFilter);
+                    loadFilterValuesForChoices(selectedFilter);
+                }});
+            }}
+            
+            // Initialize Filter Value dropdown (multi-select)
+            const filterValueElement = document.getElementById('filterValueChoice');
+            if (filterValueElement && !filterValueChoice) {{
+                filterValueChoice = new Choices(filterValueElement, {{
+                    removeItemButton: true,
+                    searchEnabled: true,
+                    itemSelectText: '',
+                    shouldSort: false,
+                    placeholder: true,
+                    placeholderValue: 'Select filter values',
+                    noResultsText: 'No values found',
+                    noChoicesText: 'No values available'
+                }});
+                
+                // Initially disable until a filter type is selected
+                filterValueChoice.disable();
+            }}
+        }}
+        
         window.onload = () => {{
             // Initialize UI and load configuration
             loadConfig();
             // loadGroupsFromDB();  // Disabled - groups feature removed
             loadUserName();  // Load saved user name from browser
+            
+            // Initialize Choices.js
+            initializeChoicesJS();
+            
             console.log('Web UI loaded successfully');
         }};
     </script>
@@ -3673,5 +3754,6 @@ def personalize_content(content, contact):
     # Legacy support
     content = content.replace('{{company}}', contact.get('agency_name', ''))
     
+    return content
     return content
     return content
