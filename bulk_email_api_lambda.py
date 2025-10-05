@@ -1817,7 +1817,7 @@ def serve_web_ui(event):
                 
                 console.log('Deleting contact:', contactId);
                 
-                const response = await fetch(`${{apiBaseUrl}}/contacts?contact_id=${{encodeURIComponent(contactId)}}`, {{
+                const response = await fetch(`${{API_URL}}/contacts?contact_id=${{encodeURIComponent(contactId)}}`, {{
                     method: 'DELETE',
                     headers: {{
                         'Content-Type': 'application/json'
