@@ -2808,7 +2808,7 @@ def get_contacts(headers, event=None):
                     last_key[key] = value
             result['lastEvaluatedKey'] = last_key
         
-        return {'statusCode': 200, 'headers': headers, 'body': json.dumps(result, cls=DecimalEncoder)}
+        return {'statusCode': 200, 'headers': headers, 'body': json.dumps(result)}
     
     except Exception as e:
         print(f"Error in get_contacts: {str(e)}")
