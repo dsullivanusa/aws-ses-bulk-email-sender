@@ -3252,12 +3252,12 @@ def get_distinct_values(headers, event):
         ]
         
         # Add common field name variations
-        common_mappings = {{
+        common_mappings = {
             'state': ['State', 'state', 'STATE', 'state_name', 'State_Name', 'stateName'],
             'region': ['Region', 'region', 'REGION', 'region_name', 'Region_Name', 'regionName'],
             'agency_name': ['Agency_Name', 'agency_name', 'AgencyName', 'agencyName', 'Agency', 'agency'],
             'entity_type': ['Entity_Type', 'entity_type', 'EntityType', 'entityType', 'Entity', 'entity'],
-        }}
+        }
         
         if field_name_requested in common_mappings:
             field_variations.extend(common_mappings[field_name_requested])
@@ -3279,7 +3279,7 @@ def get_distinct_values(headers, event):
                 # Use ExpressionAttributeNames to handle reserved words like "state", "region", "name", etc.
                 test_scan = contacts_table.scan(
                     ProjectionExpression='#field',
-                    ExpressionAttributeNames={{'#field': attempted_field}},
+                    ExpressionAttributeNames={'#field': attempted_field},
                     Select='SPECIFIC_ATTRIBUTES',
                     Limit=1
                 )
