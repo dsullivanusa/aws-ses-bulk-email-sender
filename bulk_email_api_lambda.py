@@ -568,6 +568,48 @@ def serve_web_ui(event):
             0% {{ transform: rotate(0deg); }}
             100% {{ transform: rotate(360deg); }}
         }}
+        
+        /* Editable Table Cells */
+        .editable-cell {{
+            cursor: text;
+            padding: 8px;
+            min-height: 20px;
+            transition: background-color 0.2s;
+            border: 1px solid transparent;
+        }}
+        .editable-cell:hover {{
+            background: #f0f9ff !important;
+            border: 1px solid #bae6fd;
+        }}
+        .editable-cell:focus {{
+            outline: 2px solid #3b82f6;
+            outline-offset: -2px;
+            background: #fff3cd !important;
+        }}
+        .editable-cell:empty:before {{
+            content: attr(placeholder);
+            color: #9ca3af;
+        }}
+        .yes-no-cell {{
+            text-align: center;
+        }}
+        #contactsTable {{
+            border-collapse: separate;
+            border-spacing: 0;
+        }}
+        #contactsTable th {{
+            position: sticky;
+            top: 0;
+            background: #f3f4f6;
+            z-index: 10;
+            font-weight: 600;
+            padding: 12px 8px;
+            border-bottom: 2px solid #e5e7eb;
+        }}
+        #contactsTable td {{
+            border-bottom: 1px solid #e5e7eb;
+            padding: 4px 8px;
+        }}
     </style>
 </head>
 <body>
@@ -794,9 +836,25 @@ def serve_web_ui(event):
             <table id="contactsTable">
                 <thead>
                         <tr>
-                            <th>First Name</th>
-                            <th>Last Name</th>
-                            <th>Agency</th>
+                            <th style="min-width: 200px;">Email</th>
+                            <th style="min-width: 120px;">First Name</th>
+                            <th style="min-width: 120px;">Last Name</th>
+                            <th style="min-width: 150px;">Title</th>
+                            <th style="min-width: 150px;">Entity Type</th>
+                            <th style="min-width: 80px;">State</th>
+                            <th style="min-width: 150px;">Agency</th>
+                            <th style="min-width: 120px;">Sector</th>
+                            <th style="min-width: 120px;">Subsection</th>
+                            <th style="min-width: 120px;">Phone</th>
+                            <th style="min-width: 100px;">MS-ISAC</th>
+                            <th style="min-width: 100px;">SOC Call</th>
+                            <th style="min-width: 120px;">Fusion Center</th>
+                            <th style="min-width: 80px;">K-12</th>
+                            <th style="min-width: 150px;">Water/Wastewater</th>
+                            <th style="min-width: 130px;">Weekly Rollup</th>
+                            <th style="min-width: 200px;">Alt Email</th>
+                            <th style="min-width: 100px;">Region</th>
+                            <th style="min-width: 100px; position: sticky; right: 0; background: white;">Actions</th>
                         </tr>
                 </thead>
                 <tbody id="contactsBody"></tbody>
@@ -923,6 +981,13 @@ def serve_web_ui(event):
             
             // Add active class to target tab content
             document.getElementById(tabName).classList.add('active');
+            
+            // Auto-load data when switching to specific tabs
+            if (tabName === 'contacts' && paginationState.displayedContacts.length === 0) {{
+                // Auto-load contacts when first switching to Contacts tab
+                console.log('Auto-loading contacts...');
+                loadContacts();
+            }}
         }}
         
         
@@ -1510,16 +1575,52 @@ def serve_web_ui(event):
             tbody.innerHTML = '';
             
             if (contacts && contacts.length > 0) {{
-                contacts.forEach(contact => {{
+                contacts.forEach((contact, index) => {{
                 const row = tbody.insertRow();
+                row.setAttribute('data-email', contact.email);
                 row.innerHTML = `
-                    <td>${{contact.first_name || ''}}</td>
-                    <td>${{contact.last_name || ''}}</td>
-                    <td>${{contact.agency_name || ''}}</td>
+                    <td style="background: #f9fafb; font-weight: 500;">${{contact.email || ''}}</td>
+                    <td contenteditable="true" data-field="first_name" class="editable-cell">${{contact.first_name || ''}}</td>
+                    <td contenteditable="true" data-field="last_name" class="editable-cell">${{contact.last_name || ''}}</td>
+                    <td contenteditable="true" data-field="title" class="editable-cell">${{contact.title || ''}}</td>
+                    <td contenteditable="true" data-field="entity_type" class="editable-cell">${{contact.entity_type || ''}}</td>
+                    <td contenteditable="true" data-field="state" class="editable-cell">${{contact.state || ''}}</td>
+                    <td contenteditable="true" data-field="agency_name" class="editable-cell">${{contact.agency_name || ''}}</td>
+                    <td contenteditable="true" data-field="sector" class="editable-cell">${{contact.sector || ''}}</td>
+                    <td contenteditable="true" data-field="subsection" class="editable-cell">${{contact.subsection || ''}}</td>
+                    <td contenteditable="true" data-field="phone" class="editable-cell">${{contact.phone || ''}}</td>
+                    <td contenteditable="true" data-field="ms_isac_member" class="editable-cell yes-no-cell">${{contact.ms_isac_member || ''}}</td>
+                    <td contenteditable="true" data-field="soc_call" class="editable-cell yes-no-cell">${{contact.soc_call || ''}}</td>
+                    <td contenteditable="true" data-field="fusion_center" class="editable-cell yes-no-cell">${{contact.fusion_center || ''}}</td>
+                    <td contenteditable="true" data-field="k12" class="editable-cell yes-no-cell">${{contact.k12 || ''}}</td>
+                    <td contenteditable="true" data-field="water_wastewater" class="editable-cell yes-no-cell">${{contact.water_wastewater || ''}}</td>
+                    <td contenteditable="true" data-field="weekly_rollup" class="editable-cell yes-no-cell">${{contact.weekly_rollup || ''}}</td>
+                    <td contenteditable="true" data-field="alternate_email" class="editable-cell">${{contact.alternate_email || ''}}</td>
+                    <td contenteditable="true" data-field="region" class="editable-cell">${{contact.region || ''}}</td>
+                    <td style="position: sticky; right: 0; background: white;">
+                        <button onclick="saveContactRow('${{contact.email}}')" class="btn-success" style="padding: 4px 8px; font-size: 12px;">💾 Save</button>
+                    </td>
                 `;
+                
+                // Add blur event to cells to detect changes
+                const editableCells = row.querySelectorAll('.editable-cell');
+                editableCells.forEach(cell => {{
+                    cell.addEventListener('focus', function() {{
+                        this.setAttribute('data-original', this.textContent);
+                        this.style.background = '#fff3cd';
+                    }});
+                    cell.addEventListener('blur', function() {{
+                        if (this.textContent !== this.getAttribute('data-original')) {{
+                            this.style.background = '#fef3c7'; // Changed indicator
+                            row.style.background = '#fffbeb';
+                        }} else {{
+                            this.style.background = '';
+                        }}
+                    }});
+                }});
             }});
             }} else {{
-                tbody.innerHTML = '<tr><td colspan="3" style="text-align: center; color: var(--gray-500); padding: 40px;">No contacts found. Add some contacts to get started!</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="19" style="text-align: center; color: var(--gray-500); padding: 40px;">No contacts found. Add some contacts to get started!</td></tr>';
             }}
             
             // Update record count
@@ -1527,6 +1628,87 @@ def serve_web_ui(event):
             const startRecord = ((paginationState.currentPage - 1) * paginationState.pageSize) + 1;
             const endRecord = startRecord + contacts.length - 1;
             recordCount.textContent = `Showing records ${{startRecord}} - ${{endRecord}}`;
+        }}
+        
+        async function saveContactRow(email) {{
+            try {{
+                // Find the row with this email
+                const row = document.querySelector(`tr[data-email="${{email}}"]`);
+                if (!row) {{
+                    alert('Row not found');
+                    return;
+                }}
+                
+                // Get all editable cells in this row
+                const cells = row.querySelectorAll('.editable-cell');
+                
+                // Build updated contact object
+                const contactData = {{
+                    email: email,
+                    contact_id: email  // Use email as contact_id for lookup
+                }};
+                
+                cells.forEach(cell => {{
+                    const field = cell.getAttribute('data-field');
+                    const value = cell.textContent.trim();
+                    contactData[field] = value;
+                }});
+                
+                console.log('Saving contact:', contactData);
+                
+                // Show saving state
+                const button = row.querySelector('button');
+                const originalText = button.textContent;
+                button.textContent = '⏳ Saving...';
+                button.disabled = true;
+                
+                // Send PUT request to update contact
+                const response = await fetch(`${{API_URL}}/contacts`, {{
+                    method: 'PUT',
+                    headers: {{'Content-Type': 'application/json'}},
+                    body: JSON.stringify(contactData)
+                }});
+                
+                const result = await response.json();
+                
+                if (result.success) {{
+                    button.textContent = '✅ Saved';
+                    row.style.background = '#d1fae5'; // Success green
+                    
+                    // Reset cell backgrounds
+                    cells.forEach(cell => {{
+                        cell.style.background = '';
+                    }});
+                    
+                    setTimeout(() => {{
+                        button.textContent = originalText;
+                        row.style.background = '';
+                    }}, 2000);
+                    
+                    console.log('Contact saved successfully');
+                }} else {{
+                    throw new Error(result.error || 'Save failed');
+                }}
+                
+            }} catch (error) {{
+                console.error('Error saving contact:', error);
+                alert('Error saving contact: ' + error.message);
+                
+                const row = document.querySelector(`tr[data-email="${{email}}"]`);
+                if (row) {{
+                    const button = row.querySelector('button');
+                    button.textContent = '❌ Error';
+                    setTimeout(() => {{
+                        button.textContent = '💾 Save';
+                    }}, 2000);
+                }}
+            }} finally {{
+                const row = document.querySelector(`tr[data-email="${{email}}"]`);
+                if (row) {{
+                    const button = row.querySelector('button');
+                    button.disabled = false;
+                }}
+            }}
         }}
         
         function showAddContact() {{
@@ -2399,7 +2581,6 @@ def serve_web_ui(event):
         
         async function loadConfig() {{
             try {{
-                // alert('Loading config from DynamoDB...');
                 console.log('Loading config from:', `${{API_URL}}/config`);
                 const response = await fetch(`${{API_URL}}/config`);
                 console.log('Config response status:', response.status);
@@ -2412,21 +2593,22 @@ def serve_web_ui(event):
                     
                     if (config && config.aws_region) {{
                         document.getElementById('awsRegion').value = config.aws_region;
-                        console.log('Set AWS Region to:', config.aws_region);
+                        console.log('✅ AWS Region loaded from DynamoDB:', config.aws_region);
                     }}
                     
                     if (config && config.from_email) {{
                         document.getElementById('fromEmail').value = config.from_email;
-                        console.log('Set From Email to:', config.from_email);
-                        // alert('From Email loaded: ' + config.from_email);
+                        console.log('✅ From Email loaded from DynamoDB:', config.from_email);
                     }} else {{
-                        console.log('No from_email found in config');
-                        // alert('No From Email found in configuration');
+                        console.log('⚠️ No from_email found in config - using defaults');
                     }}
                     
                     // emails_per_minute field removed
+                }} else if (response.status === 404) {{
+                    console.log('ℹ️ No email configuration found in DynamoDB - using defaults');
+                    console.log('You can save configuration in the Email Config tab');
                 }} else {{
-                    console.log('Config response not OK:', response.status);
+                    console.log('⚠️ Config response not OK:', response.status);
                     // alert('Config API error: ' + response.status);
                 }}
             }} catch (e) {{
