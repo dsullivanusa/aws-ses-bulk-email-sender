@@ -701,7 +701,8 @@ def serve_web_ui(event):
                 </div>
             </div>
             <button onclick="loadContacts()">🔄 Load Contacts</button>
-            <button class="btn-success" onclick="showAddContact()">➕ Add Contact</button>
+            <button class="btn-success" onclick="addEmptyRow()">➕ Add Row (Inline)</button>
+            <button onclick="showAddContact()">📝 Add Contact (Form)</button>
             <input type="file" id="csvFile" accept=".csv" style="display: none;" onchange="uploadCSV()">
             <button onclick="document.getElementById('csvFile').click()">📤 Upload CSV (Batch)</button>
             
@@ -1604,6 +1605,7 @@ def serve_web_ui(event):
                 contacts.forEach((contact, index) => {{
                 const row = tbody.insertRow();
                 row.setAttribute('data-email', contact.email);
+                row.setAttribute('data-contact-id', contact.contact_id || contact.email);
                 row.innerHTML = `
                     <td style="background: #dbeafe; font-weight: 600; color: #1e40af; border-right: 2px solid #60a5fa;">${{contact.email || ''}}</td>
                     <td contenteditable="true" data-field="first_name" class="editable-cell">${{contact.first_name || ''}}</td>
@@ -1656,6 +1658,152 @@ def serve_web_ui(event):
             recordCount.textContent = `Showing records ${{startRecord}} - ${{endRecord}}`;
         }}
         
+        function addEmptyRow() {{
+            const tbody = document.getElementById('contactsBody');
+            
+            // Check if there's already a new row being added
+            if (document.querySelector('tr.new-contact-row')) {{
+                alert('Please complete or cancel the current new contact before adding another');
+                return;
+            }}
+            
+            // Insert new row at the top
+            const row = tbody.insertRow(0);
+            row.classList.add('new-contact-row');
+            row.style.background = '#f0fdf4'; // Light green background
+            
+            row.innerHTML = `
+                <td contenteditable="true" data-field="email" class="editable-cell" placeholder="email@example.com" style="background: #dcfce7; font-weight: 600; border-right: 2px solid #86efac;">
+                    <span style="color: #9ca3af; font-style: italic;">email@example.com</span>
+                </td>
+                <td contenteditable="true" data-field="first_name" class="editable-cell" placeholder="First Name"></td>
+                <td contenteditable="true" data-field="last_name" class="editable-cell" placeholder="Last Name"></td>
+                <td contenteditable="true" data-field="title" class="editable-cell" placeholder="Title"></td>
+                <td contenteditable="true" data-field="entity_type" class="editable-cell" placeholder="Entity Type"></td>
+                <td contenteditable="true" data-field="state" class="editable-cell" placeholder="State"></td>
+                <td contenteditable="true" data-field="agency_name" class="editable-cell" placeholder="Agency"></td>
+                <td contenteditable="true" data-field="sector" class="editable-cell" placeholder="Sector"></td>
+                <td contenteditable="true" data-field="subsection" class="editable-cell" placeholder="Subsection"></td>
+                <td contenteditable="true" data-field="phone" class="editable-cell" placeholder="Phone"></td>
+                <td contenteditable="true" data-field="ms_isac_member" class="editable-cell yes-no-cell" placeholder="Yes/No"></td>
+                <td contenteditable="true" data-field="soc_call" class="editable-cell yes-no-cell" placeholder="Yes/No"></td>
+                <td contenteditable="true" data-field="fusion_center" class="editable-cell yes-no-cell" placeholder="Yes/No"></td>
+                <td contenteditable="true" data-field="k12" class="editable-cell yes-no-cell" placeholder="Yes/No"></td>
+                <td contenteditable="true" data-field="water_wastewater" class="editable-cell yes-no-cell" placeholder="Yes/No"></td>
+                <td contenteditable="true" data-field="weekly_rollup" class="editable-cell yes-no-cell" placeholder="Yes/No"></td>
+                <td contenteditable="true" data-field="alternate_email" class="editable-cell" placeholder="Alt Email"></td>
+                <td contenteditable="true" data-field="region" class="editable-cell" placeholder="Region"></td>
+                <td style="position: sticky; right: 0; background: #f0fdf4; border-left: 2px solid #cbd5e1; box-shadow: -2px 0 4px rgba(0,0,0,0.05);">
+                    <button onclick="saveNewContact()" class="btn-success" style="padding: 6px 12px; font-size: 12px; font-weight: 600; margin-right: 5px;">💾 Save</button>
+                    <button onclick="cancelNewContact()" class="btn-danger" style="padding: 6px 12px; font-size: 12px; font-weight: 600; background: #ef4444;">❌ Cancel</button>
+                </td>
+            `;
+            
+            // Clear placeholder text on focus
+            const emailCell = row.querySelector('td[data-field="email"]');
+            emailCell.addEventListener('focus', function() {{
+                if (this.textContent.trim() === 'email@example.com' || this.querySelector('span')) {{
+                    this.textContent = '';
+                    this.style.color = '#1e40af';
+                }}
+            }});
+            
+            // Focus on email field
+            setTimeout(() => emailCell.focus(), 100);
+            
+            console.log('✅ New empty row added');
+        }}
+        
+        function cancelNewContact() {{
+            const newRow = document.querySelector('tr.new-contact-row');
+            if (newRow) {{
+                newRow.remove();
+                console.log('❌ New contact cancelled');
+            }}
+        }}
+        
+        async function saveNewContact() {{
+            try {{
+                const row = document.querySelector('tr.new-contact-row');
+                if (!row) {{
+                    alert('New contact row not found');
+                    return;
+                }}
+                
+                // Get all cells
+                const cells = row.querySelectorAll('.editable-cell');
+                
+                // Build contact object
+                const contactData = {{}};
+                let emailFound = false;
+                
+                cells.forEach(cell => {{
+                    const field = cell.getAttribute('data-field');
+                    let value = cell.textContent.trim();
+                    
+                    // Skip placeholder text
+                    if (field === 'email' && (value === 'email@example.com' || !value)) {{
+                        value = '';
+                    }}
+                    
+                    if (field === 'email' && value) {{
+                        emailFound = true;
+                    }}
+                    
+                    contactData[field] = value;
+                }});
+                
+                // Validate email
+                if (!emailFound || !contactData.email) {{
+                    alert('Email is required!');
+                    return;
+                }}
+                
+                console.log('Creating new contact:', contactData);
+                
+                // Show saving state
+                const saveBtn = row.querySelector('.btn-success');
+                const originalText = saveBtn.textContent;
+                saveBtn.textContent = '⏳ Saving...';
+                saveBtn.disabled = true;
+                
+                // Send POST request to create contact
+                const response = await fetch(`${{API_URL}}/contacts`, {{
+                    method: 'POST',
+                    headers: {{'Content-Type': 'application/json'}},
+                    body: JSON.stringify(contactData)
+                }});
+                
+                const result = await response.json();
+                
+                if (result.success) {{
+                    console.log('✅ New contact created');
+                    
+                    // Remove the new row
+                    row.remove();
+                    
+                    // Show success message
+                    alert('Contact added successfully!');
+                    
+                    // Reload contacts to show the new one
+                    await loadContacts(false);
+                }} else {{
+                    throw new Error(result.error || 'Save failed');
+                }}
+                
+            }} catch (error) {{
+                console.error('❌ Error creating contact:', error);
+                alert('Error creating contact: ' + error.message);
+                
+                const row = document.querySelector('tr.new-contact-row');
+                if (row) {{
+                    const saveBtn = row.querySelector('.btn-success');
+                    saveBtn.textContent = '💾 Save';
+                    saveBtn.disabled = false;
+                }}
+            }}
+        }}
+        
         async function saveContactRow(email) {{
             try {{
                 // Find the row with this email
@@ -1665,13 +1813,16 @@ def serve_web_ui(event):
                     return;
                 }}
                 
+                // Get contact_id from row attribute
+                const contactId = row.getAttribute('data-contact-id');
+                
                 // Get all editable cells in this row
                 const cells = row.querySelectorAll('.editable-cell');
                 
                 // Build updated contact object
                 const contactData = {{
                     email: email,
-                    contact_id: email  // Use email as contact_id for lookup
+                    contact_id: contactId  // Use actual contact_id from DynamoDB
                 }};
                 
                 cells.forEach(cell => {{
@@ -3028,8 +3179,10 @@ def upload_attachment(body, headers):
 def add_contact(body, headers):
     """Add new contact with all CISA-specific fields"""
     try:
+        import uuid
         contacts_table.put_item(
             Item={
+                'contact_id': str(uuid.uuid4()),  # Generate unique contact_id
                 'email': body['email'],
                 'first_name': body.get('first_name', ''),
                 'last_name': body.get('last_name', ''),
@@ -3130,11 +3283,15 @@ def batch_add_contacts(body, headers):
 def update_contact(body, headers):
     """Update contact with all CISA fields"""
     try:
-        email = body['email']
+        contact_id = body.get('contact_id')
+        email = body.get('email')
+        
+        if not contact_id:
+            return {'statusCode': 400, 'headers': headers, 'body': json.dumps({'error': 'contact_id is required'})}
         
         # Define all possible contact fields
         contact_fields = [
-            'first_name', 'last_name', 'title', 'entity_type', 'state', 
+            'email', 'first_name', 'last_name', 'title', 'entity_type', 'state', 
             'agency_name', 'sector', 'subsection', 'phone', 'ms_isac_member',
             'soc_call', 'fusion_center', 'k12', 'water_wastewater', 
             'weekly_rollup', 'alternate_email', 'region', 'group'
@@ -3146,7 +3303,7 @@ def update_contact(body, headers):
         update_parts = []
         
         for field in contact_fields:
-            if field in body:
+            if field in body and field != 'contact_id':
                 # Use ExpressionAttributeNames to avoid reserved keyword issues
                 field_placeholder = f"#{field}"
                 value_placeholder = f":{field}"
@@ -3160,13 +3317,13 @@ def update_contact(body, headers):
         update_expr += ", ".join(update_parts)
         
         contacts_table.update_item(
-            Key={'email': email},
+            Key={'contact_id': contact_id},
             UpdateExpression=update_expr,
             ExpressionAttributeNames=expr_names,
             ExpressionAttributeValues=expr_values
         )
         
-        print(f"Updated contact {email} with fields: {list(body.keys())}")
+        print(f"Updated contact {contact_id} (email: {email}) with fields: {list(body.keys())}")
         return {'statusCode': 200, 'headers': headers, 'body': json.dumps({'success': True})}
     except Exception as e:
         print(f"Error updating contact: {str(e)}")
