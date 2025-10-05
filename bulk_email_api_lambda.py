@@ -1538,11 +1538,15 @@ def serve_web_ui(event):
                     body: JSON.stringify({{ search_term: searchTerm }})
                 }});
                 
+                console.log('Search response status:', response.status);
+                console.log('Search response ok:', response.ok);
+                
                 if (response.ok) {{
                     const result = await response.json();
+                    console.log('Search result:', result);
                     const searchedContacts = result.contacts || [];
                     
-                    console.log(`Found ${{searchedContacts.length}} contacts matching "${{searchTerm}}"`);
+                    console.log(`✅ Found ${{searchedContacts.length}} contacts matching "${{searchTerm}}"`);
                     
                     // Apply category filter on search results if active
                     const filterType = document.getElementById('filterType').value;
@@ -1566,8 +1570,9 @@ def serve_web_ui(event):
                     // Hide searching indicator with fade-out
                     hideSearchingIndicator();
                 }} else {{
-                    console.error('Search failed:', response.status);
-                    searchResults.textContent = 'Search failed. Please try again.';
+                    const errorText = await response.text();
+                    console.error('❌ Search failed:', response.status, errorText);
+                    searchResults.textContent = `Search failed (HTTP ${{response.status}}). Check console for details.`;
                     searchResults.style.color = '#ef4444';  // Red for error
                     hideSearchingIndicator();
                 }}
