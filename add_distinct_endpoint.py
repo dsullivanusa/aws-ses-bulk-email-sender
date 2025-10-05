@@ -29,8 +29,36 @@ def add_distinct_endpoint():
         api_id = api['id']
         print(f"✓ Found API: {api['name']} (ID: {api_id})")
         
+        # Find the Lambda function - try multiple patterns
+        print("\nLooking for Lambda function...")
+        functions = lambda_client.list_functions()
+        function_names = [f['FunctionName'] for f in functions['Functions']]
+        
+        patterns = [
+            'bulk-email',
+            'BulkEmail',
+            'bulk_email',
+            'email-api'
+        ]
+        
+        lambda_function_name = None
+        
+        for pattern in patterns:
+            matches = [name for name in function_names if pattern.lower() in name.lower()]
+            if matches:
+                lambda_function_name = matches[0]
+                print(f"✓ Found Lambda function: {lambda_function_name}")
+                break
+        
+        if not lambda_function_name:
+            print("\nAvailable Lambda functions:")
+            for i, name in enumerate(function_names, 1):
+                print(f"{i}. {name}")
+            print("\nCould not find Lambda function automatically.")
+            lambda_function_name = input("Enter the Lambda function name: ").strip()
+        
         # Get Lambda function ARN
-        lambda_function = lambda_client.get_function(FunctionName='BulkEmailAPI')
+        lambda_function = lambda_client.get_function(FunctionName=lambda_function_name)
         lambda_arn = lambda_function['Configuration']['FunctionArn']
         account_id = lambda_arn.split(':')[4]
         region = 'us-gov-west-1'
@@ -134,7 +162,7 @@ def add_distinct_endpoint():
         
         try:
             lambda_client.add_permission(
-                FunctionName='BulkEmailAPI',
+                FunctionName=lambda_function_name,
                 StatementId=f'apigateway-distinct-{api_id}',
                 Action='lambda:InvokeFunction',
                 Principal='apigateway.amazonaws.com',
