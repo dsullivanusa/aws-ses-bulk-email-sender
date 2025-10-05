@@ -713,7 +713,7 @@ def serve_web_ui(event):
                     <label style="display: block; margin-bottom: 8px; font-size: 13px; font-weight: 600; color: #374151;">Select Filter Category:</label>
                     <div id="filterTypeButtons" style="display: flex; flex-wrap: wrap; gap: 8px;">
                         <button class="filter-type-btn" data-filter="" onclick="selectFilterType('')" style="padding: 8px 16px; border: 2px solid #e5e7eb; background: white; color: #374151; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.2s;">
-                            ✅ All
+                            All
                         </button>
                         <button class="filter-type-btn" data-filter="entity_type" onclick="selectFilterType('entity_type')" style="padding: 8px 16px; border: 2px solid #e5e7eb; background: white; color: #374151; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.2s;">
                             Entity Type
