@@ -1,7 +1,12 @@
 #!/usr/bin/env python3
 """
 Recreate Private API Gateway
-Creates new API Gateway with all endpoints and Lambda integrations
+Creates new PRIVATE API Gateway with all endpoints and Lambda integrations
+
+IMPORTANT: Private API Gateways require a VPC Endpoint to be accessible.
+- The API can only be accessed from within the VPC via the VPC endpoint
+- You need to create a VPC endpoint for execute-api service in your VPC
+- Update the resource policy below if you want to restrict access to specific VPC endpoints
 """
 
 import boto3
@@ -32,18 +37,18 @@ def create_api_gateway():
     print(f"Account ID: {ACCOUNT_ID}")
     print()
     
-    # Step 1: Create REST API
-    print("Step 1: Creating REST API...")
+    # Step 1: Create REST API (PRIVATE)
+    print("Step 1: Creating Private REST API...")
     api_response = apigateway.create_rest_api(
         name=API_NAME,
-        description='Bulk Email Campaign Management API',
+        description='Bulk Email Campaign Management API - Private',
         endpointConfiguration={
-            'types': ['REGIONAL']
+            'types': ['PRIVATE']
         }
     )
     
     api_id = api_response['id']
-    print(f"✅ API Created: {api_id}")
+    print(f"✅ Private API Created: {api_id}")
     
     # Get root resource
     resources_response = apigateway.get_resources(restApiId=api_id)
@@ -286,8 +291,40 @@ def create_api_gateway():
     
     print(f"✅ Lambda permissions added")
     
-    # Step 6: Deploy API
-    print("\nStep 6: Deploying API...")
+    # Step 6: Set Private API Resource Policy
+    print("\nStep 6: Setting Private API resource policy...")
+    
+    # Create a resource policy that allows access from your VPC endpoint
+    # You can also allow access from specific VPC endpoints or allow all
+    resource_policy = {
+        "Version": "2012-10-17",
+        "Statement": [
+            {
+                "Effect": "Allow",
+                "Principal": "*",
+                "Action": "execute-api:Invoke",
+                "Resource": f"arn:aws-us-gov:execute-api:{REGION}:{ACCOUNT_ID}:{api_id}/*"
+            }
+        ]
+    }
+    
+    try:
+        apigateway.update_rest_api(
+            restApiId=api_id,
+            patchOperations=[
+                {
+                    'op': 'replace',
+                    'path': '/policy',
+                    'value': json.dumps(resource_policy)
+                }
+            ]
+        )
+        print(f"✅ Private API resource policy set")
+    except Exception as e:
+        print(f"⚠️  Warning: Could not set resource policy: {str(e)}")
+    
+    # Step 7: Deploy API
+    print("\nStep 7: Deploying API...")
     deployment = apigateway.create_deployment(
         restApiId=api_id,
         stageName=STAGE_NAME,
@@ -295,7 +332,7 @@ def create_api_gateway():
     )
     print(f"✅ API deployed to stage: {STAGE_NAME}")
     
-    # Step 7: Save configuration
+    # Step 8: Save configuration
     api_url = f"https://{api_id}.execute-api.{REGION}.amazonaws.com/{STAGE_NAME}"
     
     config = {
@@ -327,11 +364,15 @@ def create_api_gateway():
         json.dump(config, f, indent=2)
     
     print("\n" + "="*80)
-    print("✅ API GATEWAY CREATED SUCCESSFULLY!")
+    print("✅ PRIVATE API GATEWAY CREATED SUCCESSFULLY!")
     print("="*80)
     print(f"\nAPI ID:       {api_id}")
+    print(f"API Type:     PRIVATE")
     print(f"API URL:      {api_url}")
     print(f"Web UI:       {api_url}/")
+    print(f"\n⚠️  IMPORTANT: This is a PRIVATE API")
+    print(f"   - Can only be accessed from within your VPC via VPC Endpoint")
+    print(f"   - You need a VPC endpoint for execute-api service")
     print(f"\nConfiguration saved to: api_gateway_info.json")
     print("\n" + "="*80)
     print("ENDPOINTS CREATED:")
@@ -351,16 +392,20 @@ def create_api_gateway():
     print(f"GET    {api_url}/campaign/{{campaign_id}}    (Get campaign status)")
     print("="*80)
     print("\nNext Steps:")
-    print("1. Test Web UI: Open the API URL in your browser")
-    print("2. Update any saved bookmarks with new URL")
-    print("3. Test sending a campaign")
+    print("1. Ensure you have a VPC Endpoint for execute-api service")
+    print("2. Access the API only from within your VPC")
+    print("3. Test Web UI: Open the API URL from within your VPC")
+    print("4. Update any saved bookmarks with new URL")
+    print("5. Test sending a campaign")
     print("="*80)
     
     return config
 
 def main():
     print()
-    response = input(f"⚠️  This will create a NEW API Gateway. Continue? (yes/no): ")
+    print("⚠️  This will create a NEW PRIVATE API Gateway")
+    print("   Private APIs require VPC Endpoint for access")
+    response = input(f"\nContinue? (yes/no): ")
     
     if response.lower() == 'yes':
         try:
