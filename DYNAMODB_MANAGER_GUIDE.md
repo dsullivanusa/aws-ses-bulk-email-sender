@@ -17,7 +17,6 @@ A comprehensive GUI application for managing all DynamoDB tables in your AWS SES
 - **EmailContacts** / **EmailContactsNew**: Contact management
 - **EmailCampaigns**: Campaign tracking
 - **EmailConfig**: Email configuration
-- **SMTPConfig**: SMTP settings
 
 ## Getting Started
 
@@ -274,14 +273,15 @@ Perform operations on multiple records.
 }
 ```
 
-### EmailConfig / SMTPConfig
+### EmailConfig
 ```json
 {
   "config_id": "default",
-  "sender_email": "noreply@agency.gov",
-  "sender_name": "Security Team",
-  "reply_to": "support@agency.gov",
-  "created_at": "2025-01-01T00:00:00"
+  "email_service": "ses",
+  "from_email": "noreply@agency.gov",
+  "aws_region": "us-gov-west-1",
+  "created_at": "2025-01-01T00:00:00",
+  "updated_at": "2025-10-04T10:00:00"
 }
 ```
 

@@ -16,7 +16,7 @@ class TestContactGeneratorGUI:
     def __init__(self, root):
         self.root = root
         self.root.title("🧪 Test Contact Generator - Load Testing Tool")
-        self.root.geometry("900x800")
+        self.root.geometry("900x950")
         self.root.resizable(True, True)
         
         # Variables
@@ -61,7 +61,7 @@ class TestContactGeneratorGUI:
         row += 1
         ttk.Label(config_frame, text="DynamoDB Table:", font=('Arial', 9, 'bold')).grid(
             row=row, column=0, sticky=tk.W, pady=5)
-        self.table_var = tk.StringVar(value='EmailContactsNew')
+        self.table_var = tk.StringVar(value='EmailContacts')
         table_entry = ttk.Entry(config_frame, textvariable=self.table_var, width=30)
         table_entry.grid(row=row, column=1, sticky=(tk.W, tk.E), padx=(10, 0), pady=5)
         

@@ -7,7 +7,68 @@ Enhanced DynamoDB Manager GUI with powerful new features for bulk operations and
 
 ## ✨ New Features
 
-### 1. 💥 Delete All Rows
+### 1. 🔑 Schema Display for Empty Tables
+
+**Automatically shows table schema even when there are no records!**
+
+**Location:** Browse Data tab → After loading empty table
+
+**What You See:**
+```
+Column Headers with Key Indicators:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🔑 contact_id (PK) | 🔍 email (GSI) | first_name | last_name | ...
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Schema | (Primary Key) | (GSI: email-index) | (attribute) | (attribute) | ...
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Legend: 🔑 = Primary Key (PK=Partition, SK=Sort) | 🔍 = Global Secondary Index (GSI)
+```
+
+**Features:**
+- ✅ Column headers show even with 0 records
+- ✅ Primary keys marked with 🔑 icon
+- ✅ GSI keys marked with 🔍 icon
+- ✅ Schema row shows key types
+- ✅ Legend explains indicators
+
+**Benefits:**
+- Understand table structure before adding data
+- See what keys are available for queries
+- Know which fields can be searched efficiently
+- No need to add dummy data to see schema
+
+**Use Cases:**
+- Planning data import
+- Understanding new tables
+- Designing queries
+- Verifying table structure
+
+**Example Schemas:**
+
+**EmailContacts (old schema):**
+```
+🔑 email (PK) | first_name | last_name | title | ...
+```
+
+**EmailContacts (new schema):**
+```
+🔑 contact_id (PK) | 🔍 email (GSI) | first_name | last_name | ...
+```
+
+**EmailCampaigns:**
+```
+🔑 campaign_id (PK) | campaign_name | launched_by | sent_at | ...
+```
+
+**EmailConfig:**
+```
+🔑 config_id (PK) | from_email | aws_region | email_service | ...
+```
+
+---
+
+### 2. 💥 Delete All Rows
 Quickly delete all records from a table with safety confirmations.
 
 **Location:** Browse Data tab → Toolbar → "💥 Delete All Rows" button
@@ -61,7 +122,7 @@ Errors: 0
 
 ---
 
-### 2. 🖱️ Double-Click to Edit
+### 3. 🖱️ Double-Click to Edit
 Quickly open records for editing with a double-click.
 
 **How It Works:**
@@ -74,7 +135,7 @@ Quickly open records for editing with a double-click.
 
 ---
 
-### 3. 📋 Right-Click Context Menu
+### 4. 📋 Right-Click Context Menu
 Access common actions with right-click.
 
 **How It Works:**
@@ -88,7 +149,7 @@ Access common actions with right-click.
 
 ---
 
-### 4. 📋 Copy to Clipboard
+### 5. 📋 Copy to Clipboard
 Copy record JSON to clipboard for pasting elsewhere.
 
 **How It Works:**

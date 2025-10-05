@@ -594,10 +594,6 @@ def serve_web_ui(event):
                 <label>📧 From Email:</label>
                 <input type="email" id="fromEmail">
             </div>
-            <div class="form-group">
-                <label>⏱️ Emails per minute:</label>
-                <input type="number" id="emailsPerMinute" value="60">
-            </div>
             <div style="display: flex; gap: 10px; margin-top: 20px;">
                 <button onclick="saveConfig()">💾 Save Configuration</button>
                 <!-- <button onclick="loadConfig()" style="background: #007bff;">Test Load Config</button> -->
@@ -924,8 +920,7 @@ def serve_web_ui(event):
                 const config = {{
                     email_service: 'ses',
                     aws_region: document.getElementById('awsRegion').value,
-                    from_email: document.getElementById('fromEmail').value,
-                    emails_per_minute: parseInt(document.getElementById('emailsPerMinute').value)
+                    from_email: document.getElementById('fromEmail').value
                 }};
                 
                 console.log('Saving config:', config);
@@ -2339,10 +2334,7 @@ def serve_web_ui(event):
                         // alert('No From Email found in configuration');
                     }}
                     
-                    if (config && config.emails_per_minute) {{
-                        document.getElementById('emailsPerMinute').value = config.emails_per_minute;
-                        console.log('Set Emails per minute to:', config.emails_per_minute);
-                    }}
+                    // emails_per_minute field removed
                 }} else {{
                     console.log('Config response not OK:', response.status);
                     // alert('Config API error: ' + response.status);
@@ -2396,7 +2388,6 @@ def save_email_config(body, headers):
                 'config_id': 'default',
             'email_service': str(body.get('email_service', 'ses')),
             'from_email': str(body.get('from_email', '')),
-            'emails_per_minute': int(body.get('emails_per_minute', 60)),
                 'updated_at': datetime.now().isoformat()
             }
         
@@ -2419,11 +2410,10 @@ def save_email_config(body, headers):
     except email_config_table.meta.client.exceptions.ConditionalCheckFailedException:
         # Item already exists, update it instead
         try:
-            update_expression = "SET email_service = :service, from_email = :email, emails_per_minute = :rate, updated_at = :updated"
+            update_expression = "SET email_service = :service, from_email = :email, updated_at = :updated"
             expression_values = {
                 ':service': str(body.get('email_service', 'ses')),
                 ':email': str(body.get('from_email', '')),
-                ':rate': int(body.get('emails_per_minute', 60)),
                 ':updated': datetime.now().isoformat()
             }
             
