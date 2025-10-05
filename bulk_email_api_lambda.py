@@ -2869,7 +2869,7 @@ def search_contacts(body, headers):
                 clean_contact = {}
                 for key, value in contact.items():
                     if isinstance(value, Decimal):
-                        clean_contact[key] = int(value)
+                        clean_contact[key] = int(value) if value % 1 == 0 else float(value)
                     else:
                         clean_contact[key] = value
                 matched_contacts.append(clean_contact)
@@ -2886,7 +2886,9 @@ def search_contacts(body, headers):
             })
         }
     except Exception as e:
-        print(f"Search error: {str(e)}")
+        print(f"Error in search_contacts: {str(e)}")
+        import traceback
+        traceback.print_exc()
         return {
             'statusCode': 500,
             'headers': headers,
