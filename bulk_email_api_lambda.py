@@ -81,6 +81,8 @@ def lambda_handler(event, context):
             return get_contacts(headers, event)
         elif path == '/contacts/distinct' and method == 'GET':
             return get_distinct_values(headers, event)
+        elif path == '/contacts/filter' and method == 'POST':
+            return filter_contacts(body, headers)
         elif path == '/contacts' and method == 'POST':
             return add_contact(body, headers)
         elif path == '/contacts' and method == 'PUT':
@@ -1387,56 +1389,77 @@ def serve_web_ui(event):
         }}
         
         async function applyContactFilter() {{
-            console.log('Applying contact filter...', selectedFilterValues);
+            console.log('Applying contact filter from DynamoDB...', selectedFilterValues);
             
-            // Auto-load contacts if not already loaded
-            if (allContacts.length === 0) {{
-                console.log('Auto-loading contacts for filter...');
-                await loadContacts();
-                return;
-            }}
+            // Clear the contacts table
+            allContacts = [];
+            displayContacts([]);
             
-            let filteredContacts = allContacts;
+            // Show loading message
+            const tbody = document.querySelector('#contactsTable tbody');
+            tbody.innerHTML = '<tr><td colspan="20" style="text-align: center; padding: 40px; color: #6b7280; font-size: 14px;">⏳ Querying DynamoDB with filters...</td></tr>';
             
             // Check if any filters are selected
             const hasFilters = Object.keys(selectedFilterValues).length > 0;
             
             if (hasFilters) {{
-                // Apply all selected filters (AND logic across filter types)
-                filteredContacts = allContacts.filter(contact => {{
-                    // Contact must match ALL filter types that have selected values
-                    for (const [filterType, values] of Object.entries(selectedFilterValues)) {{
-                        if (values && values.length > 0) {{
-                            const contactValue = getFieldValue(contact, filterType);
-                            // If contact doesn't have a value or it's not in selected values, exclude it
-                            if (!contactValue || !values.includes(contactValue)) {{
-                                return false;
-                            }}
-                        }}
+                try {{
+                    // Build query parameters for backend
+                    const filters = Object.entries(selectedFilterValues)
+                        .filter(([key, values]) => values && values.length > 0)
+                        .map(([field, values]) => ({{
+                            field: field,
+                            values: values
+                        }}));
+                    
+                    console.log('Querying DynamoDB with filters:', filters);
+                    
+                    // Call backend API with filters
+                    const response = await fetch(`${{API_URL}}/contacts/filter`, {{
+                        method: 'POST',
+                        headers: {{
+                            'Content-Type': 'application/json'
+                        }},
+                        body: JSON.stringify({{ filters: filters }})
+                    }});
+                    
+                    if (!response.ok) {{
+                        throw new Error(`HTTP ${{response.status}}: ${{response.statusText}}`);
                     }}
-                    return true;
-                }});
-                
-                console.log(`Filtered contacts: ${{filteredContacts.length}} of ${{allContacts.length}}`);
-                
-                // Update status message
-                const filterCount = Object.values(selectedFilterValues).reduce((sum, vals) => sum + vals.length, 0);
-                const statusMsg = document.createElement('small');
-                statusMsg.style.cssText = 'color: #059669; font-weight: 600;';
-                statusMsg.textContent = `Showing ${{filteredContacts.length}} of ${{allContacts.length}} contacts (${{filterCount}} filter(s) applied)`;
-                
-                const tagsContainer = document.getElementById('selectedValuesTags');
-                const existingStatus = tagsContainer.querySelector('.filter-status');
-                if (existingStatus) existingStatus.remove();
-                
-                statusMsg.className = 'filter-status';
-                tagsContainer.appendChild(statusMsg);
+                    
+                    const result = await response.json();
+                    const filteredContacts = result.contacts || [];
+                    
+                    console.log(`Received ${{filteredContacts.length}} contacts from DynamoDB query`);
+                    
+                    // Update allContacts with filtered results
+                    allContacts = filteredContacts;
+                    
+                    // Display the filtered results
+                    displayContacts(filteredContacts);
+                    
+                    // Update status message
+                    const filterCount = Object.values(selectedFilterValues).reduce((sum, vals) => sum + vals.length, 0);
+                    const statusMsg = document.createElement('small');
+                    statusMsg.style.cssText = 'color: #059669; font-weight: 600;';
+                    statusMsg.textContent = `Showing ${{filteredContacts.length}} contact(s) from DynamoDB (${{filterCount}} filter(s) applied)`;
+                    
+                    const tagsContainer = document.getElementById('selectedValuesTags');
+                    const existingStatus = tagsContainer.querySelector('.filter-status');
+                    if (existingStatus) existingStatus.remove();
+                    
+                    statusMsg.className = 'filter-status';
+                    tagsContainer.appendChild(statusMsg);
+                    
+                }} catch (error) {{
+                    console.error('Error querying DynamoDB with filters:', error);
+                    tbody.innerHTML = '<tr><td colspan="20" style="text-align: center; padding: 40px; color: #ef4444; font-size: 14px;">❌ Error loading filtered contacts: ' + error.message + '</td></tr>';
+                }}
             }} else {{
-                // No filters selected - show all
-                console.log('No filters selected - showing all contacts');
+                // No filters selected - load all contacts
+                console.log('No filters selected - loading all contacts from DynamoDB');
+                await loadContacts();
             }}
-            
-            displayContacts(filteredContacts);
             
             // Reset pagination
             if (typeof paginationState !== 'undefined') {{
@@ -3363,6 +3386,111 @@ def get_distinct_values(headers, event):
     
     except Exception as e:
         print(f"Error in get_distinct_values: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return {'statusCode': 500, 'headers': headers, 'body': json.dumps({'error': str(e)})}
+
+def filter_contacts(body, headers):
+    """Filter contacts from DynamoDB based on multiple field filters"""
+    try:
+        filters = body.get('filters', [])
+        
+        if not filters:
+            # No filters provided, return all contacts
+            return get_contacts(headers, None)
+        
+        print(f"Filtering contacts with {len(filters)} filter(s)")
+        
+        # Build filter expression
+        filter_expressions = []
+        expression_attribute_names = {}
+        expression_attribute_values = {}
+        name_counter = 0
+        value_counter = 0
+        
+        for filter_item in filters:
+            field = filter_item.get('field')
+            values = filter_item.get('values', [])
+            
+            if not field or not values:
+                continue
+            
+            print(f"Filter: {field} IN {values}")
+            
+            # Create placeholder for field name (to handle reserved words)
+            field_placeholder = f'#field{name_counter}'
+            expression_attribute_names[field_placeholder] = field
+            name_counter += 1
+            
+            # Create OR conditions for values in the same field
+            value_conditions = []
+            for value in values:
+                value_placeholder = f':val{value_counter}'
+                expression_attribute_values[value_placeholder] = value
+                value_conditions.append(f'{field_placeholder} = {value_placeholder}')
+                value_counter += 1
+            
+            # Join OR conditions for this field
+            if value_conditions:
+                filter_expressions.append(f'({" OR ".join(value_conditions)})')
+        
+        if not filter_expressions:
+            # No valid filters, return all contacts
+            return get_contacts(headers, None)
+        
+        # Join all filter expressions with AND
+        filter_expression = ' AND '.join(filter_expressions)
+        
+        print(f"Filter Expression: {filter_expression}")
+        print(f"Expression Attribute Names: {expression_attribute_names}")
+        
+        # Scan DynamoDB with filter
+        filtered_contacts = []
+        last_evaluated_key = None
+        scan_count = 0
+        
+        while True:
+            scan_params = {
+                'FilterExpression': filter_expression,
+                'ExpressionAttributeNames': expression_attribute_names,
+                'ExpressionAttributeValues': expression_attribute_values
+            }
+            
+            if last_evaluated_key:
+                scan_params['ExclusiveStartKey'] = last_evaluated_key
+            
+            response = contacts_table.scan(**scan_params)
+            
+            # Convert Decimal types to int/float
+            for item in response.get('Items', []):
+                contact = {}
+                for key, value in item.items():
+                    if isinstance(value, Decimal):
+                        contact[key] = int(value) if value % 1 == 0 else float(value)
+                    else:
+                        contact[key] = value
+                filtered_contacts.append(contact)
+            
+            scan_count += 1
+            print(f"Scan iteration {scan_count}: Found {len(response.get('Items', []))} items, {len(filtered_contacts)} total so far")
+            
+            last_evaluated_key = response.get('LastEvaluatedKey')
+            if not last_evaluated_key:
+                break
+        
+        print(f"Filter complete: {len(filtered_contacts)} contacts match filters")
+        
+        return {
+            'statusCode': 200,
+            'headers': headers,
+            'body': json.dumps({
+                'contacts': filtered_contacts,
+                'count': len(filtered_contacts)
+            })
+        }
+    
+    except Exception as e:
+        print(f"Error in filter_contacts: {str(e)}")
         import traceback
         traceback.print_exc()
         return {'statusCode': 500, 'headers': headers, 'body': json.dumps({'error': str(e)})}
