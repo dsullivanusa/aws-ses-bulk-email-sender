@@ -960,6 +960,117 @@ def serve_web_ui(event):
                 transform: translateX(100%);
             }}
         }}
+        
+        /* ============================================
+           MODAL STYLES
+           ============================================ */
+        .modal {{
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.6);
+            backdrop-filter: blur(4px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 10000;
+            animation: modalFadeIn 0.3s ease;
+        }}
+        
+        @keyframes modalFadeIn {{
+            from {{
+                opacity: 0;
+            }}
+            to {{
+                opacity: 1;
+            }}
+        }}
+        
+        .modal-content {{
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            max-height: 90vh;
+            overflow-y: auto;
+            animation: modalSlideUp 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+        }}
+        
+        @keyframes modalSlideUp {{
+            from {{
+                transform: translateY(50px);
+                opacity: 0;
+            }}
+            to {{
+                transform: translateY(0);
+                opacity: 1;
+            }}
+        }}
+        
+        .modal-header {{
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 24px 30px;
+            border-bottom: 2px solid #e5e7eb;
+            background: linear-gradient(135deg, #f9fafb, #f3f4f6);
+        }}
+        
+        .modal-header h2 {{
+            margin: 0;
+            color: #1f2937;
+            font-size: 24px;
+            font-weight: 700;
+        }}
+        
+        .modal-close {{
+            background: none;
+            border: none;
+            font-size: 32px;
+            color: #6b7280;
+            cursor: pointer;
+            width: 40px;
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50%;
+            transition: all 0.2s;
+            line-height: 1;
+            padding: 0;
+        }}
+        
+        .modal-close:hover {{
+            background: #f3f4f6;
+            color: #1f2937;
+            transform: rotate(90deg);
+        }}
+        
+        .modal-body {{
+            padding: 30px;
+        }}
+        
+        /* Modal table styles */
+        .modal-content table tbody tr {{
+            border-bottom: 1px solid #f3f4f6;
+        }}
+        
+        .modal-content table tbody tr:hover {{
+            background: #f9fafb;
+            transform: none;
+            box-shadow: none;
+        }}
+        
+        .modal-content table tbody td {{
+            padding: 12px;
+            font-size: 13px;
+            color: #374151;
+        }}
+        
+        .modal-content table tbody tr:nth-child(even) {{
+            background: #fafafa;
+        }}
     </style>
 </head>
 <body>
@@ -1334,8 +1445,15 @@ def serve_web_ui(event):
                 
                 <!-- Contact Count Display -->
                 <div id="campaignContactCount" style="padding: 12px; background: #f0f9ff; border: 2px solid #3b82f6; border-radius: 8px; margin-bottom: 15px; display: none;">
-                    <strong style="color: #1e40af; font-size: 14px;">📊 Target Contacts:</strong>
-                    <span id="campaignContactCountNumber" style="color: #1e40af; font-size: 14px; font-weight: 700; margin-left: 8px;">0</span>
+                    <div style="display: flex; align-items: center; justify-content: space-between;">
+                        <div>
+                            <strong style="color: #1e40af; font-size: 14px;">📊 Target Contacts:</strong>
+                            <span id="campaignContactCountNumber" style="color: #1e40af; font-size: 14px; font-weight: 700; margin-left: 8px;">0</span>
+                        </div>
+                        <button onclick="openTargetContactsModal()" style="padding: 8px 16px; background: linear-gradient(135deg, #3b82f6, #2563eb); color: white; border: none; border-radius: 6px; font-size: 13px; font-weight: 600; cursor: pointer;">
+                            <i class="fas fa-eye"></i> View Target Contacts
+                        </button>
+                    </div>
                 </div>
             </div>
             <div class="form-group">
@@ -1377,6 +1495,55 @@ def serve_web_ui(event):
             </div>
             
             <div id="campaignResult" class="result hidden"></div>
+        </div>
+    </div>
+    
+    <!-- Target Contacts Modal -->
+    <div id="targetContactsModal" class="modal" style="display: none;">
+        <div class="modal-content" style="max-width: 1200px; width: 90%;">
+            <div class="modal-header">
+                <h2><i class="fas fa-users"></i> Target Contacts Preview</h2>
+                <button class="modal-close" onclick="closeTargetContactsModal()">×</button>
+            </div>
+            <div class="modal-body">
+                <div id="targetContactsInfo" style="margin-bottom: 15px; padding: 12px; background: #f0f9ff; border-left: 4px solid #3b82f6; border-radius: 4px;">
+                    <strong>Total Target Contacts:</strong> <span id="modalTotalCount">0</span>
+                </div>
+                
+                <!-- Contacts Table -->
+                <div style="overflow-x: auto; max-height: 500px; border: 1px solid #e5e7eb; border-radius: 8px;">
+                    <table style="width: 100%; border-collapse: collapse;">
+                        <thead style="background: linear-gradient(135deg, #1e40af, #1e3a8a); color: white; position: sticky; top: 0; z-index: 10;">
+                            <tr>
+                                <th style="padding: 12px; text-align: left; font-weight: 600; font-size: 13px; border-bottom: 2px solid #1e3a8a;">#</th>
+                                <th style="padding: 12px; text-align: left; font-weight: 600; font-size: 13px; border-bottom: 2px solid #1e3a8a;">First Name</th>
+                                <th style="padding: 12px; text-align: left; font-weight: 600; font-size: 13px; border-bottom: 2px solid #1e3a8a;">Last Name</th>
+                                <th style="padding: 12px; text-align: left; font-weight: 600; font-size: 13px; border-bottom: 2px solid #1e3a8a;">Email</th>
+                                <th style="padding: 12px; text-align: left; font-weight: 600; font-size: 13px; border-bottom: 2px solid #1e3a8a;">Agency</th>
+                                <th style="padding: 12px; text-align: left; font-weight: 600; font-size: 13px; border-bottom: 2px solid #1e3a8a;">State</th>
+                                <th style="padding: 12px; text-align: left; font-weight: 600; font-size: 13px; border-bottom: 2px solid #1e3a8a;">Entity Type</th>
+                            </tr>
+                        </thead>
+                        <tbody id="targetContactsTableBody">
+                            <!-- Dynamic rows will be inserted here -->
+                        </tbody>
+                    </table>
+                </div>
+                
+                <!-- Pagination Controls -->
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 20px; padding: 15px; background: #f9fafb; border-radius: 8px;">
+                    <button id="modalPrevBtn" onclick="loadTargetContactsPage('prev')" style="padding: 8px 16px; background: #6b7280; color: white; border: none; border-radius: 6px; font-weight: 600; cursor: pointer;" disabled>
+                        <i class="fas fa-chevron-left"></i> Previous
+                    </button>
+                    <div style="font-weight: 600; color: #374151;">
+                        Page <span id="modalCurrentPage">1</span> of <span id="modalTotalPages">1</span>
+                        <span style="margin-left: 15px; color: #6b7280; font-weight: normal;">(Showing <span id="modalShowingCount">0</span> contacts)</span>
+                    </div>
+                    <button id="modalNextBtn" onclick="loadTargetContactsPage('next')" style="padding: 8px 16px; background: #3b82f6; color: white; border: none; border-radius: 6px; font-weight: 600; cursor: pointer;">
+                        Next <i class="fas fa-chevron-right"></i>
+                    </button>
+                </div>
+            </div>
         </div>
     </div>
     
@@ -3061,6 +3228,139 @@ def serve_web_ui(event):
                     btn.style.boxShadow = 'none';
                 }}
             }});
+        }}
+        
+        // ============================================
+        // TARGET CONTACTS MODAL
+        // ============================================
+        let targetContactsModalState = {{
+            currentPage: 1,
+            pageSize: 25,
+            totalContacts: [],
+            totalPages: 1
+        }};
+        
+        async function openTargetContactsModal() {{
+            const modal = document.getElementById('targetContactsModal');
+            
+            // Determine which contacts to show
+            let contacts = [];
+            if (campaignFilteredContacts.length > 0) {{
+                // Use filtered contacts
+                contacts = campaignFilteredContacts;
+            }} else if (Object.keys(selectedCampaignFilterValues).length > 0) {{
+                // User selected filters but didn't apply them
+                Toast.warning('Please click "Apply Filter" first to see target contacts.');
+                return;
+            }} else {{
+                // No filters - need to load all contacts
+                Toast.info('Loading all contacts...', 2000);
+                try {{
+                    const response = await fetch(`${{API_URL}}/contacts?limit=10000`);
+                    if (!response.ok) {{
+                        throw new Error(`HTTP ${{response.status}}: ${{response.statusText}}`);
+                    }}
+                    const data = await response.json();
+                    contacts = data.contacts || [];
+                }} catch (error) {{
+                    Toast.error(`Failed to load contacts: ${{error.message}}`);
+                    return;
+                }}
+            }}
+            
+            if (contacts.length === 0) {{
+                Toast.warning('No target contacts found.');
+                return;
+            }}
+            
+            // Initialize modal state
+            targetContactsModalState.totalContacts = contacts;
+            targetContactsModalState.currentPage = 1;
+            targetContactsModalState.totalPages = Math.ceil(contacts.length / targetContactsModalState.pageSize);
+            
+            // Update total count
+            document.getElementById('modalTotalCount').textContent = contacts.length;
+            
+            // Load first page
+            displayTargetContactsPage();
+            
+            // Show modal
+            modal.style.display = 'flex';
+            document.body.style.overflow = 'hidden'; // Prevent background scrolling
+        }}
+        
+        function closeTargetContactsModal() {{
+            const modal = document.getElementById('targetContactsModal');
+            modal.style.display = 'none';
+            document.body.style.overflow = ''; // Restore scrolling
+        }}
+        
+        function loadTargetContactsPage(direction) {{
+            if (direction === 'next' && targetContactsModalState.currentPage < targetContactsModalState.totalPages) {{
+                targetContactsModalState.currentPage++;
+            }} else if (direction === 'prev' && targetContactsModalState.currentPage > 1) {{
+                targetContactsModalState.currentPage--;
+            }}
+            
+            displayTargetContactsPage();
+        }}
+        
+        function displayTargetContactsPage() {{
+            const {{ currentPage, pageSize, totalContacts, totalPages }} = targetContactsModalState;
+            
+            // Calculate start and end indices
+            const startIdx = (currentPage - 1) * pageSize;
+            const endIdx = Math.min(startIdx + pageSize, totalContacts.length);
+            const pageContacts = totalContacts.slice(startIdx, endIdx);
+            
+            // Populate table
+            const tbody = document.getElementById('targetContactsTableBody');
+            tbody.innerHTML = '';
+            
+            if (pageContacts.length === 0) {{
+                tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; padding: 40px; color: #6b7280;">No contacts to display</td></tr>';
+                return;
+            }}
+            
+            pageContacts.forEach((contact, index) => {{
+                const globalIndex = startIdx + index + 1;
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td style="font-weight: 600; color: #6b7280;">${{globalIndex}}</td>
+                    <td>${{contact.first_name || contact.FirstName || '-'}}</td>
+                    <td>${{contact.last_name || contact.LastName || '-'}}</td>
+                    <td style="color: #3b82f6; font-weight: 500;">${{contact.email || '-'}}</td>
+                    <td>${{contact.agency_name || contact.AgencyName || '-'}}</td>
+                    <td>${{contact.state || contact.State || '-'}}</td>
+                    <td>${{contact.entity_type || contact.EntityType || '-'}}</td>
+                `;
+                tbody.appendChild(row);
+            }});
+            
+            // Update pagination info
+            document.getElementById('modalCurrentPage').textContent = currentPage;
+            document.getElementById('modalTotalPages').textContent = totalPages;
+            document.getElementById('modalShowingCount').textContent = `${{startIdx + 1}}-${{endIdx}}`;
+            
+            // Update button states
+            const prevBtn = document.getElementById('modalPrevBtn');
+            const nextBtn = document.getElementById('modalNextBtn');
+            
+            prevBtn.disabled = currentPage === 1;
+            prevBtn.style.opacity = currentPage === 1 ? '0.5' : '1';
+            prevBtn.style.cursor = currentPage === 1 ? 'not-allowed' : 'pointer';
+            
+            nextBtn.disabled = currentPage === totalPages;
+            nextBtn.style.opacity = currentPage === totalPages ? '0.5' : '1';
+            nextBtn.style.cursor = currentPage === totalPages ? 'not-allowed' : 'pointer';
+        }}
+        
+        // Close modal when clicking outside of it
+        window.onclick = function(event) {{
+            const modal = document.getElementById('targetContactsModal');
+            if (event.target === modal) {{
+                closeTargetContactsModal();
+            }}
         }}
         
         // Attachment handling
