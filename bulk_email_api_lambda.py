@@ -309,17 +309,6 @@ def serve_web_ui(event):
         input:hover, textarea:hover, select:hover {{
             border-color: var(--gray-300);
         }}
-        /* Disabled state styling */
-        select:disabled {{
-            background: #f9fafb !important;
-            color: #6b7280;
-            cursor: wait !important;
-            opacity: 0.7;
-            border-color: var(--gray-200);
-        }}
-        select:disabled:hover {{
-            border-color: var(--gray-200);
-        }}
         /* Checkbox styling */
         input[type="checkbox"] {{
             width: 18px;
@@ -1330,14 +1319,7 @@ def serve_web_ui(event):
             <!-- Pagination Controls -->
             <div style="display: flex; justify-content: space-between; align-items: center; margin: 20px 0; padding: 15px; background: #f9fafb; border-radius: 8px; border: 1px solid #e5e7eb;">
                 <div style="display: flex; gap: 10px; align-items: center;">
-                    <label style="font-weight: 600; color: #374151;">Page Size:</label>
-                    <select id="pageSize" onchange="changePageSize()" style="padding: 8px 12px; border-radius: 6px; border: 1px solid #d1d5db; background: white; cursor: pointer;">
-                        <option value="25" selected>25</option>
-                        <option value="50">50</option>
-                        <option value="100">100</option>
-                    </select>
-                    <span id="pageSizeLoading" style="margin-left: 10px; color: #ff9500; font-weight: 500; display: none;">⟳ Loading...</span>
-                    <span id="pageInfo" style="margin-left: 15px; color: #6b7280; font-weight: 500;">Page 1</span>
+                    <span id="pageInfo" style="color: #6b7280; font-weight: 500;">Page 1</span>
                 </div>
                 <div style="display: flex; gap: 10px;">
                     <button id="prevPageBtn" onclick="previousPage()" disabled style="padding: 8px 16px; background: #6b7280; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 500;">⬅️ Previous</button>
@@ -3296,23 +3278,21 @@ def serve_web_ui(event):
             
             // Determine which contacts to show
             let contacts = [];
-            if (campaignFilteredContacts.length > 0) {{
-                // Use filtered contacts
+            
+            if (campaignFilteredContacts && Array.isArray(campaignFilteredContacts) && campaignFilteredContacts.length > 0) {{
+                // Use filtered contacts (already loaded)
                 contacts = campaignFilteredContacts;
-            }} else if (Object.keys(selectedCampaignFilterValues).length > 0) {{
+                console.log(`Using ${{contacts.length}} filtered contacts for modal`);
+            }} else if (Object.keys(selectedCampaignFilterValues || {{}}).length > 0) {{
                 // User selected filters but didn't apply them
                 Toast.warning('Please click "Apply Filter" first to see target contacts.');
                 return;
             }} else {{
-                // No filters - need to load all contacts
-                Toast.info('Loading all contacts...', 2000);
+                // No filters - load all contacts using pagination (handles 20k+ contacts)
+                Toast.info('Loading all contacts with pagination...', 2000);
                 try {{
-                    const response = await fetch(`${{API_URL}}/contacts?limit=10000`);
-                    if (!response.ok) {{
-                        throw new Error(`HTTP ${{response.status}}: ${{response.statusText}}`);
-                    }}
-                    const data = await response.json();
-                    contacts = data.contacts || [];
+                    contacts = await fetchAllContactsPaginated();
+                    console.log(`Loaded ${{contacts.length}} contacts for modal using pagination`);
                 }} catch (error) {{
                     Toast.error(`Failed to load contacts: ${{error.message}}`);
                     return;
@@ -3545,6 +3525,54 @@ def serve_web_ui(event):
             displayAttachments();
         }}
         
+        // Fetch all contacts using pagination to handle large datasets (20k+ contacts)
+        async function fetchAllContactsPaginated() {{
+            let allContacts = [];
+            let lastKey = null;
+            let pageCount = 0;
+            const pageSize = 1000;  // Fetch 1000 contacts per page
+            
+            console.log('Starting paginated contact fetch...');
+            
+            do {{
+                pageCount++;
+                const urlParams = new URLSearchParams();
+                urlParams.append('limit', pageSize);
+                
+                if (lastKey) {{
+                    urlParams.append('lastKey', JSON.stringify(lastKey));
+                }}
+                
+                const url = `${{API_URL}}/contacts?${{urlParams.toString()}}`;
+                console.log(`Fetching page ${{pageCount}} (batch size: ${{pageSize}})...`);
+                
+                const response = await fetch(url);
+                
+                if (!response.ok) {{
+                    throw new Error(`HTTP ${{response.status}}: ${{response.statusText}}`);
+                }}
+                
+                const data = await response.json();
+                const contacts = data.contacts || [];
+                
+                allContacts = allContacts.concat(contacts);
+                lastKey = data.lastEvaluatedKey || null;
+                
+                console.log(`Page ${{pageCount}}: Fetched ${{contacts.length}} contacts. Total so far: ${{allContacts.length}}`);
+                
+                // Show progress to user
+                if (pageCount % 5 === 0 || !lastKey) {{
+                    Toast.info(`Loading contacts... ${{allContacts.length}} loaded`, 1000);
+                }}
+                
+            }} while (lastKey);  // Continue until no more pages
+            
+            console.log(`✅ Pagination complete: Loaded ${{allContacts.length}} total contacts in ${{pageCount}} pages`);
+            Toast.success(`Loaded ${{allContacts.length}} contacts successfully!`, 2000);
+            
+            return allContacts;
+        }}
+        
         async function sendCampaign(event) {{
             // Check form availability first
             if (!checkFormAvailability()) {{
@@ -3575,17 +3603,12 @@ def serve_web_ui(event):
             
             // THREE STATES: null = no filter, [] = filter with no results, [...] = filtered contacts
             if (campaignFilteredContacts === null) {{
-                // No filters applied - need to load all contacts from DynamoDB
-                console.log('No filters applied, fetching all contacts from database...');
+                // No filters applied - need to load all contacts from DynamoDB with pagination
+                console.log('No filters applied, fetching all contacts from database with pagination...');
                 try {{
-                    const response = await fetch(`${{API_URL}}/contacts?limit=10000`);
-                    if (!response.ok) {{
-                        throw new Error(`Failed to load contacts: HTTP ${{response.status}}`);
-                    }}
-                    const data = await response.json();
-                    targetContacts = data.contacts || [];
+                    targetContacts = await fetchAllContactsPaginated();
                     filterDescription = 'All Contacts';
-                    console.log(`Loaded ${{targetContacts.length}} contacts from database`);
+                    console.log(`Loaded ${{targetContacts.length}} contacts from database using pagination`);
                 }} catch (loadError) {{
                     console.error('Failed to load contacts:', loadError);
                     throw new Error(`Failed to load contacts: ${{loadError.message}}. Please ensure your API is configured correctly.`);
@@ -3625,14 +3648,9 @@ def serve_web_ui(event):
                 }}
             }} else {{
                 // Fallback: shouldn't get here, but fetch all contacts as safety
-                console.warn('Unexpected state - falling back to fetch all contacts');
+                console.warn('Unexpected state - falling back to fetch all contacts with pagination');
                 try {{
-                    const response = await fetch(`${{API_URL}}/contacts?limit=10000`);
-                    if (!response.ok) {{
-                        throw new Error(`Failed to load contacts: HTTP ${{response.status}}`);
-                    }}
-                    const data = await response.json();
-                    targetContacts = data.contacts || [];
+                    targetContacts = await fetchAllContactsPaginated();
                     filterDescription = 'All Contacts';
                     console.log(`Fallback: Loaded ${{targetContacts.length}} contacts from database`);
                 }} catch (loadError) {{
@@ -4851,29 +4869,26 @@ def send_campaign(body, headers, event=None):
         print(f"Sample emails: {target_contact_emails[:5]}")
         
         if not target_contact_emails:
-            return {'statusCode': 400, 'headers': headers, 'body': json.dumps({'error': 'No target contacts specified. Please ensure contacts are loaded in the Contacts tab.'})}
+            return {'statusCode': 400, 'headers': headers, 'body': json.dumps({'error': 'No target email addresses specified. Please select recipients in the Campaign tab.'})}
         
-        # Retrieve full contact records for the target emails
+        # Create contact objects directly from email addresses (independent of Contacts table)
+        # This allows campaigns to work without requiring emails to exist in the Contacts table
         contacts = []
-        failed_lookups = []
         for email in target_contact_emails:
-            try:
-                contact_response = contacts_table.get_item(Key={'email': email})
-                if 'Item' in contact_response:
-                    contacts.append(contact_response['Item'])
-                else:
-                    failed_lookups.append(email)
-                    print(f"Contact not found in database: {email}")
-            except Exception as e:
-                failed_lookups.append(email)
-                print(f"Error retrieving contact {email}: {str(e)}")
+            if email and '@' in email:  # Basic email validation
+                contacts.append({
+                    'email': email,
+                    'first_name': '',
+                    'last_name': '',
+                    'company': ''
+                })
+            else:
+                print(f"Invalid email format, skipping: {email}")
         
-        print(f"Campaign targeting {len(contacts)} contacts out of {len(target_contact_emails)} requested ({filter_description})")
-        if failed_lookups:
-            print(f"Failed to find {len(failed_lookups)} contacts. Sample: {failed_lookups[:5]}")
+        print(f"Campaign targeting {len(contacts)} valid email addresses ({filter_description})")
         
         if not contacts:
-            error_msg = f'No valid contacts found in database. Received {len(target_contact_emails)} emails but none exist in the Contacts table. Please ensure contacts are added in the Contacts tab first.'
+            error_msg = f'No valid email addresses found. Received {len(target_contact_emails)} entries but none are valid emails. Please check email format (must contain @).'
             return {'statusCode': 400, 'headers': headers, 'body': json.dumps({'error': error_msg})}
         
         campaign_id = f"campaign_{int(datetime.now().timestamp())}"
