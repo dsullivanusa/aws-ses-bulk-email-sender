@@ -127,6 +127,9 @@ def serve_web_ui(event):
     <!-- Favicon to prevent 403 error -->
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📧</text></svg>">
     
+    <!-- Font Awesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
     <!-- Quill Rich Text Editor -->
     <link href="https://cdn.quilljs.com/1.3.6/quill.snow.css" rel="stylesheet">
     <script src="https://cdn.quilljs.com/1.3.6/quill.js"></script>
@@ -673,9 +676,296 @@ def serve_web_ui(event):
         #selectedValuesTags > div {{
             animation: slideIn 0.3s ease;
         }}
+        
+        /* ============================================
+           TOAST NOTIFICATION SYSTEM
+           ============================================ */
+        #toastContainer {{
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 9999;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            max-width: 400px;
+        }}
+        
+        .toast {{
+            padding: 16px 20px;
+            border-radius: 12px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15), 0 0 1px rgba(0, 0, 0, 0.05);
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            animation: toastSlideIn 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+            backdrop-filter: blur(10px);
+            color: white;
+            font-size: 14px;
+            font-weight: 500;
+            min-width: 300px;
+            position: relative;
+            overflow: hidden;
+        }}
+        
+        .toast::before {{
+            content: '';
+            position: absolute;
+            left: 0;
+            top: 0;
+            bottom: 0;
+            width: 4px;
+            background: currentColor;
+        }}
+        
+        .toast-success {{
+            background: linear-gradient(135deg, #10b981, #059669);
+        }}
+        
+        .toast-error {{
+            background: linear-gradient(135deg, #ef4444, #dc2626);
+        }}
+        
+        .toast-warning {{
+            background: linear-gradient(135deg, #f59e0b, #d97706);
+        }}
+        
+        .toast-info {{
+            background: linear-gradient(135deg, #3b82f6, #2563eb);
+        }}
+        
+        .toast i {{
+            font-size: 20px;
+            flex-shrink: 0;
+        }}
+        
+        .toast-message {{
+            flex: 1;
+        }}
+        
+        .toast-close {{
+            background: rgba(255, 255, 255, 0.2);
+            border: none;
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 16px;
+            transition: background 0.2s;
+            flex-shrink: 0;
+        }}
+        
+        .toast-close:hover {{
+            background: rgba(255, 255, 255, 0.3);
+        }}
+        
+        @keyframes toastSlideIn {{
+            from {{
+                transform: translateX(400px);
+                opacity: 0;
+            }}
+            to {{
+                transform: translateX(0);
+                opacity: 1;
+            }}
+        }}
+        
+        .toast.removing {{
+            animation: toastSlideOut 0.3s ease forwards;
+        }}
+        
+        @keyframes toastSlideOut {{
+            to {{
+                transform: translateX(400px);
+                opacity: 0;
+            }}
+        }}
+        
+        /* ============================================
+           SKELETON LOADING STATES
+           ============================================ */
+        .skeleton {{
+            background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+            background-size: 200% 100%;
+            animation: skeletonLoading 1.5s ease-in-out infinite;
+            border-radius: 4px;
+        }}
+        
+        @keyframes skeletonLoading {{
+            0% {{
+                background-position: 200% 0;
+            }}
+            100% {{
+                background-position: -200% 0;
+            }}
+        }}
+        
+        .skeleton-text {{
+            height: 16px;
+            margin-bottom: 8px;
+            border-radius: 4px;
+        }}
+        
+        .skeleton-button {{
+            height: 40px;
+            width: 120px;
+            border-radius: 8px;
+        }}
+        
+        .skeleton-row {{
+            height: 48px;
+            margin-bottom: 4px;
+            border-radius: 6px;
+        }}
+        
+        /* ============================================
+           ENHANCED BUTTON ANIMATIONS
+           ============================================ */
+        button {{
+            position: relative;
+            overflow: hidden;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }}
+        
+        button::before {{
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 0;
+            height: 0;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.3);
+            transform: translate(-50%, -50%);
+            transition: width 0.6s, height 0.6s;
+        }}
+        
+        button:active::before {{
+            width: 300px;
+            height: 300px;
+        }}
+        
+        button:hover {{
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
+        }}
+        
+        button:active {{
+            transform: translateY(0);
+        }}
+        
+        /* Loading spinner for buttons */
+        .btn-loading {{
+            pointer-events: none;
+            position: relative;
+        }}
+        
+        .btn-loading::after {{
+            content: '';
+            position: absolute;
+            width: 16px;
+            height: 16px;
+            top: 50%;
+            left: 50%;
+            margin-left: -8px;
+            margin-top: -8px;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-top-color: white;
+            border-radius: 50%;
+            animation: spin 0.6s linear infinite;
+        }}
+        
+        @keyframes spin {{
+            to {{
+                transform: rotate(360deg);
+            }}
+        }}
+        
+        /* ============================================
+           SMOOTH TRANSITIONS
+           ============================================ */
+        * {{
+            transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+        }}
+        
+        .fade-in {{
+            animation: fadeIn 0.4s ease;
+        }}
+        
+        @keyframes fadeIn {{
+            from {{
+                opacity: 0;
+                transform: translateY(10px);
+            }}
+            to {{
+                opacity: 1;
+                transform: translateY(0);
+            }}
+        }}
+        
+        /* Enhanced table row hover */
+        table tbody tr {{
+            transition: all 0.2s ease;
+        }}
+        
+        table tbody tr:hover {{
+            transform: scale(1.01);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+        }}
+        
+        /* Smooth scroll */
+        html {{
+            scroll-behavior: smooth;
+        }}
+        
+        /* Focus states for accessibility */
+        button:focus,
+        input:focus,
+        select:focus,
+        textarea:focus {{
+            outline: 2px solid var(--primary-color);
+            outline-offset: 2px;
+        }}
+        
+        /* Progress bar animation */
+        .progress-bar {{
+            position: relative;
+            overflow: hidden;
+        }}
+        
+        .progress-bar::after {{
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            bottom: 0;
+            right: 0;
+            background: linear-gradient(90deg, 
+                transparent, 
+                rgba(255, 255, 255, 0.3), 
+                transparent
+            );
+            animation: shimmer 2s infinite;
+        }}
+        
+        @keyframes shimmer {{
+            0% {{
+                transform: translateX(-100%);
+            }}
+            100% {{
+                transform: translateX(100%);
+            }}
+        }}
     </style>
 </head>
 <body>
+    <!-- Toast Notification Container -->
+    <div id="toastContainer"></div>
+    
     <div class="container">
         <div class="header">
             <h1>CISA Email Campaign Management System</h1>
@@ -970,7 +1260,7 @@ def serve_web_ui(event):
             <h2>📧 Send Campaign</h2>
             <div id="formStatus" class="form-status" style="display: none; padding: 10px; margin-bottom: 15px; border-radius: 4px; background: #fff3cd; border: 1px solid #ffeaa7; color: #856404;"></div>
             
-            <div class="form-group">
+            <div class="form-group" style="border: 2px solid #cbd5e1; border-radius: 12px; padding: 20px; background: #f8fafc;">
                 <label style="font-size: 16px; font-weight: 700; color: #1f2937; margin-bottom: 12px; display: block;">🎯 Target Group Filter</label>
                 
                 <!-- Filter Type Selection (Buttons) -->
@@ -1093,6 +1383,79 @@ def serve_web_ui(event):
     <script>
         const API_URL = '{api_url}';
         
+        // ============================================
+        // TOAST NOTIFICATION SYSTEM
+        // ============================================
+        const Toast = {{
+            show: function(message, type = 'info', duration = 4000) {{
+                const container = document.getElementById('toastContainer');
+                const toast = document.createElement('div');
+                toast.className = `toast toast-${{type}}`;
+                
+                const icons = {{
+                    success: '<i class="fas fa-check-circle"></i>',
+                    error: '<i class="fas fa-exclamation-circle"></i>',
+                    warning: '<i class="fas fa-exclamation-triangle"></i>',
+                    info: '<i class="fas fa-info-circle"></i>'
+                }};
+                
+                toast.innerHTML = `
+                    ${{icons[type] || icons.info}}
+                    <div class="toast-message">${{message}}</div>
+                    <button class="toast-close" onclick="Toast.close(this.parentElement)">×</button>
+                `;
+                
+                container.appendChild(toast);
+                
+                // Auto remove after duration
+                if (duration > 0) {{
+                    setTimeout(() => {{
+                        Toast.close(toast);
+                    }}, duration);
+                }}
+                
+                return toast;
+            }},
+            
+            success: function(message, duration = 4000) {{
+                return this.show(message, 'success', duration);
+            }},
+            
+            error: function(message, duration = 5000) {{
+                return this.show(message, 'error', duration);
+            }},
+            
+            warning: function(message, duration = 4500) {{
+                return this.show(message, 'warning', duration);
+            }},
+            
+            info: function(message, duration = 4000) {{
+                return this.show(message, 'info', duration);
+            }},
+            
+            close: function(toast) {{
+                toast.classList.add('removing');
+                setTimeout(() => {{
+                    toast.remove();
+                }}, 300);
+            }}
+        }};
+        
+        // ============================================
+        // LOADING SKELETON HELPER
+        // ============================================
+        function showSkeleton(containerId, count = 5) {{
+            const container = document.getElementById(containerId);
+            if (!container) return;
+            
+            container.innerHTML = '';
+            for (let i = 0; i < count; i++) {{
+                const skeleton = document.createElement('div');
+                skeleton.className = 'skeleton skeleton-row';
+                container.appendChild(skeleton);
+            }}
+        }}
+        
         // Initialize Quill Rich Text Editor
         let quillEditor;
         document.addEventListener('DOMContentLoaded', function() {{
@@ -1169,6 +1532,7 @@ def serve_web_ui(event):
                 if (result.success) {{
                     button.textContent = 'Saved!';
                     button.style.background = 'linear-gradient(135deg, var(--success-color), #059669)';
+                    Toast.success('Configuration saved successfully!');
                     setTimeout(() => {{
                         button.textContent = originalText;
                         button.style.background = '';
@@ -1181,6 +1545,7 @@ def serve_web_ui(event):
                 console.error('Save config error:', error);
                 button.textContent = 'Error';
                 button.style.background = 'linear-gradient(135deg, var(--danger-color), #dc2626)';
+                Toast.error(`Failed to save configuration: ${{error.message}}`);
                 setTimeout(() => {{
                     button.textContent = originalText;
                     button.style.background = '';
@@ -1298,6 +1663,15 @@ def serve_web_ui(event):
                 if (button) {{
                     button.textContent = '⏳ Loading...';
                     button.disabled = true;
+                }}
+                
+                // Show skeleton loading state
+                const tbody = document.querySelector('#contactsTable tbody');
+                if (tbody) {{
+                    tbody.innerHTML = '';
+                    for (let i = 0; i < paginationState.pageSize; i++) {{
+                        tbody.innerHTML += '<tr><td colspan="20" class="skeleton skeleton-row"></td></tr>';
+                    }}
                 }}
                 
                 // Get the pagination key for the current page
@@ -1865,7 +2239,7 @@ def serve_web_ui(event):
                 console.log('Delete response status:', response.status);
                 
                 if (response.ok) {{
-                    alert('Contact deleted successfully!');
+                    Toast.success('Contact deleted successfully!');
                     // Remove the row from the table
                     const row = document.querySelector(`tr[data-contact-id="${{contactId}}"]`);
                     if (row) {{
@@ -1892,7 +2266,7 @@ def serve_web_ui(event):
                 // Find the row with this email
                 const row = document.querySelector(`tr[data-email="${{email}}"]`);
                 if (!row) {{
-                    alert('Row not found');
+                    Toast.error('Row not found');
                     return;
                 }}
                 
@@ -1934,6 +2308,7 @@ def serve_web_ui(event):
                 if (result.success) {{
                     button.textContent = '✅ Saved';
                     row.style.background = '#d1fae5'; // Success green
+                    Toast.success('Contact updated successfully!', 3000);
                     
                     // Reset cell backgrounds
                     cells.forEach(cell => {{
@@ -2464,11 +2839,15 @@ def serve_web_ui(event):
         async function selectCampaignFilterType(filterType) {{
             console.log('Campaign filter type selected:', filterType, 'Current type:', currentCampaignFilterType);
             
+            const countDisplay = document.getElementById('campaignContactCount');
+            const countNumber = document.getElementById('campaignContactCountNumber');
+            
             // Allow toggling off by clicking the same button (including "All")
             if (currentCampaignFilterType === filterType) {{
                 console.log('Toggling off current campaign filter type');
                 currentCampaignFilterType = null;
                 document.getElementById('campaignAvailableValuesArea').style.display = 'none';
+                countDisplay.style.display = 'none';
                 updateCampaignButtonStyles();
                 return;
             }}
@@ -2477,9 +2856,35 @@ def serve_web_ui(event):
             console.log('New current campaign filter type:', currentCampaignFilterType);
             updateCampaignButtonStyles();
             
-            // If "All" is selected, hide the available values area
+            // If "All" is selected, get count from DynamoDB and display
             if (filterType === '') {{
                 document.getElementById('campaignAvailableValuesArea').style.display = 'none';
+                
+                // Fetch all contacts count from DynamoDB
+                try {{
+                    console.log('Fetching all contacts count from DynamoDB...');
+                    const response = await fetch(`${{API_URL}}/contacts?limit=1`);
+                    if (!response.ok) {{
+                        throw new Error(`HTTP ${{response.status}}: ${{response.statusText}}`);
+                    }}
+                    const data = await response.json();
+                    
+                    // Use the scan to get actual count
+                    const countResponse = await fetch(`${{API_URL}}/contacts?limit=10000`);
+                    if (!countResponse.ok) {{
+                        throw new Error(`HTTP ${{countResponse.status}}: ${{countResponse.statusText}}`);
+                    }}
+                    const countData = await countResponse.json();
+                    const totalContacts = (countData.contacts || []).length;
+                    
+                    // Display the count
+                    countNumber.textContent = totalContacts;
+                    countDisplay.style.display = 'block';
+                    console.log(`Total contacts in DynamoDB: ${{totalContacts}}`);
+                }} catch (error) {{
+                    console.error('Error fetching contacts count:', error);
+                    countDisplay.style.display = 'none';
+                }}
                 return;
             }}
             
@@ -2568,7 +2973,7 @@ def serve_web_ui(event):
                     tag.style.cssText = 'display: inline-flex; align-items: center; padding: 6px 10px; background: linear-gradient(135deg, #3b82f6, #2563eb); color: white; border-radius: 6px; font-size: 12px; font-weight: 600;';
                     tag.innerHTML = `
                         <span style="margin-right: 8px;">${{filterType}}: ${{value}}</span>
-                        <button onclick="removeCampaignFilterValue('${{filterType}}', '${{value}}')" style="background: rgba(255,255,255,0.3); border: none; border-radius: 50%; width: 18px; height: 18px; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 12px; color: white; font-weight: bold;">×</button>
+                        <button onclick="removeCampaignFilterValue('${{filterType}}', '${{value}}')" style="background: rgba(255,255,255,0.3); border: none; border-radius: 50%; width: 18px; height: 18px; min-width: 18px; max-width: 18px; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 14px; line-height: 1; color: white; font-weight: bold; padding: 0; flex-shrink: 0;">×</button>
                     `;
                     tagsContainer.appendChild(tag);
                 }});
@@ -2585,7 +2990,7 @@ def serve_web_ui(event):
             if (Object.keys(selectedCampaignFilterValues).length === 0) {{
                 campaignFilteredContacts = [];  // Empty means all contacts
                 countDisplay.style.display = 'none';
-                alert('No filters selected. Campaign will be sent to ALL contacts when you click "Send Campaign".');
+                console.log('No filters selected. Will send to all contacts.');
                 return;
             }}
             
@@ -2622,9 +3027,7 @@ def serve_web_ui(event):
                 countDisplay.style.display = 'block';
                 
                 if (campaignFilteredContacts.length === 0) {{
-                    alert('⚠️ No contacts match the selected filters. Please adjust your filter criteria.');
-                }} else {{
-                    alert(`✅ Filter applied! ${{campaignFilteredContacts.length}} contact(s) will receive this campaign.`);
+                    console.warn('No contacts match the selected filters.');
                 }}
             }} catch (error) {{
                 console.error('Error applying campaign filter:', error);
@@ -2884,6 +3287,7 @@ def serve_web_ui(event):
                 }}
                 
                 // Create a beautiful result display
+                Toast.success('Campaign queued successfully! Emails are being sent.', 6000);
                 resultDiv.innerHTML = `
                     <h3>Campaign Queued Successfully!</h3>
                     <div style="background: var(--info-color); color: white; padding: 20px; border-radius: 12px; margin: 20px 0;">
@@ -2925,6 +3329,7 @@ def serve_web_ui(event):
                 
             }} catch (error) {{
                 const resultDiv = document.getElementById('campaignResult');
+                Toast.error(`Campaign failed: ${{error.message}}`);
                 resultDiv.innerHTML = `
                     <h3 style="color: var(--danger-color);">Campaign Failed</h3>
                     <p style="color: var(--gray-600);">${{error.message}}</p>
