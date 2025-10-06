@@ -969,37 +969,83 @@ def serve_web_ui(event):
         <div id="campaign" class="tab-content">
             <h2>📧 Send Campaign</h2>
             <div id="formStatus" class="form-status" style="display: none; padding: 10px; margin-bottom: 15px; border-radius: 4px; background: #fff3cd; border: 1px solid #ffeaa7; color: #856404;"></div>
+            
             <div class="form-group">
-                <label>🎯 Target Contacts:</label>
-                <div style="display: grid; grid-template-columns: 1fr 2fr; gap: 10px; align-items: start;">
-                    <div style="position: relative; z-index: 100;">
-                        <select id="campaignFilterType" onchange="loadCampaignFilterValues()" style="width: 100%; cursor: pointer;">
-                            <option value="">All Contacts</option>
-                            <option value="test_group">🧪 Test Group Only</option>
-                            <option value="entity_type">Entity Type</option>
-                            <option value="state">State</option>
-                            <option value="agency_name">Agency Name</option>
-                            <option value="sector">Sector</option>
-                            <option value="subsection">Subsection</option>
-                            <option value="ms_isac_member">MS-ISAC Member</option>
-                            <option value="soc_call">SOC Call</option>
-                            <option value="fusion_center">Fusion Center</option>
-                            <option value="k12">K-12</option>
-                            <option value="water_wastewater">Water/Wastewater</option>
-                            <option value="weekly_rollup">Weekly Rollup</option>
-                            <option value="region">Region</option>
-                        </select>
+                <label style="font-size: 16px; font-weight: 700; color: #1f2937; margin-bottom: 12px; display: block;">🎯 Target Group Filter</label>
+                
+                <!-- Filter Type Selection (Buttons) -->
+                <div style="margin-bottom: 15px;">
+                    <label style="display: block; margin-bottom: 8px; font-size: 13px; font-weight: 600; color: #374151;">Select Filter Category:</label>
+                    <div id="campaignFilterTypeButtons" style="display: flex; flex-wrap: wrap; gap: 8px;">
+                        <button class="campaign-filter-type-btn" data-filter="" onclick="selectCampaignFilterType('')" style="padding: 8px 16px; border: 2px solid #e5e7eb; background: white; color: #374151; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.2s;">
+                            All
+                        </button>
+                        <button class="campaign-filter-type-btn" data-filter="entity_type" onclick="selectCampaignFilterType('entity_type')" style="padding: 8px 16px; border: 2px solid #e5e7eb; background: white; color: #374151; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.2s;">
+                            Entity Type
+                        </button>
+                        <button class="campaign-filter-type-btn" data-filter="state" onclick="selectCampaignFilterType('state')" style="padding: 8px 16px; border: 2px solid #e5e7eb; background: white; color: #374151; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.2s;">
+                            State
+                        </button>
+                        <button class="campaign-filter-type-btn" data-filter="agency_name" onclick="selectCampaignFilterType('agency_name')" style="padding: 8px 16px; border: 2px solid #e5e7eb; background: white; color: #374151; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.2s;">
+                            Agency
+                        </button>
+                        <button class="campaign-filter-type-btn" data-filter="sector" onclick="selectCampaignFilterType('sector')" style="padding: 8px 16px; border: 2px solid #e5e7eb; background: white; color: #374151; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.2s;">
+                            Sector
+                        </button>
+                        <button class="campaign-filter-type-btn" data-filter="subsection" onclick="selectCampaignFilterType('subsection')" style="padding: 8px 16px; border: 2px solid #e5e7eb; background: white; color: #374151; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.2s;">
+                            Sub-section
+                        </button>
+                        <button class="campaign-filter-type-btn" data-filter="ms_isac_member" onclick="selectCampaignFilterType('ms_isac_member')" style="padding: 8px 16px; border: 2px solid #e5e7eb; background: white; color: #374151; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.2s;">
+                            MS-ISAC Member
+                        </button>
+                        <button class="campaign-filter-type-btn" data-filter="soc_call" onclick="selectCampaignFilterType('soc_call')" style="padding: 8px 16px; border: 2px solid #e5e7eb; background: white; color: #374151; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.2s;">
+                            SOC Call
+                        </button>
+                        <button class="campaign-filter-type-btn" data-filter="fusion_center" onclick="selectCampaignFilterType('fusion_center')" style="padding: 8px 16px; border: 2px solid #e5e7eb; background: white; color: #374151; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.2s;">
+                            Fusion Center
+                        </button>
+                        <button class="campaign-filter-type-btn" data-filter="k12" onclick="selectCampaignFilterType('k12')" style="padding: 8px 16px; border: 2px solid #e5e7eb; background: white; color: #374151; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.2s;">
+                            K-12
+                        </button>
+                        <button class="campaign-filter-type-btn" data-filter="water_wastewater" onclick="selectCampaignFilterType('water_wastewater')" style="padding: 8px 16px; border: 2px solid #e5e7eb; background: white; color: #374151; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.2s;">
+                            Water/Wastewater
+                        </button>
+                        <button class="campaign-filter-type-btn" data-filter="weekly_rollup" onclick="selectCampaignFilterType('weekly_rollup')" style="padding: 8px 16px; border: 2px solid #e5e7eb; background: white; color: #374151; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.2s;">
+                            Weekly Rollup
+                        </button>
+                        <button class="campaign-filter-type-btn" data-filter="region" onclick="selectCampaignFilterType('region')" style="padding: 8px 16px; border: 2px solid #e5e7eb; background: white; color: #374151; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.2s;">
+                            Region
+                        </button>
                     </div>
-                    <div id="campaignFilterValueContainer" style="display: none;">
-                        <div style="max-height: 300px; overflow-y: auto; padding: 12px; background: #f9fafb; border-radius: 8px; border: 1px solid #e5e7eb;">
-                            <div style="margin-bottom: 12px; padding-bottom: 10px; border-bottom: 1px solid #e5e7eb;">
-                                <button onclick="selectAllCampaignFilters()" style="padding: 6px 12px; font-size: 13px; background: #10b981; margin-right: 8px;">✅ Select All</button>
-                                <button onclick="clearAllCampaignFilters()" style="padding: 6px 12px; font-size: 13px; background: #ef4444;">❌ Clear All</button>
-                            </div>
-                            <div id="campaignFilterCheckboxes"></div>
-                        </div>
-                        <small style="display: block; margin-top: 8px; color: #6b7280;" id="campaignFilterCount"></small>
+                </div>
+                
+                <!-- Available Values Area (shown when a filter type is selected) -->
+                <div id="campaignAvailableValuesArea" style="display: none; margin-bottom: 15px;">
+                    <label style="display: block; margin-bottom: 8px; font-size: 13px; font-weight: 600; color: #374151;">Available Values (click to add):</label>
+                    <div id="campaignAvailableValuesList" style="max-height: 200px; overflow-y: auto; padding: 12px; background: #f9fafb; border: 2px solid #e5e7eb; border-radius: 8px; display: flex; flex-wrap: wrap; gap: 6px;">
+                        <!-- Dynamic value buttons will appear here -->
                     </div>
+                    <small id="campaignAvailableCount" style="display: block; margin-top: 6px; color: #6b7280;"></small>
+                </div>
+                
+                <!-- Selected Filter Values (tags with remove buttons) -->
+                <div id="campaignSelectedValuesArea" style="margin-bottom: 15px;">
+                    <label style="display: block; margin-bottom: 8px; font-size: 13px; font-weight: 600; color: #374151;">Filter Values:</label>
+                    <div id="campaignSelectedValuesTags" style="min-height: 44px; padding: 10px; background: white; border: 2px solid #e5e7eb; border-radius: 8px; display: flex; flex-wrap: wrap; gap: 8px; align-items: center;">
+                        <small style="color: #9ca3af; font-style: italic;">No filters selected - will send to all contacts</small>
+                    </div>
+                </div>
+                
+                <!-- Apply Filter Button -->
+                <div style="display: flex; gap: 10px; margin-bottom: 15px;">
+                    <button onclick="applyCampaignFilter()" class="btn-primary" style="padding: 10px 20px; font-weight: 600; font-size: 14px;">🔍 Apply Filter</button>
+                    <button onclick="clearAllCampaignFilters()" class="btn-secondary" style="padding: 10px 20px; font-weight: 600; font-size: 14px; background: #6b7280;">🔄 Clear All</button>
+                </div>
+                
+                <!-- Contact Count Display -->
+                <div id="campaignContactCount" style="padding: 12px; background: #f0f9ff; border: 2px solid #3b82f6; border-radius: 8px; margin-bottom: 15px; display: none;">
+                    <strong style="color: #1e40af; font-size: 14px;">📊 Target Contacts:</strong>
+                    <span id="campaignContactCountNumber" style="color: #1e40af; font-size: 14px; font-weight: 700; margin-left: 8px;">0</span>
                 </div>
             </div>
             <div class="form-group">
@@ -2410,103 +2456,208 @@ def serve_web_ui(event):
             console.log(`Downloaded ${{window.failedContacts.length}} failed contacts to CSV file`);
         }}
         
-        async function loadCampaignFilterValues() {{
-            const filterType = document.getElementById('campaignFilterType').value;
-            const filterValueContainer = document.getElementById('campaignFilterValueContainer');
-            const filterValueCheckboxes = document.getElementById('campaignFilterCheckboxes');
+        // Campaign Filter State
+        let currentCampaignFilterType = null;
+        let selectedCampaignFilterValues = {{}};  // {{filterType: [values]}}
+        let campaignFilteredContacts = [];  // Store filtered contacts for campaign
+        
+        async function selectCampaignFilterType(filterType) {{
+            console.log('Campaign filter type selected:', filterType, 'Current type:', currentCampaignFilterType);
             
-            if (!filterType) {{
-                // No filter type selected - will use all contacts
-                filterValueContainer.style.display = 'none';
-                updateCampaignContactCount();
+            // Allow toggling off by clicking the same button (including "All")
+            if (currentCampaignFilterType === filterType) {{
+                console.log('Toggling off current campaign filter type');
+                currentCampaignFilterType = null;
+                document.getElementById('campaignAvailableValuesArea').style.display = 'none';
+                updateCampaignButtonStyles();
                 return;
             }}
             
-            // Handle Test Group as a special preset filter
-            if (filterType === 'test_group') {{
-                filterValueContainer.style.display = 'none';
-                updateCampaignContactCount();
+            currentCampaignFilterType = filterType;
+            console.log('New current campaign filter type:', currentCampaignFilterType);
+            updateCampaignButtonStyles();
+            
+            // If "All" is selected, hide the available values area
+            if (filterType === '') {{
+                document.getElementById('campaignAvailableValuesArea').style.display = 'none';
                 return;
             }}
             
-            // Auto-load contacts if not already loaded
-            if (allContacts.length === 0) {{
-                console.log('Contacts not loaded yet, loading now...');
-                await loadContacts();
+            // Show loading state
+            const availableValuesList = document.getElementById('campaignAvailableValuesList');
+            const availableCount = document.getElementById('campaignAvailableCount');
+            availableValuesList.innerHTML = '<small style="color: #6b7280;">Loading values...</small>';
+            document.getElementById('campaignAvailableValuesArea').style.display = 'block';
+            
+            try {{
+                // Call the backend /contacts/distinct endpoint
+                console.log(`Fetching distinct values for campaign: ${{filterType}}`);
+                const response = await fetch(`${{API_URL}}/contacts/distinct?field=${{encodeURIComponent(filterType)}}`);
+                
+                if (!response.ok) {{
+                    throw new Error(`HTTP ${{response.status}}: ${{response.statusText}}`);
+                }}
+                
+                const data = await response.json();
+                console.log('Distinct values received for campaign:', data);
+                
+                const distinctValues = data.values || [];
+                
+                // Populate available values as clickable buttons
+                availableValuesList.innerHTML = '';
+                if (distinctValues.length === 0) {{
+                    availableValuesList.innerHTML = '<small style="color: #ef4444;">No values found for this field</small>';
+                    availableCount.textContent = '0 values available';
+                }} else {{
+                    distinctValues.forEach(value => {{
+                        const btn = document.createElement('button');
+                        btn.textContent = value;
+                        btn.onclick = () => addCampaignFilterValue(filterType, value);
+                        btn.style.cssText = 'padding: 6px 12px; background: #3b82f6; color: white; border: none; border-radius: 6px; font-size: 12px; cursor: pointer; transition: all 0.2s;';
+                        btn.onmouseover = () => {{ btn.style.background = '#2563eb'; }};
+                        btn.onmouseout = () => {{ btn.style.background = '#3b82f6'; }};
+                        availableValuesList.appendChild(btn);
+                    }});
+                    availableCount.textContent = `${{distinctValues.length}} value(s) available`;
+                }}
+            }} catch (error) {{
+                console.error('Error loading campaign distinct values:', error);
+                availableValuesList.innerHTML = `<small style="color: #ef4444;">Error: ${{error.message}}</small>`;
+                availableCount.textContent = '';
             }}
-            
-            // Get distinct values for selected field from loaded contacts
-            const distinctValues = [...new Set(
-                allContacts
-                    .map(c => c[filterType])
-                    .filter(v => v && v.trim() !== '')
-            )].sort();
-            
-            console.log(`Campaign filter: Found ${{distinctValues.length}} distinct values for ${{filterType}}`);
-            
-            // Populate filter value checkboxes
-            filterValueCheckboxes.innerHTML = '';
-            distinctValues.forEach((value, index) => {{
-                const checkboxDiv = document.createElement('div');
-                checkboxDiv.style.marginBottom = '5px';
-                checkboxDiv.innerHTML = `
-                    <label style="display: flex; align-items: center; padding: 8px; cursor: pointer; border-radius: 4px; transition: background 0.2s;" onmouseover="this.style.background='#e0e7ff'" onmouseout="this.style.background='transparent'">
-                        <input type="checkbox" class="campaignFilterCheckbox" value="${{value}}" onchange="updateCampaignContactCount()" style="margin-right: 10px; width: auto;">
-                        <span>${{value}}</span>
-                    </label>
-                `;
-                filterValueCheckboxes.appendChild(checkboxDiv);
-            }});
-            
-            filterValueContainer.style.display = 'block';
-            updateCampaignContactCount();
         }}
         
-        function updateCampaignContactCount() {{
-            const filterType = document.getElementById('campaignFilterType').value;
-            const checkedBoxes = document.querySelectorAll('.campaignFilterCheckbox:checked');
-            const filterCount = document.getElementById('campaignFilterCount');
+        function addCampaignFilterValue(filterType, value) {{
+            if (!selectedCampaignFilterValues[filterType]) {{
+                selectedCampaignFilterValues[filterType] = [];
+            }}
             
-            let targetContacts = allContacts;
+            if (!selectedCampaignFilterValues[filterType].includes(value)) {{
+                selectedCampaignFilterValues[filterType].push(value);
+                console.log('Added campaign filter value:', filterType, value);
+                updateCampaignSelectedValuesTags();
+            }}
+        }}
+        
+        function removeCampaignFilterValue(filterType, value) {{
+            if (selectedCampaignFilterValues[filterType]) {{
+                selectedCampaignFilterValues[filterType] = selectedCampaignFilterValues[filterType].filter(v => v !== value);
+                if (selectedCampaignFilterValues[filterType].length === 0) {{
+                    delete selectedCampaignFilterValues[filterType];
+                }}
+                console.log('Removed campaign filter value:', filterType, value);
+                updateCampaignSelectedValuesTags();
+            }}
+        }}
+        
+        function updateCampaignSelectedValuesTags() {{
+            const tagsContainer = document.getElementById('campaignSelectedValuesTags');
+            tagsContainer.innerHTML = '';
             
-            // Handle Test Group special filter
-            if (filterType === 'test_group') {{
-                targetContacts = allContacts.filter(contact => 
-                    contact.group && contact.group.toLowerCase() === 'test'
-                );
-                filterCount.textContent = `${{targetContacts.length}} contact(s) in Test Group will receive this campaign`;
-                filterCount.style.color = '#f59e0b';
-                filterCount.style.fontWeight = '600';
+            const hasFilters = Object.keys(selectedCampaignFilterValues).length > 0;
+            
+            if (!hasFilters) {{
+                tagsContainer.innerHTML = '<small style="color: #9ca3af; font-style: italic;">No filters selected - will send to all contacts</small>';
                 return;
             }}
             
-            // Apply filter if selected
-            if (filterType && checkedBoxes.length > 0) {{
-                const selectedValues = Array.from(checkedBoxes).map(cb => cb.value);
-                targetContacts = allContacts.filter(contact => {{
-                    const contactValue = getFieldValue(contact, filterType);
-                    return contactValue && selectedValues.includes(contactValue);
+            // Display all selected filters as tags
+            for (const [filterType, values] of Object.entries(selectedCampaignFilterValues)) {{
+                values.forEach(value => {{
+                    const tag = document.createElement('div');
+                    tag.style.cssText = 'display: inline-flex; align-items: center; padding: 6px 10px; background: linear-gradient(135deg, #3b82f6, #2563eb); color: white; border-radius: 6px; font-size: 12px; font-weight: 600;';
+                    tag.innerHTML = `
+                        <span style="margin-right: 8px;">${{filterType}}: ${{value}}</span>
+                        <button onclick="removeCampaignFilterValue('${{filterType}}', '${{value}}')" style="background: rgba(255,255,255,0.3); border: none; border-radius: 50%; width: 18px; height: 18px; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 12px; color: white; font-weight: bold;">×</button>
+                    `;
+                    tagsContainer.appendChild(tag);
                 }});
-                filterCount.textContent = `${{targetContacts.length}} contact(s) will receive this campaign (${{checkedBoxes.length}} filter(s) selected)`;
-                filterCount.style.color = '#6b7280';
-                filterCount.style.fontWeight = 'normal';
-            }} else {{
-                filterCount.textContent = `${{allContacts.length}} contact(s) will receive this campaign (All Contacts)`;
-                filterCount.style.color = '#6b7280';
-                filterCount.style.fontWeight = 'normal';
             }}
         }}
         
-        function selectAllCampaignFilters() {{
-            const checkboxes = document.querySelectorAll('.campaignFilterCheckbox');
-            checkboxes.forEach(cb => cb.checked = true);
-            updateCampaignContactCount();
+        async function applyCampaignFilter() {{
+            console.log('Applying campaign filter...', selectedCampaignFilterValues);
+            
+            const countDisplay = document.getElementById('campaignContactCount');
+            const countNumber = document.getElementById('campaignContactCountNumber');
+            
+            // If no filters selected, use all contacts
+            if (Object.keys(selectedCampaignFilterValues).length === 0) {{
+                campaignFilteredContacts = [];  // Empty means all contacts
+                countDisplay.style.display = 'none';
+                alert('No filters selected. Campaign will be sent to ALL contacts when you click "Send Campaign".');
+                return;
+            }}
+            
+            // Build filters array for API
+            const filters = Object.entries(selectedCampaignFilterValues)
+                .map(([field, values]) => ({{
+                    field: field,
+                    values: values
+                }}));
+            
+            console.log('Campaign filter request:', filters);
+            
+            try {{
+                // Call the backend /contacts/filter endpoint
+                const response = await fetch(`${{API_URL}}/contacts/filter`, {{
+                    method: 'POST',
+                    headers: {{
+                        'Content-Type': 'application/json'
+                    }},
+                    body: JSON.stringify({{ filters: filters }})
+                }});
+                
+                if (!response.ok) {{
+                    throw new Error(`HTTP ${{response.status}}: ${{response.statusText}}`);
+                }}
+                
+                const data = await response.json();
+                console.log('Campaign filtered contacts received:', data);
+                
+                campaignFilteredContacts = data.contacts || [];
+                
+                // Display the count
+                countNumber.textContent = campaignFilteredContacts.length;
+                countDisplay.style.display = 'block';
+                
+                if (campaignFilteredContacts.length === 0) {{
+                    alert('⚠️ No contacts match the selected filters. Please adjust your filter criteria.');
+                }} else {{
+                    alert(`✅ Filter applied! ${{campaignFilteredContacts.length}} contact(s) will receive this campaign.`);
+                }}
+            }} catch (error) {{
+                console.error('Error applying campaign filter:', error);
+                alert(`Error loading filtered contacts: ${{error.message}}`);
+            }}
         }}
         
         function clearAllCampaignFilters() {{
-            const checkboxes = document.querySelectorAll('.campaignFilterCheckbox');
-            checkboxes.forEach(cb => cb.checked = false);
-            updateCampaignContactCount();
+            selectedCampaignFilterValues = {{}};
+            currentCampaignFilterType = null;
+            campaignFilteredContacts = [];
+            document.getElementById('campaignAvailableValuesArea').style.display = 'none';
+            document.getElementById('campaignContactCount').style.display = 'none';
+            updateCampaignSelectedValuesTags();
+            updateCampaignButtonStyles();
+        }}
+        
+        function updateCampaignButtonStyles() {{
+            const buttons = document.querySelectorAll('.campaign-filter-type-btn');
+            buttons.forEach(btn => {{
+                const filterValue = btn.getAttribute('data-filter');
+                if (filterValue === currentCampaignFilterType) {{
+                    btn.style.background = 'linear-gradient(135deg, #3b82f6, #2563eb)';
+                    btn.style.color = 'white';
+                    btn.style.borderColor = '#2563eb';
+                    btn.style.boxShadow = '0 2px 8px rgba(59, 130, 246, 0.3)';
+                }} else {{
+                    btn.style.background = 'white';
+                    btn.style.color = '#374151';
+                    btn.style.borderColor = '#e5e7eb';
+                    btn.style.boxShadow = 'none';
+                }}
+            }});
         }}
         
         // Attachment handling
@@ -2656,36 +2807,34 @@ def serve_web_ui(event):
                 button.classList.add('loading');
                 button.disabled = true;
                 
-            // Get target contacts based on selected filter
-            const campaignFilterType = document.getElementById('campaignFilterType').value;
-            const campaignCheckedBoxes = document.querySelectorAll('.campaignFilterCheckbox:checked');
-            
-            let targetContacts = allContacts;
+            // Determine target contacts based on filter
+            let targetContacts = [];
             let filterDescription = 'All Contacts';
             
-            // Auto-load contacts if not already loaded
-            if (allContacts.length === 0) {{
-                throw new Error('Please load contacts first by going to the Contacts tab.');
-            }}
-            
-            // Handle Test Group special filter
-            if (campaignFilterType === 'test_group') {{
-                targetContacts = allContacts.filter(contact => 
-                    contact.group && contact.group.toLowerCase() === 'test'
-                );
-                filterDescription = 'Test Group (group = Test)';
-            }}
-            // Apply filter if checkboxes are selected
-            else if (campaignFilterType && campaignCheckedBoxes.length > 0) {{
-                const selectedValues = Array.from(campaignCheckedBoxes).map(cb => cb.value);
-                targetContacts = allContacts.filter(contact => 
-                    contact[campaignFilterType] && selectedValues.includes(contact[campaignFilterType])
-                );
-                filterDescription = `${{campaignFilterType}}: ${{selectedValues.join(', ')}}`;
+            // If user has applied a filter, use the filtered contacts
+            if (campaignFilteredContacts.length > 0) {{
+                targetContacts = campaignFilteredContacts;
+                const filterTags = Object.entries(selectedCampaignFilterValues)
+                    .map(([field, values]) => `${{field}}: ${{values.join(', ')}}`)
+                    .join('; ');
+                filterDescription = filterTags;
+            }} else if (Object.keys(selectedCampaignFilterValues).length > 0) {{
+                // User has selected filters but hasn't clicked "Apply Filter"
+                throw new Error('Please click "Apply Filter" button before sending the campaign.');
+            }} else {{
+                // No filters - need to load all contacts from DynamoDB
+                console.log('No filters applied, fetching all contacts...');
+                const response = await fetch(`${{API_URL}}/contacts?limit=10000`);
+                if (!response.ok) {{
+                    throw new Error(`Failed to load contacts: HTTP ${{response.status}}`);
+                }}
+                const data = await response.json();
+                targetContacts = data.contacts || [];
+                filterDescription = 'All Contacts';
             }}
             
             if (targetContacts.length === 0) {{
-                throw new Error('No contacts match the selected filters. Please adjust your filter or select "All Contacts".');
+                throw new Error('No contacts found. Please add contacts or adjust your filter.');
             }}
             
             console.log(`Campaign will be sent to ${{targetContacts.length}} contacts (${{filterDescription}})`);
@@ -2701,9 +2850,9 @@ def serve_web_ui(event):
                 subject: document.getElementById('subject').value,
                 body: emailBody,
                 launched_by: userName,  // Send user identity to backend
-                filter_type: campaignFilterType || null,
-                filter_values: campaignFilterType && campaignCheckedBoxes.length > 0 
-                    ? Array.from(campaignCheckedBoxes).map(cb => cb.value)
+                filter_type: Object.keys(selectedCampaignFilterValues).length > 0 ? 'custom' : null,
+                filter_values: Object.keys(selectedCampaignFilterValues).length > 0 
+                    ? JSON.stringify(selectedCampaignFilterValues)
                     : null,
                 filter_description: filterDescription,
                 target_contacts: targetContacts.map(c => c.email),  // Send email list to backend
