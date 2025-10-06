@@ -2,14 +2,17 @@
 Email Worker Lambda Function
 Processes email messages from SQS queue
 Retrieves campaign data and contact data from DynamoDB
-Sends emails via AWS SES
+Sends emails via AWS SES with adaptive rate control
 """
 
 import json
 import boto3
 import logging
+import time
+import os
 from decimal import Decimal
 from datetime import datetime
+from botocore.exceptions import ClientError
 
 # Configure logging
 logger = logging.getLogger()
@@ -21,12 +24,242 @@ campaigns_table = dynamodb.Table('EmailCampaigns')
 contacts_table = dynamodb.Table('EmailContacts')
 secrets_client = boto3.client('secretsmanager', region_name='us-gov-west-1')
 s3_client = boto3.client('s3', region_name='us-gov-west-1')
+cloudwatch = boto3.client('cloudwatch', region_name='us-gov-west-1')
 
 # S3 bucket for attachments
 ATTACHMENTS_BUCKET = 'jcdc-ses-contact-list'
 
+# Adaptive Rate Control Configuration
+class AdaptiveRateControl:
+    def __init__(self):
+        # Base rate control settings
+        self.base_delay = float(os.environ.get('BASE_DELAY_SECONDS', '0.1'))  # Base delay between emails
+        self.max_delay = float(os.environ.get('MAX_DELAY_SECONDS', '5.0'))   # Maximum delay allowed
+        self.min_delay = float(os.environ.get('MIN_DELAY_SECONDS', '0.01'))  # Minimum delay allowed
+        
+        # Attachment size thresholds (in bytes)
+        self.small_attachment_threshold = 1024 * 1024      # 1MB
+        self.medium_attachment_threshold = 5 * 1024 * 1024  # 5MB
+        self.large_attachment_threshold = 10 * 1024 * 1024  # 10MB
+        
+        # Rate adjustment factors
+        self.small_attachment_factor = 1.5    # 50% slower for small attachments
+        self.medium_attachment_factor = 2.0   # 100% slower for medium attachments
+        self.large_attachment_factor = 3.0    # 200% slower for large attachments
+        
+        # Throttle detection and recovery
+        self.throttle_detection_window = 10   # Look for throttles in last N emails
+        self.throttle_backoff_factor = 2.0    # Double delay when throttled
+        self.throttle_recovery_time = 60      # Seconds to wait before reducing delay
+        self.max_throttle_backoffs = 5        # Maximum consecutive throttle backoffs
+        
+        # Rate control state
+        self.current_delay = self.base_delay
+        self.recent_throttles = []  # Track recent throttle events
+        self.last_throttle_time = None
+        self.consecutive_throttles = 0
+        
+        logger.info(f"Adaptive Rate Control initialized:")
+        logger.info(f"  Base delay: {self.base_delay}s")
+        logger.info(f"  Delay range: {self.min_delay}s - {self.max_delay}s")
+        logger.info(f"  Attachment thresholds: {self.small_attachment_threshold//1024//1024}MB, {self.medium_attachment_threshold//1024//1024}MB, {self.large_attachment_threshold//1024//1024}MB")
+
+    def calculate_attachment_delay(self, attachments):
+        """Calculate delay based on attachment sizes"""
+        if not attachments:
+            return self.base_delay
+        
+        total_size = 0
+        for attachment in attachments:
+            try:
+                # Try to get file size from S3 metadata
+                s3_key = attachment.get('s3_key')
+                if s3_key:
+                    response = s3_client.head_object(Bucket=ATTACHMENTS_BUCKET, Key=s3_key)
+                    file_size = response.get('ContentLength', 0)
+                    total_size += file_size
+                    logger.debug(f"Attachment {attachment.get('filename', 'unknown')}: {file_size} bytes")
+            except Exception as e:
+                logger.warning(f"Could not get size for attachment {attachment.get('filename', 'unknown')}: {str(e)}")
+                # Estimate based on filename if we can't get actual size
+                total_size += 1024 * 1024  # Assume 1MB if unknown
+        
+        # Determine rate factor based on total attachment size
+        if total_size <= self.small_attachment_threshold:
+            factor = self.small_attachment_factor
+            size_category = "small"
+        elif total_size <= self.medium_attachment_threshold:
+            factor = self.medium_attachment_factor
+            size_category = "medium"
+        else:
+            factor = self.large_attachment_factor
+            size_category = "large"
+        
+        delay = self.base_delay * factor
+        logger.info(f"Attachment size: {total_size//1024//1024}MB ({size_category}), delay factor: {factor}x, calculated delay: {delay:.3f}s")
+        
+        return min(delay, self.max_delay)
+
+    def detect_throttle_exception(self, exception):
+        """Detect if an exception is a throttle/rate limit exception"""
+        throttle_indicators = [
+            'throttle',
+            'rate limit',
+            'rate exceeded',
+            'too many requests',
+            'quota exceeded',
+            'service unavailable',
+            'slow down'
+        ]
+        
+        error_message = str(exception).lower()
+        for indicator in throttle_indicators:
+            if indicator in error_message:
+                return True
+        
+        # Check for specific AWS SES throttle errors
+        if isinstance(exception, ClientError):
+            error_code = exception.response.get('Error', {}).get('Code', '')
+            if error_code in ['Throttling', 'ServiceUnavailable', 'SlowDown']:
+                return True
+        
+        return False
+
+    def handle_throttle_detected(self):
+        """Handle throttle detection by adjusting rate"""
+        current_time = time.time()
+        self.recent_throttles.append(current_time)
+        self.last_throttle_time = current_time
+        self.consecutive_throttles += 1
+        
+        # Clean old throttle events
+        cutoff_time = current_time - self.throttle_detection_window
+        self.recent_throttles = [t for t in self.recent_throttles if t > cutoff_time]
+        
+        # Apply backoff
+        if self.consecutive_throttles <= self.max_throttle_backoffs:
+            self.current_delay = min(
+                self.current_delay * self.throttle_backoff_factor,
+                self.max_delay
+            )
+            logger.warning(f"Throttle detected! Increasing delay to {self.current_delay:.3f}s (backoff #{self.consecutive_throttles})")
+        else:
+            logger.error(f"Maximum throttle backoffs ({self.max_throttle_backoffs}) reached. Keeping delay at {self.current_delay:.3f}s")
+        
+        return self.current_delay
+
+    def recover_from_throttle(self):
+        """Gradually recover from throttle by reducing delay"""
+        current_time = time.time()
+        
+        # Only start recovery if enough time has passed since last throttle
+        if (self.last_throttle_time and 
+            current_time - self.last_throttle_time > self.throttle_recovery_time and
+            self.current_delay > self.base_delay):
+            
+            # Gradually reduce delay
+            recovery_factor = 0.9  # Reduce delay by 10%
+            self.current_delay = max(
+                self.current_delay * recovery_factor,
+                self.base_delay
+            )
+            
+            if self.current_delay <= self.base_delay:
+                self.consecutive_throttles = 0
+                logger.info("Recovered from throttle - back to base delay")
+            else:
+                logger.info(f"Recovering from throttle - reducing delay to {self.current_delay:.3f}s")
+        
+        return self.current_delay
+
+    def get_delay_for_email(self, attachments, exception=None):
+        """Get the appropriate delay for the next email"""
+        # Handle throttle exceptions
+        if exception and self.detect_throttle_exception(exception):
+            return self.handle_throttle_detected()
+        
+        # Check for throttle recovery
+        self.recover_from_throttle()
+        
+        # Calculate delay based on attachments
+        attachment_delay = self.calculate_attachment_delay(attachments)
+        
+        # Use the higher of attachment delay or current throttle delay
+        final_delay = max(attachment_delay, self.current_delay)
+        
+        # Ensure delay is within bounds
+        final_delay = max(self.min_delay, min(final_delay, self.max_delay))
+        
+        return final_delay
+
+# Global rate control instance
+rate_control = AdaptiveRateControl()
+
+def send_cloudwatch_metric(metric_name, value, unit='Count', dimensions=None):
+    """Send custom metric to CloudWatch"""
+    try:
+        metric_data = {
+            'MetricName': metric_name,
+            'Value': value,
+            'Unit': unit,
+            'Timestamp': datetime.now(),
+            'Namespace': 'EmailWorker/Custom'
+        }
+        
+        if dimensions:
+            metric_data['Dimensions'] = dimensions
+        
+        cloudwatch.put_metric_data(
+            Namespace='EmailWorker/Custom',
+            MetricData=[metric_data]
+        )
+        
+        logger.debug(f"Sent CloudWatch metric: {metric_name}={value} {unit}")
+        
+    except Exception as e:
+        logger.warning(f"Failed to send CloudWatch metric {metric_name}: {str(e)}")
+
+def check_campaign_completion_status(campaign_id, expected_total):
+    """Check if campaign is completed and send metric if incomplete"""
+    try:
+        # Get current campaign status
+        campaign_response = campaigns_table.get_item(Key={'campaign_id': campaign_id})
+        if 'Item' in campaign_response:
+            campaign = campaign_response['Item']
+            
+            sent_count = campaign.get('sent_count', 0)
+            failed_count = campaign.get('failed_count', 0)
+            total_processed = sent_count + failed_count
+            
+            # Check if campaign is significantly behind
+            if expected_total > 0:
+                completion_percentage = (total_processed / expected_total) * 100
+                
+                # If less than 90% complete and we've been processing for a while
+                if completion_percentage < 90:
+                    logger.warning(f"Campaign {campaign_id} only {completion_percentage:.1f}% complete ({total_processed}/{expected_total})")
+                    
+                    # Send metric for incomplete campaign
+                    send_cloudwatch_metric(
+                        'IncompleteCampaigns',
+                        1,
+                        'Count',
+                        [
+                            {'Name': 'CampaignId', 'Value': campaign_id},
+                            {'Name': 'CompletionPercentage', 'Value': f"{completion_percentage:.1f}"}
+                        ]
+                    )
+                    
+                    return False
+        
+        return True
+        
+    except Exception as e:
+        logger.error(f"Error checking campaign completion status: {str(e)}")
+        return True
+
 def lambda_handler(event, context):
-    """Process SQS messages and send emails"""
+    """Process SQS messages and send emails with adaptive rate control"""
     
     start_time = datetime.now()
     logger.info(f"Lambda invocation started at {start_time.isoformat()}")
@@ -38,7 +271,14 @@ def lambda_handler(event, context):
     results = {
         'successful': 0,
         'failed': 0,
-        'errors': []
+        'errors': [],
+        'rate_control_stats': {
+            'total_delay_applied': 0,
+            'throttles_detected': 0,
+            'attachment_delays_applied': 0
+        },
+        'campaigns_processed': set(),
+        'total_expected_emails': 0
     }
     
     for idx, record in enumerate(event['Records'], 1):
@@ -57,6 +297,9 @@ def lambda_handler(event, context):
                 raise ValueError("Missing campaign_id or contact_email in message")
             
             logger.info(f"[Message {idx}] Campaign ID: {campaign_id}, Contact: {contact_email}")
+            
+            # Track campaigns being processed
+            results['campaigns_processed'].add(campaign_id)
             
             # Retrieve campaign data from DynamoDB
             logger.info(f"[Message {idx}] Retrieving campaign data from DynamoDB")
@@ -100,17 +343,75 @@ def lambda_handler(event, context):
             logger.info(f"[Message {idx}] Subject: {personalized_subject}")
             logger.debug(f"[Message {idx}] Body length: {len(personalized_body)} characters")
             
+            # Apply adaptive rate control delay before sending
+            attachments = campaign.get('attachments', [])
+            delay = rate_control.get_delay_for_email(attachments)
+            
+            if delay > 0:
+                logger.info(f"[Message {idx}] Applying adaptive rate control delay: {delay:.3f}s")
+                time.sleep(delay)
+                results['rate_control_stats']['total_delay_applied'] += delay
+                
+                # Track if delay was due to attachments
+                if attachments:
+                    results['rate_control_stats']['attachment_delays_applied'] += 1
+                    
+                    # Send metric for attachment delays
+                    total_attachment_size = 0
+                    for attachment in attachments:
+                        try:
+                            s3_key = attachment.get('s3_key')
+                            if s3_key:
+                                response = s3_client.head_object(Bucket=ATTACHMENTS_BUCKET, Key=s3_key)
+                                total_attachment_size += response.get('ContentLength', 0)
+                        except:
+                            total_attachment_size += 1024 * 1024  # Estimate 1MB if unknown
+                    
+                    send_cloudwatch_metric(
+                        'AttachmentDelays',
+                        len(attachments),
+                        'Count',
+                        [
+                            {'Name': 'CampaignId', 'Value': campaign_id},
+                            {'Name': 'TotalSizeMB', 'Value': f"{total_attachment_size // 1024 // 1024}"}
+                        ]
+                    )
+            
             # Send email via AWS SES or SMTP
             logger.info(f"[Message {idx}] Sending email via {email_service.upper()}")
             send_start = datetime.now()
             
-            if email_service == 'ses':
-                success = send_ses_email(campaign, contact, from_email, personalized_subject, personalized_body, idx)
-            else:
-                success = send_smtp_email(campaign, contact, from_email, personalized_subject, personalized_body, idx)
-            
-            send_duration = (datetime.now() - send_start).total_seconds()
-            logger.info(f"[Message {idx}] Email send attempt completed in {send_duration:.2f} seconds")
+            try:
+                if email_service == 'ses':
+                    success = send_ses_email(campaign, contact, from_email, personalized_subject, personalized_body, idx)
+                else:
+                    success = send_smtp_email(campaign, contact, from_email, personalized_subject, personalized_body, idx)
+                
+                send_duration = (datetime.now() - send_start).total_seconds()
+                logger.info(f"[Message {idx}] Email send attempt completed in {send_duration:.2f} seconds")
+                
+            except Exception as send_exception:
+                # Check if this is a throttle exception and handle it
+                if rate_control.detect_throttle_exception(send_exception):
+                    results['rate_control_stats']['throttles_detected'] += 1
+                    logger.warning(f"[Message {idx}] Throttle exception detected: {str(send_exception)}")
+                    
+                    # Send CloudWatch metric for throttle exception
+                    send_cloudwatch_metric(
+                        'ThrottleExceptions',
+                        1,
+                        'Count',
+                        [
+                            {'Name': 'CampaignId', 'Value': campaign_id},
+                            {'Name': 'ErrorType', 'Value': 'SES_Throttle'}
+                        ]
+                    )
+                    
+                    # Update rate control for future emails
+                    rate_control.handle_throttle_detected()
+                
+                # Re-raise the exception to be handled by the outer try-catch
+                raise send_exception
             
             if success:
                 results['successful'] += 1
@@ -159,6 +460,42 @@ def lambda_handler(event, context):
     end_time = datetime.now()
     duration = (end_time - start_time).total_seconds()
     
+    # Check campaign completion status and send metrics
+    for campaign_id in results['campaigns_processed']:
+        try:
+            # Get campaign details to check completion
+            campaign_response = campaigns_table.get_item(Key={'campaign_id': campaign_id})
+            if 'Item' in campaign_response:
+                campaign = campaign_response['Item']
+                total_contacts = campaign.get('total_contacts', 0)
+                
+                # Check if campaign appears to be stuck or incomplete
+                if total_contacts > 0:
+                    check_campaign_completion_status(campaign_id, total_contacts)
+                    
+                    # Send general campaign processing metric
+                    send_cloudwatch_metric(
+                        'CampaignProcessing',
+                        1,
+                        'Count',
+                        [
+                            {'Name': 'CampaignId', 'Value': campaign_id},
+                            {'Name': 'TotalContacts', 'Value': str(total_contacts)}
+                        ]
+                    )
+        except Exception as e:
+            logger.warning(f"Error checking campaign completion for {campaign_id}: {str(e)}")
+    
+    # Send batch processing metrics
+    send_cloudwatch_metric('BatchProcessing', 1, 'Count')
+    send_cloudwatch_metric('EmailsProcessed', results['successful'] + results['failed'], 'Count')
+    send_cloudwatch_metric('ProcessingDuration', duration, 'Seconds')
+    
+    if results['rate_control_stats']['throttles_detected'] > 0:
+        send_cloudwatch_metric('ThrottleExceptionsInBatch', results['rate_control_stats']['throttles_detected'], 'Count')
+    
+    # Log rate control statistics
+    rate_stats = results['rate_control_stats']
     logger.info(f"=" * 80)
     logger.info(f"Batch processing complete")
     logger.info(f"Total messages: {len(event['Records'])}")
@@ -166,6 +503,12 @@ def lambda_handler(event, context):
     logger.info(f"Failed: {results['failed']}")
     logger.info(f"Duration: {duration:.2f} seconds")
     logger.info(f"Average: {duration/len(event['Records']):.2f} seconds per message")
+    logger.info(f"Campaigns processed: {len(results['campaigns_processed'])}")
+    logger.info(f"Rate Control Statistics:")
+    logger.info(f"  Total delay applied: {rate_stats['total_delay_applied']:.3f} seconds")
+    logger.info(f"  Throttles detected: {rate_stats['throttles_detected']}")
+    logger.info(f"  Attachment delays applied: {rate_stats['attachment_delays_applied']}")
+    logger.info(f"  Current adaptive delay: {rate_control.current_delay:.3f} seconds")
     if results['errors']:
         logger.error(f"Errors encountered: {len(results['errors'])}")
         for error in results['errors']:
@@ -314,7 +657,17 @@ def send_ses_email(campaign, contact, from_email, subject, body, msg_idx=0):
     except Exception as e:
         logger.error(f"[Message {msg_idx}] SES Error: {str(e)}")
         logger.exception(f"[Message {msg_idx}] SES Exception details:")
-        return False
+        
+        # Log specific throttle information for debugging
+        if rate_control.detect_throttle_exception(e):
+            logger.warning(f"[Message {msg_idx}] This appears to be a throttle exception")
+            if isinstance(e, ClientError):
+                error_code = e.response.get('Error', {}).get('Code', '')
+                error_message = e.response.get('Error', {}).get('Message', '')
+                logger.warning(f"[Message {msg_idx}] AWS Error Code: {error_code}, Message: {error_message}")
+        
+        # Re-raise the exception so it can be handled by the caller
+        raise e
 
 def send_smtp_email(campaign, contact, from_email, subject, body, msg_idx=0):
     """Send email via SMTP"""
@@ -347,7 +700,13 @@ def send_smtp_email(campaign, contact, from_email, subject, body, msg_idx=0):
     except Exception as e:
         logger.error(f"[Message {msg_idx}] SMTP Error: {str(e)}")
         logger.exception(f"[Message {msg_idx}] SMTP Exception details:")
-        return False
+        
+        # Log specific throttle information for debugging
+        if rate_control.detect_throttle_exception(e):
+            logger.warning(f"[Message {msg_idx}] This appears to be a throttle/rate limit exception")
+        
+        # Re-raise the exception so it can be handled by the caller
+        raise e
 
 def personalize_content(content, contact):
     """Replace placeholders with contact data - supports all CISA fields"""
