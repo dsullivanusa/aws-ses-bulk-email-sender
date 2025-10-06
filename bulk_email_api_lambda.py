@@ -1932,11 +1932,42 @@ def serve_web_ui(event):
         }}
         
         async function changePageSize() {{
-            const newPageSize = parseInt(document.getElementById('pageSize').value);
-            paginationState.pageSize = newPageSize;
-            
-            // Reset to first page with new page size
-            await loadContacts(true);
+            try {{
+                const pageSizeSelect = document.getElementById('pageSize');
+                if (!pageSizeSelect) {{
+                    console.error('Page size select not found');
+                    return;
+                }}
+                
+                const newPageSize = parseInt(pageSizeSelect.value);
+                console.log('Changing page size to:', newPageSize);
+                
+                // Disable dropdown during loading to prevent multiple clicks
+                pageSizeSelect.disabled = true;
+                
+                // Reset pagination state completely
+                paginationState = {{
+                    currentPage: 1,
+                    pageSize: newPageSize,
+                    paginationKeys: [null],
+                    hasNextPage: false,
+                    displayedContacts: []
+                }};
+                
+                // Reload contacts with new page size
+                await loadContacts(false);
+                
+                // Re-enable dropdown after loading
+                pageSizeSelect.disabled = false;
+                
+            }} catch (error) {{
+                console.error('Error changing page size:', error);
+                // Re-enable dropdown on error
+                const pageSizeSelect = document.getElementById('pageSize');
+                if (pageSizeSelect) {{
+                    pageSizeSelect.disabled = false;
+                }}
+            }}
         }}
         
         async function loadAllContacts() {{
@@ -3514,31 +3545,72 @@ def serve_web_ui(event):
             let targetContacts = [];
             let filterDescription = 'All Contacts';
             
+            console.log('Campaign filter debug:', {{
+                campaignFilteredContactsLength: campaignFilteredContacts?.length || 0,
+                selectedCampaignFilterValuesKeys: Object.keys(selectedCampaignFilterValues || {{}}).length,
+                selectedCampaignFilterValues: selectedCampaignFilterValues
+            }});
+            
             // If user has applied a filter, use the filtered contacts
-            if (campaignFilteredContacts.length > 0) {{
+            if (campaignFilteredContacts && campaignFilteredContacts.length > 0) {{
                 targetContacts = campaignFilteredContacts;
-                const filterTags = Object.entries(selectedCampaignFilterValues)
+                const filterTags = Object.entries(selectedCampaignFilterValues || {{}})
                     .map(([field, values]) => `${{field}}: ${{values.join(', ')}}`)
                     .join('; ');
-                filterDescription = filterTags;
-            }} else if (Object.keys(selectedCampaignFilterValues).length > 0) {{
+                filterDescription = filterTags || 'Filtered Contacts';
+                console.log(`Using ${{targetContacts.length}} filtered contacts: ${{filterDescription}}`);
+            }} else if (Object.keys(selectedCampaignFilterValues || {{}}).length > 0) {{
                 // User has selected filters but hasn't clicked "Apply Filter"
-                throw new Error('Please click "Apply Filter" button before sending the campaign.');
+                console.log('Filters selected but not applied. Attempting to apply filter automatically...');
+                
+                try {{
+                    // Try to apply the filter automatically
+                    await applyCampaignFilter();
+                    
+                    // Check if we now have filtered contacts
+                    if (campaignFilteredContacts && campaignFilteredContacts.length > 0) {{
+                        targetContacts = campaignFilteredContacts;
+                        const filterTags = Object.entries(selectedCampaignFilterValues)
+                            .map(([field, values]) => `${{field}}: ${{values.join(', ')}}`)
+                            .join('; ');
+                        filterDescription = filterTags;
+                        console.log(`Auto-applied filter: ${{targetContacts.length}} contacts found`);
+                    }} else {{
+                        throw new Error('No contacts match the selected filter criteria. Please adjust your filter or click "Apply Filter" to see results.');
+                    }}
+                }} catch (filterError) {{
+                    console.error('Auto-apply filter failed:', filterError);
+                    throw new Error('Please click "Apply Filter" button to see which contacts match your criteria before sending the campaign.');
+                }}
             }} else {{
                 // No filters - need to load all contacts from DynamoDB
                 console.log('No filters applied, fetching all contacts...');
-                const response = await fetch(`${{API_URL}}/contacts?limit=10000`);
-                if (!response.ok) {{
-                    throw new Error(`Failed to load contacts: HTTP ${{response.status}}`);
+                try {{
+                    const response = await fetch(`${{API_URL}}/contacts?limit=10000`);
+                    if (!response.ok) {{
+                        throw new Error(`Failed to load contacts: HTTP ${{response.status}}`);
+                    }}
+                    const data = await response.json();
+                    targetContacts = data.contacts || [];
+                    filterDescription = 'All Contacts';
+                    console.log(`Loaded ${{targetContacts.length}} contacts from database`);
+                }} catch (loadError) {{
+                    console.error('Failed to load contacts:', loadError);
+                    throw new Error(`Failed to load contacts: ${{loadError.message}}`);
                 }}
-                const data = await response.json();
-                targetContacts = data.contacts || [];
-                filterDescription = 'All Contacts';
             }}
             
-            if (targetContacts.length === 0) {{
+            if (!targetContacts || targetContacts.length === 0) {{
                 throw new Error('No contacts found. Please add contacts or adjust your filter.');
             }}
+            
+            // Additional validation - check if emails are valid
+            const validEmails = targetContacts.map(c => c?.email).filter(email => email && email.includes('@'));
+            if (validEmails.length === 0) {{
+                throw new Error('No valid email addresses found in the selected contacts. Please check your contact data.');
+            }}
+            
+            console.log(`Valid emails found: ${{validEmails.length}} out of ${{targetContacts.length}} contacts`);
             
             console.log(`Campaign will be sent to ${{targetContacts.length}} contacts (${{filterDescription}})`);
             
@@ -3558,7 +3630,7 @@ def serve_web_ui(event):
                     ? JSON.stringify(selectedCampaignFilterValues)
                     : null,
                 filter_description: filterDescription,
-                target_contacts: targetContacts.map(c => c.email),  // Send email list to backend
+                target_contacts: targetContacts.map(c => c?.email).filter(email => email),  // Send email list to backend
                 attachments: campaignAttachments  // Include attachments
             }};
                 
