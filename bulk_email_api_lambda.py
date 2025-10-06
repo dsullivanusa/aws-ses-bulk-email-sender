@@ -1316,6 +1316,11 @@ def serve_web_ui(event):
                 <small id="searchResults" style="color: #6b7280;"></small>
             </div>
             
+            <!-- Contacts List Title -->
+            <h2 style="margin: 30px 0 20px 0; color: #1f2937; font-size: 1.8rem; font-weight: 700; border-bottom: 3px solid #6366f1; padding-bottom: 10px;">
+                📋 Contacts List
+            </h2>
+            
             <!-- Pagination Controls -->
             <div style="display: flex; justify-content: space-between; align-items: center; margin: 20px 0; padding: 15px; background: #f9fafb; border-radius: 8px; border: 1px solid #e5e7eb;">
                 <div style="display: flex; gap: 10px; align-items: center;">
@@ -1790,18 +1795,30 @@ def serve_web_ui(event):
                 return;
             }}
             
-            document.getElementById('campaignName').value = '';
-            document.getElementById('subject').value = '';
-            quillEditor.setContents([]);
+            // Clear form fields (with null checks)
+            const campaignName = document.getElementById('campaignName');
+            if (campaignName) campaignName.value = '';
             
-            // Clear campaign filter
-            document.getElementById('campaignFilterType').value = '';
-            document.getElementById('campaignFilterValueContainer').style.display = 'none';
+            const subject = document.getElementById('subject');
+            if (subject) subject.value = '';
+            
+            // Clear Quill editor
+            if (quillEditor) {{
+                quillEditor.setContents([]);
+            }}
+            
+            // Clear campaign filters
             clearAllCampaignFilters();
             
             // Clear attachments
             campaignAttachments = [];
             displayAttachments();
+            
+            // Clear user name field if it exists
+            const userName = document.getElementById('userName');
+            if (userName) userName.value = '';
+            
+            console.log('Campaign form cleared');
         }};
         
         async function loadContacts(resetPagination = true) {{
@@ -1813,7 +1830,7 @@ def serve_web_ui(event):
                 // Reset pagination to first page
                 paginationState = {{
                     currentPage: 1,
-                    pageSize: parseInt(document.getElementById('pageSize').value) || 25,
+                    pageSize: 25,  // Fixed page size (page size dropdown removed)
                     paginationKeys: [null],
                     hasNextPage: false,
                     displayedContacts: []
@@ -1925,52 +1942,7 @@ def serve_web_ui(event):
             await loadContacts(false);
         }}
         
-        async function changePageSize() {{
-            const pageSizeSelect = document.getElementById('pageSize');
-            const loadingIndicator = document.getElementById('pageSizeLoading');
-            
-            try {{
-                if (!pageSizeSelect) {{
-                    console.error('Page size select not found');
-                    return;
-                }}
-                
-                const newPageSize = parseInt(pageSizeSelect.value);
-                console.log('Changing page size to:', newPageSize);
-                
-                // Show loading indicator and disable dropdown
-                if (loadingIndicator) loadingIndicator.style.display = 'inline';
-                pageSizeSelect.disabled = true;
-                pageSizeSelect.style.opacity = '0.6';
-                pageSizeSelect.style.cursor = 'wait';
-                
-                // Reset pagination state completely
-                paginationState = {{
-                    currentPage: 1,
-                    pageSize: newPageSize,
-                    paginationKeys: [null],
-                    hasNextPage: false,
-                    displayedContacts: []
-                }};
-                
-                // Reload contacts with new page size
-                await loadContacts(false);
-                
-            }} catch (error) {{
-                console.error('Error changing page size:', error);
-                alert('Error changing page size: ' + error.message);
-            }} finally {{
-                // Always re-enable dropdown and hide loading indicator
-                if (pageSizeSelect) {{
-                    pageSizeSelect.disabled = false;
-                    pageSizeSelect.style.opacity = '1';
-                    pageSizeSelect.style.cursor = 'pointer';
-                }}
-                if (loadingIndicator) {{
-                    loadingIndicator.style.display = 'none';
-                }}
-            }}
-        }}
+        // changePageSize function removed - page size dropdown removed from UI (fixed at 25 contacts per page)
         
         async function loadAllContacts() {{
             await loadContacts();

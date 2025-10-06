@@ -13,6 +13,7 @@ import os
 from decimal import Decimal
 from datetime import datetime
 from botocore.exceptions import ClientError
+from boto3.dynamodb.conditions import Key
 
 # Configure logging
 logger = logging.getLogger()
@@ -202,15 +203,14 @@ def send_cloudwatch_metric(metric_name, value, unit='Count', dimensions=None):
             'MetricName': metric_name,
             'Value': value,
             'Unit': unit,
-            'Timestamp': datetime.now(),
-            'Namespace': 'EmailWorker/Custom'
+            'Timestamp': datetime.now()
         }
         
         if dimensions:
             metric_data['Dimensions'] = dimensions
         
         cloudwatch.put_metric_data(
-            Namespace='EmailWorker/Custom',
+            Namespace='EmailWorker/Custom',  # Namespace goes here, not in metric_data
             MetricData=[metric_data]
         )
         
@@ -316,15 +316,37 @@ def lambda_handler(event, context):
                 if isinstance(value, Decimal):
                     campaign[key] = int(value) if value % 1 == 0 else float(value)
             
-            # Retrieve contact data from DynamoDB
-            logger.info(f"[Message {idx}] Retrieving contact data from DynamoDB")
-            contact_response = contacts_table.get_item(Key={'email': contact_email})
-            if 'Item' not in contact_response:
-                logger.warning(f"[Message {idx}] Contact {contact_email} not found in DynamoDB")
-                raise ValueError(f"Contact {contact_email} not found in DynamoDB")
+            # Try to retrieve contact data from DynamoDB (optional - campaigns are independent)
+            logger.info(f"[Message {idx}] Attempting to retrieve contact data from DynamoDB")
+            contact = None
             
-            contact = contact_response['Item']
-            logger.info(f"[Message {idx}] Contact retrieved: {contact.get('first_name', '')} {contact.get('last_name', '')}")
+            try:
+                # Query using email-index GSI (email is not the primary key)
+                response = contacts_table.query(
+                    IndexName='email-index',
+                    KeyConditionExpression=Key('email').eq(contact_email),
+                    Limit=1
+                )
+                
+                if response.get('Items'):
+                    contact = response['Items'][0]
+                    logger.info(f"[Message {idx}] Contact found: {contact.get('first_name', '')} {contact.get('last_name', '')}")
+                else:
+                    logger.info(f"[Message {idx}] Contact {contact_email} not in Contacts table (using email-only mode)")
+            except Exception as contact_error:
+                logger.warning(f"[Message {idx}] Could not query contact: {str(contact_error)}")
+            
+            # If contact not found, create minimal contact object with just email
+            if not contact:
+                logger.info(f"[Message {idx}] Using email-only contact for {contact_email}")
+                contact = {
+                    'email': contact_email,
+                    'first_name': '',
+                    'last_name': '',
+                    'company': '',
+                    'title': '',
+                    'agency_name': ''
+                }
             
             # Extract campaign details
             subject = campaign.get('subject', '')
@@ -468,10 +490,36 @@ def lambda_handler(event, context):
             if 'Item' in campaign_response:
                 campaign = campaign_response['Item']
                 total_contacts = campaign.get('total_contacts', 0)
+                sent_count = campaign.get('sent_count', 0)
+                failed_count = campaign.get('failed_count', 0)
                 
                 # Check if campaign appears to be stuck or incomplete
                 if total_contacts > 0:
                     check_campaign_completion_status(campaign_id, total_contacts)
+                    
+                    # Calculate campaign-specific send rate
+                    campaign_total_processed = sent_count + failed_count
+                    if campaign_total_processed > 0 and total_contacts > 0:
+                        campaign_progress = (campaign_total_processed / total_contacts) * 100
+                        
+                        # Send campaign-specific metrics
+                        send_cloudwatch_metric(
+                            'CampaignProgress',
+                            campaign_progress,
+                            'Percent',
+                            [
+                                {'Name': 'CampaignId', 'Value': campaign_id}
+                            ]
+                        )
+                        
+                        send_cloudwatch_metric(
+                            'CampaignEmailsSent',
+                            sent_count,
+                            'Count',
+                            [
+                                {'Name': 'CampaignId', 'Value': campaign_id}
+                            ]
+                        )
                     
                     # Send general campaign processing metric
                     send_cloudwatch_metric(
@@ -486,24 +534,48 @@ def lambda_handler(event, context):
         except Exception as e:
             logger.warning(f"Error checking campaign completion for {campaign_id}: {str(e)}")
     
+    # Calculate send rate metrics
+    total_emails = results['successful'] + results['failed']
+    send_rate_per_second = total_emails / duration if duration > 0 else 0
+    send_rate_per_minute = send_rate_per_second * 60
+    success_rate = (results['successful'] / total_emails * 100) if total_emails > 0 else 0
+    failure_rate = (results['failed'] / total_emails * 100) if total_emails > 0 else 0
+    
     # Send batch processing metrics
     send_cloudwatch_metric('BatchProcessing', 1, 'Count')
-    send_cloudwatch_metric('EmailsProcessed', results['successful'] + results['failed'], 'Count')
+    send_cloudwatch_metric('EmailsProcessed', total_emails, 'Count')
+    send_cloudwatch_metric('EmailsSentSuccessfully', results['successful'], 'Count')
+    send_cloudwatch_metric('EmailsFailed', results['failed'], 'Count')
     send_cloudwatch_metric('ProcessingDuration', duration, 'Seconds')
+    
+    # Send rate metrics
+    send_cloudwatch_metric('SendRatePerSecond', send_rate_per_second, 'Count/Second')
+    send_cloudwatch_metric('SendRatePerMinute', send_rate_per_minute, 'Count/Second')  # SES measures in emails/second
+    send_cloudwatch_metric('SuccessRate', success_rate, 'Percent')
+    send_cloudwatch_metric('FailureRate', failure_rate, 'Percent')
     
     if results['rate_control_stats']['throttles_detected'] > 0:
         send_cloudwatch_metric('ThrottleExceptionsInBatch', results['rate_control_stats']['throttles_detected'], 'Count')
     
-    # Log rate control statistics
+    # Log rate control statistics and send rate metrics
     rate_stats = results['rate_control_stats']
     logger.info(f"=" * 80)
-    logger.info(f"Batch processing complete")
+    logger.info(f"📊 BATCH PROCESSING COMPLETE")
+    logger.info(f"=" * 80)
     logger.info(f"Total messages: {len(event['Records'])}")
-    logger.info(f"Successful: {results['successful']}")
-    logger.info(f"Failed: {results['failed']}")
-    logger.info(f"Duration: {duration:.2f} seconds")
-    logger.info(f"Average: {duration/len(event['Records']):.2f} seconds per message")
-    logger.info(f"Campaigns processed: {len(results['campaigns_processed'])}")
+    logger.info(f"✅ Successful: {results['successful']}")
+    logger.info(f"❌ Failed: {results['failed']}")
+    logger.info(f"⏱️  Duration: {duration:.2f} seconds")
+    logger.info(f"📈 Average: {duration/len(event['Records']):.2f} seconds per message")
+    logger.info(f"📧 Campaigns processed: {len(results['campaigns_processed'])}")
+    logger.info(f"-" * 80)
+    logger.info(f"📊 SEND RATE METRICS")
+    logger.info(f"-" * 80)
+    logger.info(f"📤 Send Rate: {send_rate_per_second:.2f} emails/second")
+    logger.info(f"📤 Send Rate: {send_rate_per_minute:.2f} emails/minute")
+    logger.info(f"✅ Success Rate: {success_rate:.1f}%")
+    logger.info(f"❌ Failure Rate: {failure_rate:.1f}%")
+    logger.info(f"-" * 80)
     logger.info(f"Rate Control Statistics:")
     logger.info(f"  Total delay applied: {rate_stats['total_delay_applied']:.3f} seconds")
     logger.info(f"  Throttles detected: {rate_stats['throttles_detected']}")
@@ -582,6 +654,8 @@ def send_ses_email(campaign, contact, from_email, subject, body, msg_idx=0):
         # If no attachments, use simple send_email
         if not attachments or len(attachments) == 0:
             logger.info(f"[Message {msg_idx}] No attachments - using send_email API")
+            logger.info(f"[Message {msg_idx}] Sending to: {contact['email']}, From: {from_email}")
+            
             response = ses_client.send_email(
                 Source=from_email,
                 Destination={'ToAddresses': [contact['email']]},
@@ -590,8 +664,19 @@ def send_ses_email(campaign, contact, from_email, subject, body, msg_idx=0):
                     'Body': {'Html': {'Data': body}}
                 }
             )
+            
+            # Log complete SES response
+            logger.info(f"[Message {msg_idx}] ✅ SES Response: {json.dumps(response, default=str)}")
             message_id = response.get('MessageId', 'unknown')
-            logger.info(f"[Message {msg_idx}] SES send successful. Message ID: {message_id}")
+            response_metadata = response.get('ResponseMetadata', {})
+            http_status = response_metadata.get('HTTPStatusCode', 'unknown')
+            request_id = response_metadata.get('RequestId', 'unknown')
+            
+            logger.info(f"[Message {msg_idx}] SES send successful!")
+            logger.info(f"[Message {msg_idx}]   Message ID: {message_id}")
+            logger.info(f"[Message {msg_idx}]   HTTP Status: {http_status}")
+            logger.info(f"[Message {msg_idx}]   Request ID: {request_id}")
+            
             return True
         
         # Build MIME message with attachments
@@ -641,8 +726,8 @@ def send_ses_email(campaign, contact, from_email, subject, body, msg_idx=0):
                 # Continue with other attachments even if one fails
         
         # Send via send_raw_email (supports attachments)
-        logger.info(f"[Message {msg_idx}] Calling SES send_raw_email API with attachments")
-        logger.debug(f"[Message {msg_idx}] From: {from_email}, To: {contact['email']}")
+        logger.info(f"[Message {msg_idx}] Calling SES send_raw_email API with {len(attachments)} attachment(s)")
+        logger.info(f"[Message {msg_idx}] Sending to: {contact['email']}, From: {from_email}")
         
         response = ses_client.send_raw_email(
             Source=from_email,
@@ -650,23 +735,52 @@ def send_ses_email(campaign, contact, from_email, subject, body, msg_idx=0):
             RawMessage={'Data': msg.as_string()}
         )
         
+        # Log complete SES response
+        logger.info(f"[Message {msg_idx}] ✅ SES Response: {json.dumps(response, default=str)}")
         message_id = response.get('MessageId', 'unknown')
-        logger.info(f"[Message {msg_idx}] SES send_raw_email successful. Message ID: {message_id}")
+        response_metadata = response.get('ResponseMetadata', {})
+        http_status = response_metadata.get('HTTPStatusCode', 'unknown')
+        request_id = response_metadata.get('RequestId', 'unknown')
+        
+        logger.info(f"[Message {msg_idx}] SES send_raw_email successful!")
+        logger.info(f"[Message {msg_idx}]   Message ID: {message_id}")
+        logger.info(f"[Message {msg_idx}]   HTTP Status: {http_status}")
+        logger.info(f"[Message {msg_idx}]   Request ID: {request_id}")
+        
         return True
         
+    except ClientError as e:
+        error_code = e.response.get('Error', {}).get('Code', 'Unknown')
+        error_message = e.response.get('Error', {}).get('Message', 'Unknown')
+        error_type = e.response.get('Error', {}).get('Type', 'Unknown')
+        http_status = e.response.get('ResponseMetadata', {}).get('HTTPStatusCode', 'Unknown')
+        request_id = e.response.get('ResponseMetadata', {}).get('RequestId', 'Unknown')
+        
+        logger.error(f"[Message {msg_idx}] ❌ AWS SES Error:")
+        logger.error(f"[Message {msg_idx}]   Error Code: {error_code}")
+        logger.error(f"[Message {msg_idx}]   Error Message: {error_message}")
+        logger.error(f"[Message {msg_idx}]   Error Type: {error_type}")
+        logger.error(f"[Message {msg_idx}]   HTTP Status: {http_status}")
+        logger.error(f"[Message {msg_idx}]   Request ID: {request_id}")
+        logger.error(f"[Message {msg_idx}]   Full Error Response: {json.dumps(e.response, default=str)}")
+        
+        # Log specific issues
+        if error_code == 'MessageRejected':
+            logger.error(f"[Message {msg_idx}] ⚠️  Message was rejected by SES. Check:")
+            logger.error(f"[Message {msg_idx}]     - Is the from address verified in SES?")
+            logger.error(f"[Message {msg_idx}]     - Is the to address verified (if in sandbox)?")
+            logger.error(f"[Message {msg_idx}]     - From: {from_email}, To: {contact.get('email', 'unknown')}")
+        elif error_code == 'ConfigurationSetDoesNotExist':
+            logger.error(f"[Message {msg_idx}] ⚠️  Configuration set not found")
+        elif rate_control.detect_throttle_exception(e):
+            logger.warning(f"[Message {msg_idx}] ⚠️  SES throttling detected - rate limiting in effect")
+        
+        raise e
+        
     except Exception as e:
-        logger.error(f"[Message {msg_idx}] SES Error: {str(e)}")
-        logger.exception(f"[Message {msg_idx}] SES Exception details:")
-        
-        # Log specific throttle information for debugging
-        if rate_control.detect_throttle_exception(e):
-            logger.warning(f"[Message {msg_idx}] This appears to be a throttle exception")
-            if isinstance(e, ClientError):
-                error_code = e.response.get('Error', {}).get('Code', '')
-                error_message = e.response.get('Error', {}).get('Message', '')
-                logger.warning(f"[Message {msg_idx}] AWS Error Code: {error_code}, Message: {error_message}")
-        
-        # Re-raise the exception so it can be handled by the caller
+        logger.error(f"[Message {msg_idx}] ❌ Unexpected SES Error: {str(e)}")
+        logger.error(f"[Message {msg_idx}]   Exception Type: {type(e).__name__}")
+        logger.exception(f"[Message {msg_idx}]   Full Exception:")
         raise e
 
 def send_smtp_email(campaign, contact, from_email, subject, body, msg_idx=0):
