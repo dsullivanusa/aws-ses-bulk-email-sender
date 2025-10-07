@@ -15,7 +15,7 @@ def set_custom_api_url():
         lambda_client = boto3.client('lambda')
         
         # Get current function configuration
-        response = lambda_client.get_function(FunctionName='bulk-email-api')
+        response = lambda_client.get_function(FunctionName='bulk-email-api-function')
         current_config = response['Configuration']
         current_env = current_config.get('Environment', {}).get('Variables', {})
         
@@ -30,7 +30,7 @@ def set_custom_api_url():
         
         # Update the function configuration
         update_response = lambda_client.update_function_configuration(
-            FunctionName='bulk-email-api',
+            FunctionName='bulk-email-api-function',
             Environment={
                 'Variables': current_env
             }
@@ -54,7 +54,7 @@ def verify_custom_domain_setup():
         lambda_client = boto3.client('lambda')
         
         # Get updated function configuration
-        response = lambda_client.get_function(FunctionName='bulk-email-api')
+        response = lambda_client.get_function(FunctionName='bulk-email-api-function')
         config = response['Configuration']
         env_vars = config.get('Environment', {}).get('Variables', {})
         

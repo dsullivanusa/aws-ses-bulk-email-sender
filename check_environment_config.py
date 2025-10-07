@@ -15,7 +15,7 @@ def check_lambda_environment():
         lambda_client = boto3.client('lambda')
         
         # Get function configuration
-        response = lambda_client.get_function(FunctionName='bulk-email-api')
+        response = lambda_client.get_function(FunctionName='bulk-email-api-function')
         config = response['Configuration']
         env_vars = config.get('Environment', {}).get('Variables', {})
         
