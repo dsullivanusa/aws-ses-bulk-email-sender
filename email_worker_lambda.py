@@ -602,6 +602,9 @@ def lambda_handler(event, context):
     
     logger.info(f"=" * 80)
     
+    # Convert set to list for JSON serialization (sets are not JSON serializable)
+    results['campaigns_processed'] = list(results['campaigns_processed'])
+    
     # Always return success (200) to ensure SQS deletes the messages
     # Even if there were errors, we've logged them and handled them gracefully
     return {
