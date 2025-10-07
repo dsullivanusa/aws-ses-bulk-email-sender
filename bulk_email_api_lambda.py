@@ -1553,7 +1553,7 @@ def serve_web_ui(event):
             show: function(message, type = 'info', duration = 4000) {{
                 const container = document.getElementById('toastContainer');
                 const toast = document.createElement('div');
-                toast.className = `toast toast-${type}`;
+                toast.className = `toast toast-${{type}}`;
                 
                 const icons = {{
                     success: '<i class="fas fa-check-circle"></i>',
@@ -1682,7 +1682,7 @@ def serve_web_ui(event):
                 console.log('Saving config:', config);
                 console.log('API URL:', API_URL);
                 
-                const response = await fetch(`${API_URL}/config`, {{
+                const response = await fetch(`${{API_URL}}/config`, {{
                     method: 'POST',
                     headers: {{'Content-Type': 'application/json'}},
                     body: JSON.stringify(config)
@@ -1708,7 +1708,7 @@ def serve_web_ui(event):
                 console.error('Save config error:', error);
                 button.textContent = 'Error';
                 button.style.background = 'linear-gradient(135deg, var(--danger-color), #dc2626)';
-                Toast.error(`Failed to save configuration: ${error.message}`);
+                Toast.error(`Failed to save configuration: ${{error.message}}`);
                 setTimeout(() => {{
                     button.textContent = originalText;
                     button.style.background = '';
@@ -1853,9 +1853,9 @@ def serve_web_ui(event):
                 const paginationKey = paginationState.paginationKeys[paginationState.currentPage - 1];
                 
                 // Build URL with pagination parameters
-                let url = `${API_URL}/contacts?limit=${paginationState.pageSize}`;
+                let url = `${{API_URL}}/contacts?limit=${{paginationState.pageSize}}`;
                 if (paginationKey) {{
-                    url += `&lastKey=${encodeURIComponent(JSON.stringify(paginationKey))}`;
+                    url += `&lastKey=${{encodeURIComponent(JSON.stringify(paginationKey))}}`;
                 }}
                 
                 console.log('Fetching contacts from:', url);
@@ -1863,7 +1863,7 @@ def serve_web_ui(event):
                 console.log('Contacts response status:', response.status);
                 
                 if (!response.ok) {{
-                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                    throw new Error(`HTTP ${{response.status}}: ${{response.statusText}}`);
                 }}
                 
                 const result = await response.json();
@@ -1910,7 +1910,7 @@ def serve_web_ui(event):
         
         function updatePaginationControls() {{
             // Update page info
-            document.getElementById('pageInfo').textContent = `Page ${paginationState.currentPage}`;
+            document.getElementById('pageInfo').textContent = `Page ${{paginationState.currentPage}}`;
             
             // Update prev button
             const prevBtn = document.getElementById('prevPageBtn');
@@ -1952,8 +1952,8 @@ def serve_web_ui(event):
         async function loadGroupsFromDB() {{
             try {{
                 console.log('Loading groups from DynamoDB...');
-                console.log('API URL:', `${API_URL}/groups`);
-                const response = await fetch(`${API_URL}/groups`);
+                console.log('API URL:', `${{API_URL}}/groups`);
+                const response = await fetch(`${{API_URL}}/groups`);
                 
                 if (response.ok) {{
                     const result = await response.json();
@@ -2004,7 +2004,7 @@ def serve_web_ui(event):
                     console.log('Querying DynamoDB with filters:', filters);
                     
                     // Call backend API with filters
-                    const response = await fetch(`${API_URL}/contacts/filter`, {{
+                    const response = await fetch(`${{API_URL}}/contacts/filter`, {{
                         method: 'POST',
                         headers: {{
                             'Content-Type': 'application/json'
@@ -2013,13 +2013,13 @@ def serve_web_ui(event):
                     }});
                     
                     if (!response.ok) {{
-                        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                        throw new Error(`HTTP ${{response.status}}: ${{response.statusText}}`);
                     }}
                     
                     const result = await response.json();
                     const filteredContacts = result.contacts || [];
                     
-                    console.log(`Received ${filteredContacts.length} contacts from DynamoDB query`);
+                    console.log(`Received ${{filteredContacts.length}} contacts from DynamoDB query`);
                     
                     // Update allContacts with filtered results
                     allContacts = filteredContacts;
@@ -2031,7 +2031,7 @@ def serve_web_ui(event):
                     const filterCount = Object.values(selectedFilterValues).reduce((sum, vals) => sum + vals.length, 0);
                     const statusMsg = document.createElement('small');
                     statusMsg.style.cssText = 'color: #059669; font-weight: 600;';
-                    statusMsg.textContent = `Showing ${filteredContacts.length} contact(s) from DynamoDB (${filterCount} filter(s) applied)`;
+                    statusMsg.textContent = `Showing ${{filteredContacts.length}} contact(s) from DynamoDB (${{filterCount}} filter(s) applied)`;
                     
                     const tagsContainer = document.getElementById('selectedValuesTags');
                     const existingStatus = tagsContainer.querySelector('.filter-status');
@@ -2109,14 +2109,14 @@ def serve_web_ui(event):
             }}
             
             try {{
-                console.log(`Searching DynamoDB for: "${searchTerm}"`);
+                console.log(`Searching DynamoDB for: "${{searchTerm}}"`);
                 
                 // Show searching indicator with fade-in
                 showSearchingIndicator();
                 searchResults.textContent = '';
                 
                 // Search DynamoDB via API
-                const response = await fetch(`${API_URL}/contacts/search`, {{
+                const response = await fetch(`${{API_URL}}/contacts/search`, {{
                     method: 'POST',
                     headers: {{'Content-Type': 'application/json'}},
                     body: JSON.stringify({{ search_term: searchTerm }})
@@ -2130,7 +2130,7 @@ def serve_web_ui(event):
                     console.log('Search result:', result);
                     const searchedContacts = result.contacts || [];
                     
-                    console.log(`✅ Found ${searchedContacts.length} contacts matching "${searchTerm}"`);
+                    console.log(`✅ Found ${{searchedContacts.length}} contacts matching "${{searchTerm}}"`);
                     
                     // Apply category filter on search results if active
                     const filterType = document.getElementById('filterType').value;
@@ -2144,9 +2144,9 @@ def serve_web_ui(event):
                             const contactValue = getFieldValue(contact, filterType);
                             return contactValue && selectedValues.includes(contactValue);
                         }});
-                        searchResults.textContent = `Found ${finalContacts.length} contact(s) matching "${searchTerm}" with selected filters`;
+                        searchResults.textContent = `Found ${{finalContacts.length}} contact(s) matching "${{searchTerm}}" with selected filters`;
                     }} else {{
-                        searchResults.textContent = `Found ${finalContacts.length} contact(s) matching "${searchTerm}"`;
+                        searchResults.textContent = `Found ${{finalContacts.length}} contact(s) matching "${{searchTerm}}"`;
                     }}
                     
                     searchResults.style.color = '#10b981';  // Green for success
@@ -2157,7 +2157,7 @@ def serve_web_ui(event):
                 }} else {{
                     const errorText = await response.text();
                     console.error('❌ Search failed:', response.status, errorText);
-                    searchResults.textContent = `Search failed (HTTP ${response.status}). Check console for details.`;
+                    searchResults.textContent = `Search failed (HTTP ${{response.status}}). Check console for details.`;
                     searchResults.style.color = '#ef4444';  // Red for error
                     hideSearchingIndicator();
                 }}
@@ -2191,27 +2191,27 @@ def serve_web_ui(event):
                 row.setAttribute('data-email', contact.email);
                 row.setAttribute('data-contact-id', contact.contact_id || contact.email);
                 row.innerHTML = `
-                    <td style="background: #dbeafe; font-weight: 600; color: #1e40af; border-right: 2px solid #60a5fa;">${{contact.email || ''}}</td>
-                    <td contenteditable="true" data-field="first_name" class="editable-cell">${{contact.first_name || ''}}</td>
-                    <td contenteditable="true" data-field="last_name" class="editable-cell">${{contact.last_name || ''}}</td>
-                    <td contenteditable="true" data-field="title" class="editable-cell">${{contact.title || ''}}</td>
-                    <td contenteditable="true" data-field="entity_type" class="editable-cell">${{contact.entity_type || ''}}</td>
-                    <td contenteditable="true" data-field="state" class="editable-cell">${{contact.state || ''}}</td>
-                    <td contenteditable="true" data-field="agency_name" class="editable-cell">${{contact.agency_name || ''}}</td>
-                    <td contenteditable="true" data-field="sector" class="editable-cell">${{contact.sector || ''}}</td>
-                    <td contenteditable="true" data-field="subsection" class="editable-cell">${{contact.subsection || ''}}</td>
-                    <td contenteditable="true" data-field="phone" class="editable-cell">${{contact.phone || ''}}</td>
-                    <td contenteditable="true" data-field="ms_isac_member" class="editable-cell yes-no-cell">${{contact.ms_isac_member || ''}}</td>
-                    <td contenteditable="true" data-field="soc_call" class="editable-cell yes-no-cell">${{contact.soc_call || ''}}</td>
-                    <td contenteditable="true" data-field="fusion_center" class="editable-cell yes-no-cell">${{contact.fusion_center || ''}}</td>
-                    <td contenteditable="true" data-field="k12" class="editable-cell yes-no-cell">${{contact.k12 || ''}}</td>
-                    <td contenteditable="true" data-field="water_wastewater" class="editable-cell yes-no-cell">${{contact.water_wastewater || ''}}</td>
-                    <td contenteditable="true" data-field="weekly_rollup" class="editable-cell yes-no-cell">${{contact.weekly_rollup || ''}}</td>
-                    <td contenteditable="true" data-field="alternate_email" class="editable-cell">${{contact.alternate_email || ''}}</td>
-                    <td contenteditable="true" data-field="region" class="editable-cell">${{contact.region || ''}}</td>
+                    <td style="background: #dbeafe; font-weight: 600; color: #1e40af; border-right: 2px solid #60a5fa;">${{{contact.email || ''}}}</td>
+                    <td contenteditable="true" data-field="first_name" class="editable-cell">${{{contact.first_name || ''}}}</td>
+                    <td contenteditable="true" data-field="last_name" class="editable-cell">${{{contact.last_name || ''}}}</td>
+                    <td contenteditable="true" data-field="title" class="editable-cell">${{{contact.title || ''}}}</td>
+                    <td contenteditable="true" data-field="entity_type" class="editable-cell">${{{contact.entity_type || ''}}}</td>
+                    <td contenteditable="true" data-field="state" class="editable-cell">${{{contact.state || ''}}}</td>
+                    <td contenteditable="true" data-field="agency_name" class="editable-cell">${{{contact.agency_name || ''}}}</td>
+                    <td contenteditable="true" data-field="sector" class="editable-cell">${{{contact.sector || ''}}}</td>
+                    <td contenteditable="true" data-field="subsection" class="editable-cell">${{{contact.subsection || ''}}}</td>
+                    <td contenteditable="true" data-field="phone" class="editable-cell">${{{contact.phone || ''}}}</td>
+                    <td contenteditable="true" data-field="ms_isac_member" class="editable-cell yes-no-cell">${{{contact.ms_isac_member || ''}}}</td>
+                    <td contenteditable="true" data-field="soc_call" class="editable-cell yes-no-cell">${{{contact.soc_call || ''}}}</td>
+                    <td contenteditable="true" data-field="fusion_center" class="editable-cell yes-no-cell">${{{contact.fusion_center || ''}}}</td>
+                    <td contenteditable="true" data-field="k12" class="editable-cell yes-no-cell">${{{contact.k12 || ''}}}</td>
+                    <td contenteditable="true" data-field="water_wastewater" class="editable-cell yes-no-cell">${{{contact.water_wastewater || ''}}}</td>
+                    <td contenteditable="true" data-field="weekly_rollup" class="editable-cell yes-no-cell">${{{contact.weekly_rollup || ''}}}</td>
+                    <td contenteditable="true" data-field="alternate_email" class="editable-cell">${{{contact.alternate_email || ''}}}</td>
+                    <td contenteditable="true" data-field="region" class="editable-cell">${{{contact.region || ''}}}</td>
                     <td style="position: sticky; right: 0; background: #f8fafc; border-left: 2px solid #cbd5e1; box-shadow: -2px 0 4px rgba(0,0,0,0.05);">
-                        <button onclick="saveContactRow('${{contact.email}}')" class="btn-success" style="padding: 6px 12px; font-size: 12px; font-weight: 600; margin-right: 5px;">💾 Save</button>
-                        <button onclick="deleteContactRow('${{contact.contact_id || contact.email}}')" class="btn-danger" style="padding: 6px 12px; font-size: 12px; font-weight: 600; background: #ef4444;">🗑️ Delete</button>
+                        <button onclick="saveContactRow('${{{contact.email}}}')" class="btn-success" style="padding: 6px 12px; font-size: 12px; font-weight: 600; margin-right: 5px;">💾 Save</button>
+                        <button onclick="deleteContactRow('${{{contact.contact_id || contact.email}}}')" class="btn-danger" style="padding: 6px 12px; font-size: 12px; font-weight: 600; background: #ef4444;">🗑️ Delete</button>
                     </td>
                 `;
                 
@@ -2240,7 +2240,7 @@ def serve_web_ui(event):
             const recordCount = document.getElementById('recordCount');
             const startRecord = ((paginationState.currentPage - 1) * paginationState.pageSize) + 1;
             const endRecord = startRecord + contacts.length - 1;
-            recordCount.textContent = `Showing records ${startRecord} - ${endRecord}`;
+            recordCount.textContent = `Showing records ${{startRecord}} - ${{endRecord}}`;
         }}
         
         function addEmptyRow() {{
@@ -2353,7 +2353,7 @@ def serve_web_ui(event):
                 saveBtn.disabled = true;
                 
                 // Send POST request to create contact
-                const response = await fetch(`${API_URL}/contacts`, {{
+                const response = await fetch(`${{API_URL}}/contacts`, {{
                     method: 'POST',
                     headers: {{'Content-Type': 'application/json'}},
                     body: JSON.stringify(contactData)
@@ -2514,7 +2514,7 @@ def serve_web_ui(event):
                 
                 console.log('Deleting contact:', contactId);
                 
-                const response = await fetch(`${API_URL}/contacts?contact_id=${encodeURIComponent(contactId)}`, {{
+                const response = await fetch(`${{API_URL}}/contacts?contact_id=${{encodeURIComponent(contactId)}}`, {{
                     method: 'DELETE',
                     headers: {{
                         'Content-Type': 'application/json'
@@ -2528,7 +2528,7 @@ def serve_web_ui(event):
                     Toast.success('✅ Contact deleted successfully', 3000);
                     
                     // Remove the row from the table
-                    const row = document.querySelector(`tr[data-contact-id="${contactId}"]`);
+                    const row = document.querySelector(`tr[data-contact-id="${{contactId}}"]`);
                     if (row) {{
                         row.remove();
                     }}
@@ -2537,11 +2537,11 @@ def serve_web_ui(event):
                     const recordCount = document.getElementById('recordCount');
                     if (recordCount) {{
                         const currentCount = parseInt(recordCount.textContent.match(/\\d+/)[0] || 0);
-                        recordCount.textContent = `${currentCount - 1} records`;
+                        recordCount.textContent = `${{currentCount - 1}} records`;
                     }}
                 }} else {{
                     const errorData = await response.json();
-                    Toast.error(`Failed to delete contact: ${{errorData.error || 'Unknown error'}}`);
+                    Toast.error(`Failed to delete contact: ${{{errorData.error || 'Unknown error'}}}`);
                 }}
             }} catch (error) {{
                 console.error('Error deleting contact:', error);
@@ -2552,7 +2552,7 @@ def serve_web_ui(event):
         async function saveContactRow(email) {{
             try {{
                 // Find the row with this email
-                const row = document.querySelector(`tr[data-email="${email}"]`);
+                const row = document.querySelector(`tr[data-email="${{email}}"]`);
                 if (!row) {{
                     Toast.error('Row not found');
                     return;
@@ -2585,7 +2585,7 @@ def serve_web_ui(event):
                 button.disabled = true;
                 
                 // Send PUT request to update contact
-                const response = await fetch(`${API_URL}/contacts`, {{
+                const response = await fetch(`${{API_URL}}/contacts`, {{
                     method: 'PUT',
                     headers: {{'Content-Type': 'application/json'}},
                     body: JSON.stringify(contactData)
@@ -2617,7 +2617,7 @@ def serve_web_ui(event):
                 console.error('Error saving contact:', error);
                 alert('Error saving contact: ' + error.message);
                 
-                const row = document.querySelector(`tr[data-email="${email}"]`);
+                const row = document.querySelector(`tr[data-email="${{email}}"]`);
                 if (row) {{
                     const button = row.querySelector('button');
                     button.textContent = '❌ Error';
@@ -2626,7 +2626,7 @@ def serve_web_ui(event):
                     }}, 2000);
                 }}
             }} finally {{
-                const row = document.querySelector(`tr[data-email="${email}"]`);
+                const row = document.querySelector(`tr[data-email="${{email}}"]`);
                 if (row) {{
                     const button = row.querySelector('button');
                     button.disabled = false;
@@ -2701,7 +2701,7 @@ def serve_web_ui(event):
             }};
             
             try {{
-                const response = await fetch(`${API_URL}/contacts`, {{
+                const response = await fetch(`${{API_URL}}/contacts`, {{
                     method: 'PUT',
                     headers: {{'Content-Type': 'application/json'}},
                     body: JSON.stringify(contactData)
@@ -2744,7 +2744,7 @@ def serve_web_ui(event):
                 region: document.getElementById('newRegion').value
             }};
             
-            const response = await fetch(`${API_URL}/contacts`, {{
+            const response = await fetch(`${{API_URL}}/contacts`, {{
                 method: 'POST',
                 headers: {{'Content-Type': 'application/json'}},
                 body: JSON.stringify(contact)
@@ -2778,37 +2778,37 @@ def serve_web_ui(event):
         }}
         
         async function viewContact(email) {{
-            const response = await fetch(`${API_URL}/contacts`);
+            const response = await fetch(`${{API_URL}}/contacts`);
             const result = await response.json();
             const contact = result.contacts.find(c => c.email === email);
             
             if (contact) {{
                 alert(`Contact Details:\\n\\n` +
-                    `Email: ${{contact.email}}\\n` +
-                    `Name: ${{contact.first_name}} ${{contact.last_name}}\\n` +
-                    `Title: ${{contact.title || 'N/A'}}\\n` +
-                    `Entity Type: ${{contact.entity_type || 'N/A'}}\\n` +
-                    `State: ${{contact.state || 'N/A'}}\\n` +
-                    `Agency: ${{contact.agency_name || 'N/A'}}\\n` +
-                    `Sector: ${{contact.sector || 'N/A'}}\\n` +
-                    `Subsection: ${{contact.subsection || 'N/A'}}\\n` +
-                    `Phone: ${{contact.phone || 'N/A'}}\\n` +
-                    `MS-ISAC Member: ${{contact.ms_isac_member || 'N/A'}}\\n` +
-                    `SOC Call: ${{contact.soc_call || 'N/A'}}\\n` +
-                    `Fusion Center: ${{contact.fusion_center || 'N/A'}}\\n` +
-                    `K-12: ${{contact.k12 || 'N/A'}}\\n` +
-                    `Water/Wastewater: ${{contact.water_wastewater || 'N/A'}}\\n` +
-                    `Weekly Rollup: ${{contact.weekly_rollup || 'N/A'}}\\n` +
-                    `Alternate Email: ${{contact.alternate_email || 'N/A'}}\\n` +
-                    `Region: ${{contact.region || 'N/A'}}\\n` +
-                    `Group: ${{contact.group || 'N/A'}}`
+                    `Email: ${{{contact.email}}}\\n` +
+                    `Name: ${{{contact.first_name}}} ${{{contact.last_name}}}\\n` +
+                    `Title: ${{{contact.title || 'N/A'}}}\\n` +
+                    `Entity Type: ${{{contact.entity_type || 'N/A'}}}\\n` +
+                    `State: ${{{contact.state || 'N/A'}}}\\n` +
+                    `Agency: ${{{contact.agency_name || 'N/A'}}}\\n` +
+                    `Sector: ${{{contact.sector || 'N/A'}}}\\n` +
+                    `Subsection: ${{{contact.subsection || 'N/A'}}}\\n` +
+                    `Phone: ${{{contact.phone || 'N/A'}}}\\n` +
+                    `MS-ISAC Member: ${{{contact.ms_isac_member || 'N/A'}}}\\n` +
+                    `SOC Call: ${{{contact.soc_call || 'N/A'}}}\\n` +
+                    `Fusion Center: ${{{contact.fusion_center || 'N/A'}}}\\n` +
+                    `K-12: ${{{contact.k12 || 'N/A'}}}\\n` +
+                    `Water/Wastewater: ${{{contact.water_wastewater || 'N/A'}}}\\n` +
+                    `Weekly Rollup: ${{{contact.weekly_rollup || 'N/A'}}}\\n` +
+                    `Alternate Email: ${{{contact.alternate_email || 'N/A'}}}\\n` +
+                    `Region: ${{{contact.region || 'N/A'}}}\\n` +
+                    `Group: ${{{contact.group || 'N/A'}}}`
                 );
             }}
         }}
         
         async function deleteContact(email) {{
             if (confirm('Delete contact?')) {{
-                await fetch(`${API_URL}/contacts?email=${encodeURIComponent(email)}`, {{method: 'DELETE'}});
+                await fetch(`${{API_URL}}/contacts?email=${{encodeURIComponent(email)}}`, {{method: 'DELETE'}});
                 loadContacts();
             }}
         }}
@@ -2870,7 +2870,7 @@ def serve_web_ui(event):
                     const values = parseCSVLine(lines[i]);
                 
                     if (values.length !== headers.length) {{
-                        console.warn(`Row ${i}: Column count mismatch. Got ${values.length}, expected ${headers.length}`);
+                        console.warn(`Row ${{i}}: Column count mismatch. Got ${{values.length}}, expected ${{headers.length}}`);
                         continue;
                     }}
                 
@@ -2930,7 +2930,7 @@ def serve_web_ui(event):
                     }}
                 }}
                 
-                console.log(`Parsed ${allContacts.length} valid contacts from CSV`);
+                console.log(`Parsed ${{allContacts.length}} valid contacts from CSV`);
                 
                 if (allContacts.length === 0) {{
                     alert('No valid contacts found in CSV file');
@@ -2951,7 +2951,7 @@ def serve_web_ui(event):
                     // Check if cancelled
                     if (csvUploadCancelled) {{
                         console.log('CSV upload cancelled by user');
-                        alert(`Import cancelled.\\nImported: ${imported} contacts\\nRemaining: ${allContacts.length - imported}`);
+                        alert(`Import cancelled.\\nImported: ${{imported}} contacts\\nRemaining: ${{allContacts.length - imported}}`);
                         hideCSVProgress();
                         return;
                     }}
@@ -2960,10 +2960,10 @@ def serve_web_ui(event):
                     const end = Math.min(start + BATCH_SIZE, allContacts.length);
                     const batch = allContacts.slice(start, end);
                     
-                    console.log(`Processing batch ${batchNum + 1}/${totalBatches}: contacts ${start + 1}-${end}`);
+                    console.log(`Processing batch ${{batchNum + 1}}/${{totalBatches}}: contacts ${{start + 1}}-${{end}}`);
                     
                     try {{
-                        const response = await fetch(`${API_URL}/contacts/batch`, {{
+                        const response = await fetch(`${{API_URL}}/contacts/batch`, {{
                             method: 'POST',
                             headers: {{'Content-Type': 'application/json'}},
                             body: JSON.stringify({{ contacts: batch }})
@@ -2976,12 +2976,12 @@ def serve_web_ui(event):
                             
                             const percentage = Math.round((imported / allContacts.length) * 100);
                             updateCSVProgress(imported, allContacts.length, 
-                                `Batch ${batchNum + 1}/${totalBatches} - Imported: ${imported}, Errors: ${errors}`);
+                                `Batch ${{batchNum + 1}}/${{totalBatches}} - Imported: ${{imported}}, Errors: ${{errors}}`);
                             
-                            console.log(`✓ Batch ${batchNum + 1} complete: +${result.imported} imported, ${result.unprocessed} failed`);
+                            console.log(`✓ Batch ${{batchNum + 1}} complete: +${{result.imported}} imported, ${{result.unprocessed}} failed`);
                         }} else {{
                             const errorText = await response.text();
-                            console.error(`Batch ${batchNum + 1} failed:`, response.status, errorText);
+                            console.error(`Batch ${{batchNum + 1}} failed:`, response.status, errorText);
                             errors += batch.length;
                             
                             // Track failed batch details
@@ -2990,14 +2990,14 @@ def serve_web_ui(event):
                                 rowStart: start + 1,
                                 rowEnd: end,
                                 contacts: batch,
-                                error: `HTTP ${response.status}: ${errorText}`
+                                error: `HTTP ${{response.status}}: ${{errorText}}`
                             }});
                             
                             updateCSVProgress(imported, allContacts.length, 
-                                `Batch ${batchNum + 1}/${totalBatches} FAILED - Imported: ${imported}, Errors: ${errors}`);
+                                `Batch ${{batchNum + 1}}/${{totalBatches}} FAILED - Imported: ${{imported}}, Errors: ${{errors}}`);
                         }}
                     }} catch (e) {{
-                        console.error(`Batch ${batchNum + 1} exception:`, e);
+                        console.error(`Batch ${{batchNum + 1}} exception:`, e);
                         errors += batch.length;
                         
                         // Track failed batch details
@@ -3010,7 +3010,7 @@ def serve_web_ui(event):
                         }});
                         
                         updateCSVProgress(imported, allContacts.length, 
-                            `Batch ${batchNum + 1}/${totalBatches} ERROR - Imported: ${imported}, Errors: ${errors}`);
+                            `Batch ${{batchNum + 1}}/${{totalBatches}} ERROR - Imported: ${{imported}}, Errors: ${{errors}}`);
                     }}
                     
                     // Small delay to avoid overwhelming the API
@@ -3023,8 +3023,8 @@ def serve_web_ui(event):
                 if (failedBatches.length > 0) {{
                     console.log('\\n=== FAILED BATCHES DETAILS ===');
                     failedBatches.forEach(fb => {{
-                        console.log(`\\nBatch ${fb.batchNum} (Rows ${fb.rowStart}-${fb.rowEnd}):`);
-                        console.log(`  Error: ${fb.error}`);
+                        console.log(`\\nBatch ${{fb.batchNum}} (Rows ${{fb.rowStart}}-${{fb.rowEnd}}):`);
+                        console.log(`  Error: ${{fb.error}}`);
                         console.log(`  Failed contacts:`, fb.contacts);
                     }});
                     console.log('\\n=== END FAILED BATCHES ===\\n');
@@ -3036,10 +3036,10 @@ def serve_web_ui(event):
                 
                 hideCSVProgress();
                 
-                let message = `CSV Import Complete!\\n\\nImported: ${imported} contacts\\nErrors: ${errors}\\n\\nProcessed ${totalBatches} batches of up to 25 contacts each.`;
+                let message = `CSV Import Complete!\\n\\nImported: ${{imported}} contacts\\nErrors: ${{errors}}\\n\\nProcessed ${{totalBatches}} batches of up to 25 contacts each.`;
                 
                 if (failedBatches.length > 0) {{
-                    message += `\\n\\n⚠️ ${failedBatches.length} batches failed (${errors} contacts).`;
+                    message += `\\n\\n⚠️ ${{failedBatches.length}} batches failed (${{errors}} contacts).`;
                     message += `\\n\\nTo see failed rows:\\n1. Open Console (F12)\\n2. Look for "FAILED BATCHES DETAILS"\\n3. Run: downloadFailedContacts()`;
                 }}
                 
@@ -3062,7 +3062,7 @@ def serve_web_ui(event):
             
             progressBar.style.width = percentage + '%';
             progressBar.textContent = percentage + '%';
-            progressText.textContent = message + ` (${current} / ${total})`;
+            progressText.textContent = message + ` (${{current}} / ${{total}})`;
         }}
         
         function hideCSVProgress() {{
@@ -3116,7 +3116,7 @@ def serve_web_ui(event):
             link.click();
             document.body.removeChild(link);
             
-            console.log(`Downloaded ${window.failedContacts.length} failed contacts to CSV file`);
+            console.log(`Downloaded ${{window.failedContacts.length}} failed contacts to CSV file`);
         }}
         
         // Campaign Filter State
@@ -3151,16 +3151,16 @@ def serve_web_ui(event):
                 // Fetch all contacts count from DynamoDB
                 try {{
                     console.log('Fetching all contacts count from DynamoDB...');
-                    const response = await fetch(`${API_URL}/contacts?limit=1`);
+                    const response = await fetch(`${{API_URL}}/contacts?limit=1`);
                     if (!response.ok) {{
-                        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                        throw new Error(`HTTP ${{response.status}}: ${{response.statusText}}`);
                     }}
                     const data = await response.json();
                     
                     // Use the scan to get actual count
-                    const countResponse = await fetch(`${API_URL}/contacts?limit=10000`);
+                    const countResponse = await fetch(`${{API_URL}}/contacts?limit=10000`);
                     if (!countResponse.ok) {{
-                        throw new Error(`HTTP ${countResponse.status}: ${countResponse.statusText}`);
+                        throw new Error(`HTTP ${{countResponse.status}}: ${{countResponse.statusText}}`);
                     }}
                     const countData = await countResponse.json();
                     const totalContacts = (countData.contacts || []).length;
@@ -3168,7 +3168,7 @@ def serve_web_ui(event):
                     // Display the count
                     countNumber.textContent = totalContacts;
                     countDisplay.style.display = 'block';
-                    console.log(`Total contacts in DynamoDB: ${totalContacts}`);
+                    console.log(`Total contacts in DynamoDB: ${{totalContacts}}`);
                 }} catch (error) {{
                     console.error('Error fetching contacts count:', error);
                     countDisplay.style.display = 'none';
@@ -3184,11 +3184,11 @@ def serve_web_ui(event):
             
             try {{
                 // Call the backend /contacts/distinct endpoint
-                console.log(`Fetching distinct values for campaign: ${filterType}`);
-                const response = await fetch(`${API_URL}/contacts/distinct?field=${encodeURIComponent(filterType)}`);
+                console.log(`Fetching distinct values for campaign: ${{filterType}}`);
+                const response = await fetch(`${{API_URL}}/contacts/distinct?field=${{encodeURIComponent(filterType)}}`);
                 
                 if (!response.ok) {{
-                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                    throw new Error(`HTTP ${{response.status}}: ${{response.statusText}}`);
                 }}
                 
                 const data = await response.json();
@@ -3211,11 +3211,11 @@ def serve_web_ui(event):
                         btn.onmouseout = () => {{ btn.style.background = '#3b82f6'; }};
                         availableValuesList.appendChild(btn);
                     }});
-                    availableCount.textContent = `${distinctValues.length} value(s) available`;
+                    availableCount.textContent = `${{distinctValues.length}} value(s) available`;
                 }}
             }} catch (error) {{
                 console.error('Error loading campaign distinct values:', error);
-                availableValuesList.innerHTML = `<small style="color: #ef4444;">Error: ${error.message}</small>`;
+                availableValuesList.innerHTML = `<small style="color: #ef4444;">Error: ${{error.message}}</small>`;
                 availableCount.textContent = '';
             }}
         }}
@@ -3268,8 +3268,8 @@ def serve_web_ui(event):
                     const tag = document.createElement('div');
                     tag.style.cssText = 'display: inline-flex; align-items: center; padding: 6px 10px; background: linear-gradient(135deg, #3b82f6, #2563eb); color: white; border-radius: 6px; font-size: 12px; font-weight: 600;';
                     tag.innerHTML = `
-                        <span style="margin-right: 8px;">${filterType}: ${value}</span>
-                        <button onclick="removeCampaignFilterValue('${filterType}', '${value}')" style="background: rgba(255,255,255,0.3); border: none; border-radius: 50%; width: 18px; height: 18px; min-width: 18px; max-width: 18px; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 14px; line-height: 1; color: white; font-weight: bold; padding: 0; flex-shrink: 0;">×</button>
+                        <span style="margin-right: 8px;">${{filterType}}: ${{value}}</span>
+                        <button onclick="removeCampaignFilterValue('${{filterType}}', '${{value}}')" style="background: rgba(255,255,255,0.3); border: none; border-radius: 50%; width: 18px; height: 18px; min-width: 18px; max-width: 18px; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 14px; line-height: 1; color: white; font-weight: bold; padding: 0; flex-shrink: 0;">×</button>
                     `;
                     tagsContainer.appendChild(tag);
                 }});
@@ -3302,7 +3302,7 @@ def serve_web_ui(event):
             
             try {{
                 // Call the backend /contacts/filter endpoint
-                const response = await fetch(`${API_URL}/contacts/filter`, {{
+                const response = await fetch(`${{API_URL}}/contacts/filter`, {{
                     method: 'POST',
                     headers: {{
                         'Content-Type': 'application/json'
@@ -3311,7 +3311,7 @@ def serve_web_ui(event):
                 }});
                 
                 if (!response.ok) {{
-                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                    throw new Error(`HTTP ${{response.status}}: ${{response.statusText}}`);
                 }}
                 
                 const data = await response.json();
@@ -3328,7 +3328,7 @@ def serve_web_ui(event):
                 }}
             }} catch (error) {{
                 console.error('Error applying campaign filter:', error);
-                alert(`Error loading filtered contacts: ${error.message}`);
+                alert(`Error loading filtered contacts: ${{error.message}}`);
             }}
         }}
         
@@ -3385,7 +3385,7 @@ def serve_web_ui(event):
             if (campaignFilteredContacts && Array.isArray(campaignFilteredContacts) && campaignFilteredContacts.length > 0) {{
                 // Use filtered contacts (already loaded)
                 contacts = campaignFilteredContacts;
-                console.log(`Using ${contacts.length} filtered contacts for modal`);
+                console.log(`Using ${{contacts.length}} filtered contacts for modal`);
             }} else if (Object.keys(selectedCampaignFilterValues || {{}}).length > 0) {{
                 // User selected filters but didn't apply them
                 Toast.warning('Please click "Apply Filter" first to see target contacts.');
@@ -3395,9 +3395,9 @@ def serve_web_ui(event):
                 Toast.info('Loading all contacts with pagination...', 2000);
                 try {{
                     contacts = await fetchAllContactsPaginated();
-                    console.log(`Loaded ${contacts.length} contacts for modal using pagination`);
+                    console.log(`Loaded ${{contacts.length}} contacts for modal using pagination`);
                 }} catch (error) {{
-                    Toast.error(`Failed to load contacts: ${error.message}`);
+                    Toast.error(`Failed to load contacts: ${{error.message}}`);
                     return;
                 }}
             }}
@@ -3460,13 +3460,13 @@ def serve_web_ui(event):
                 const globalIndex = startIdx + index + 1;
                 const row = document.createElement('tr');
                 row.innerHTML = `
-                    <td style="font-weight: 600; color: #6b7280;">${{globalIndex}}</td>
-                    <td>${{contact.first_name || contact.FirstName || '-'}}</td>
-                    <td>${{contact.last_name || contact.LastName || '-'}}</td>
-                    <td style="color: #3b82f6; font-weight: 500;">${{contact.email || '-'}}</td>
-                    <td>${{contact.agency_name || contact.AgencyName || '-'}}</td>
-                    <td>${{contact.state || contact.State || '-'}}</td>
-                    <td>${{contact.entity_type || contact.EntityType || '-'}}</td>
+                    <td style="font-weight: 600; color: #6b7280;">${{{globalIndex}}}</td>
+                    <td>${{{contact.first_name || contact.FirstName || '-'}}}</td>
+                    <td>${{{contact.last_name || contact.LastName || '-'}}}</td>
+                    <td style="color: #3b82f6; font-weight: 500;">${{{contact.email || '-'}}}</td>
+                    <td>${{{contact.agency_name || contact.AgencyName || '-'}}}</td>
+                    <td>${{{contact.state || contact.State || '-'}}}</td>
+                    <td>${{{contact.entity_type || contact.EntityType || '-'}}}</td>
                 `;
                 tbody.appendChild(row);
             }});
@@ -3474,7 +3474,7 @@ def serve_web_ui(event):
             // Update pagination info
             document.getElementById('modalCurrentPage').textContent = currentPage;
             document.getElementById('modalTotalPages').textContent = totalPages;
-            document.getElementById('modalShowingCount').textContent = `${startIdx + 1}-${endIdx}`;
+            document.getElementById('modalShowingCount').textContent = `${{startIdx + 1}}-${{endIdx}}`;
             
             // Update button states
             const prevBtn = document.getElementById('modalPrevBtn');
@@ -3514,7 +3514,7 @@ def serve_web_ui(event):
             }}
             
             if (totalSize > MAX_ATTACHMENT_SIZE) {{
-                alert(`Total attachment size exceeds 40 MB limit.\\nCurrent total: ${(totalSize / 1024 / 1024).toFixed(2)} MB\\nPlease remove some files.`);
+                alert(`Total attachment size exceeds 40 MB limit.\\nCurrent total: ${{(totalSize / 1024 / 1024).toFixed(2)}} MB\\nPlease remove some files.`);
                 fileInput.value = ''; // Clear selection
                 return;
             }}
@@ -3522,7 +3522,7 @@ def serve_web_ui(event):
             // Upload files to S3
             for (const file of files) {{
                 try {{
-                    console.log(`Uploading attachment: ${file.name} (${(file.size / 1024).toFixed(1)} KB)`);
+                    console.log(`Uploading attachment: ${{file.name}} (${{(file.size / 1024).toFixed(1)}} KB)`);
                     const s3Key = await uploadAttachmentToS3(file);
                     
                     campaignAttachments.push({{
@@ -3532,10 +3532,10 @@ def serve_web_ui(event):
                         s3_key: s3Key
                     }});
                     
-                    console.log(`✓ Uploaded: ${file.name} to S3 as ${s3Key}`);
+                    console.log(`✓ Uploaded: ${{file.name}} to S3 as ${{s3Key}}`);
                 }} catch (error) {{
-                    console.error(`Error uploading ${file.name}:`, error);
-                    let errorMsg = `Failed to upload ${file.name}: ${error.message}`;
+                    console.error(`Error uploading ${{file.name}}:`, error);
+                    let errorMsg = `Failed to upload ${{file.name}}: ${{error.message}}`;
                     
                     if (error.message.includes('404')) {{
                         errorMsg += '\\n\\nThe /upload-attachment endpoint is not configured.\\nPlease run: python add_attachment_endpoint.py';
@@ -3558,13 +3558,13 @@ def serve_web_ui(event):
         async function uploadAttachmentToS3(file) {{
             const timestamp = Date.now();
             const randomStr = Math.random().toString(36).substring(7);
-            const s3Key = `campaign-attachments/${timestamp}-${randomStr}-${file.name}`;
+            const s3Key = `campaign-attachments/${{timestamp}}-${{randomStr}}-${{file.name}}`;
             
             // Convert file to base64
             const base64Data = await fileToBase64(file);
             
             // Upload to S3 via Lambda
-            const response = await fetch(`${API_URL}/upload-attachment`, {{
+            const response = await fetch(`${{API_URL}}/upload-attachment`, {{
                 method: 'POST',
                 headers: {{'Content-Type': 'application/json'}},
                 body: JSON.stringify({{
@@ -3576,7 +3576,7 @@ def serve_web_ui(event):
             }});
             
             if (!response.ok) {{
-                throw new Error(`Upload failed: ${response.status}`);
+                throw new Error(`Upload failed: ${{response.status}}`);
             }}
             
             const result = await response.json();
@@ -3612,15 +3612,15 @@ def serve_web_ui(event):
                 <div style="display: flex; align-items: center; justify-content: space-between; padding: 8px; background: #f3f4f6; border-radius: 4px; margin-bottom: 8px;">
                     <div style="display: flex; align-items: center; gap: 10px;">
                         <div>
-                            <div style="font-weight: 500;">📎 ${att.filename}</div>
-                            <div style="font-size: 12px; color: #6b7280;">💾 ${(att.size / 1024).toFixed(1)} KB</div>
+                            <div style="font-weight: 500;">📎 ${{att.filename}}</div>
+                            <div style="font-size: 12px; color: #6b7280;">💾 ${{(att.size / 1024).toFixed(1)}} KB</div>
                         </div>
                     </div>
-                    <button onclick="removeAttachment(${index})" style="background: #ef4444; padding: 6px 12px; font-size: 14px;">🗑️ Remove</button>
+                    <button onclick="removeAttachment(${{index}})" style="background: #ef4444; padding: 6px 12px; font-size: 14px;">🗑️ Remove</button>
                 </div>
             `).join('');
             
-            sizeDiv.innerHTML = `<strong>📊 Total size:</strong> ${{totalSizeMB}} MB / 40 MB ${{totalSize > MAX_ATTACHMENT_SIZE ? '<span style="color: #ef4444;">❌ Exceeds limit!</span>' : '<span style="color: #10b981;">✅ OK</span>'}}`;
+            sizeDiv.innerHTML = `<strong>📊 Total size:</strong> ${{{totalSizeMB}}} MB / 40 MB ${{{totalSize > MAX_ATTACHMENT_SIZE ? '<span style="color: #ef4444;">❌ Exceeds limit!</span>' : '<span style="color: #10b981;">✅ OK</span>'}}}`;
         }}
         
         function removeAttachment(index) {{
@@ -3646,13 +3646,13 @@ def serve_web_ui(event):
                     urlParams.append('lastKey', JSON.stringify(lastKey));
                 }}
                 
-                const url = `${API_URL}/contacts?${urlParams.toString()}`;
-                console.log(`Fetching page ${pageCount} (batch size: ${pageSize})...`);
+                const url = `${{API_URL}}/contacts?${{urlParams.toString()}}`;
+                console.log(`Fetching page ${{pageCount}} (batch size: ${{pageSize}})...`);
                 
                 const response = await fetch(url);
                 
                 if (!response.ok) {{
-                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                    throw new Error(`HTTP ${{response.status}}: ${{response.statusText}}`);
                 }}
                 
                 const data = await response.json();
@@ -3661,17 +3661,17 @@ def serve_web_ui(event):
                 allContacts = allContacts.concat(contacts);
                 lastKey = data.lastEvaluatedKey || null;
                 
-                console.log(`Page ${pageCount}: Fetched ${contacts.length} contacts. Total so far: ${allContacts.length}`);
+                console.log(`Page ${{pageCount}}: Fetched ${{contacts.length}} contacts. Total so far: ${{allContacts.length}}`);
                 
                 // Show progress to user
                 if (pageCount % 5 === 0 || !lastKey) {{
-                    Toast.info(`Loading contacts... ${allContacts.length} loaded`, 1000);
+                    Toast.info(`Loading contacts... ${{allContacts.length}} loaded`, 1000);
                 }}
                 
             }} while (lastKey);  // Continue until no more pages
             
-            console.log(`✅ Pagination complete: Loaded ${allContacts.length} total contacts in ${pageCount} pages`);
-            Toast.success(`Loaded ${allContacts.length} contacts successfully!`, 2000);
+            console.log(`✅ Pagination complete: Loaded ${{allContacts.length}} total contacts in ${{pageCount}} pages`);
+            Toast.success(`Loaded ${{allContacts.length}} contacts successfully!`, 2000);
             
             return allContacts;
         }}
@@ -3698,7 +3698,7 @@ def serve_web_ui(event):
             
             console.log('Campaign filter debug:', {{
                 campaignFilteredContacts: campaignFilteredContacts === null ? 'null (no filter)' : 
-                                         Array.isArray(campaignFilteredContacts) ? `array with ${campaignFilteredContacts.length} items` : 
+                                         Array.isArray(campaignFilteredContacts) ? `array with ${{campaignFilteredContacts.length}} items` : 
                                          'invalid',
                 selectedCampaignFilterValuesKeys: Object.keys(selectedCampaignFilterValues || {{}}).length,
                 selectedCampaignFilterValues: selectedCampaignFilterValues
@@ -3711,19 +3711,19 @@ def serve_web_ui(event):
                 try {{
                     targetContacts = await fetchAllContactsPaginated();
                     filterDescription = 'All Contacts';
-                    console.log(`Loaded ${targetContacts.length} contacts from database using pagination`);
+                    console.log(`Loaded ${{targetContacts.length}} contacts from database using pagination`);
                 }} catch (loadError) {{
                     console.error('Failed to load contacts:', loadError);
-                    throw new Error(`Failed to load contacts: ${loadError.message}. Please ensure your API is configured correctly.`);
+                    throw new Error(`Failed to load contacts: ${{loadError.message}}. Please ensure your API is configured correctly.`);
                 }}
             }} else if (Array.isArray(campaignFilteredContacts) && campaignFilteredContacts.length > 0) {{
                 // User has applied a filter and has results
                 targetContacts = campaignFilteredContacts;
                 const filterTags = Object.entries(selectedCampaignFilterValues || {{}})
-                    .map(([field, values]) => `${field}: ${values.join(', ')}`)
+                    .map(([field, values]) => `${{field}}: ${{values.join(', ')}}`)
                     .join('; ');
                 filterDescription = filterTags || 'Filtered Contacts';
-                console.log(`Using ${targetContacts.length} filtered contacts: ${filterDescription}`);
+                console.log(`Using ${{targetContacts.length}} filtered contacts: ${{filterDescription}}`);
             }} else if (Array.isArray(campaignFilteredContacts) && campaignFilteredContacts.length === 0) {{
                 // Filter was applied but returned no results
                 throw new Error('Your filter returned 0 contacts. Please adjust your filter criteria or clear filters to send to all contacts.');
@@ -3738,10 +3738,10 @@ def serve_web_ui(event):
                     if (campaignFilteredContacts && Array.isArray(campaignFilteredContacts) && campaignFilteredContacts.length > 0) {{
                         targetContacts = campaignFilteredContacts;
                         const filterTags = Object.entries(selectedCampaignFilterValues)
-                            .map(([field, values]) => `${field}: ${values.join(', ')}`)
+                            .map(([field, values]) => `${{field}}: ${{values.join(', ')}}`)
                             .join('; ');
                         filterDescription = filterTags;
-                        console.log(`Auto-applied filter: ${targetContacts.length} contacts found`);
+                        console.log(`Auto-applied filter: ${{targetContacts.length}} contacts found`);
                     }} else {{
                         throw new Error('No contacts match the selected filter criteria. Please adjust your filter or clear it to send to all contacts.');
                     }}
@@ -3755,10 +3755,10 @@ def serve_web_ui(event):
                 try {{
                     targetContacts = await fetchAllContactsPaginated();
                     filterDescription = 'All Contacts';
-                    console.log(`Fallback: Loaded ${targetContacts.length} contacts from database`);
+                    console.log(`Fallback: Loaded ${{targetContacts.length}} contacts from database`);
                 }} catch (loadError) {{
                     console.error('Failed to load contacts:', loadError);
-                    throw new Error(`Failed to load contacts: ${loadError.message}`);
+                    throw new Error(`Failed to load contacts: ${{loadError.message}}`);
                 }}
             }}
             
@@ -3772,9 +3772,9 @@ def serve_web_ui(event):
                 throw new Error('No valid email addresses found in the selected contacts. Please check your contact data.');
             }}
             
-            console.log(`Valid emails found: ${validEmails.length} out of ${targetContacts.length} contacts`);
+            console.log(`Valid emails found: ${{validEmails.length}} out of ${{targetContacts.length}} contacts`);
             
-            console.log(`Campaign will be sent to ${targetContacts.length} contacts (${filterDescription})`);
+            console.log(`Campaign will be sent to ${{targetContacts.length}} contacts (${{filterDescription}})`);
             console.log('Sample target contacts:', targetContacts.slice(0, 3));
             
             // Get content from Quill editor
@@ -3800,7 +3800,7 @@ def serve_web_ui(event):
             console.log('   Processing', targetContacts.length, 'contacts...');
             
             const targetEmails = targetContacts.map(c => c?.email).filter(email => email && email.includes('@'));
-            console.log(`✅ Extracted ${targetEmails.length} valid emails from ${targetContacts.length} contacts`);
+            console.log(`✅ Extracted ${{targetEmails.length}} valid emails from ${{targetContacts.length}} contacts`);
             console.log('📧 Sample emails:', targetEmails.slice(0, 5));
             console.log('📧 All target emails:', targetEmails);
             
@@ -3830,10 +3830,10 @@ def serve_web_ui(event):
                 // Validate attachment size
                 const totalAttachmentSize = campaignAttachments.reduce((sum, att) => sum + att.size, 0);
                 if (totalAttachmentSize > MAX_ATTACHMENT_SIZE) {{
-                    throw new Error(`Attachments exceed 40 MB limit (${(totalAttachmentSize / 1024 / 1024).toFixed(2)} MB)`);
+                    throw new Error(`Attachments exceed 40 MB limit (${{(totalAttachmentSize / 1024 / 1024).toFixed(2)}} MB)`);
                 }}
             
-            const response = await fetch(`${API_URL}/campaign`, {{
+            const response = await fetch(`${{API_URL}}/campaign`, {{
                 method: 'POST',
                 headers: {{'Content-Type': 'application/json'}},
                 body: JSON.stringify(campaign)
@@ -3844,7 +3844,7 @@ def serve_web_ui(event):
             if (!contentType || !contentType.includes('application/json')) {{
                 const responseText = await response.text();
                 console.error('API returned non-JSON response:', responseText);
-                throw new Error(`API returned HTML instead of JSON. Status: ${response.status}. This usually means the Lambda function crashed or there's a server error. Check CloudWatch logs for details.`);
+                throw new Error(`API returned HTML instead of JSON. Status: ${{response.status}}. This usually means the Lambda function crashed or there's a server error. Check CloudWatch logs for details.`);
             }}
             
             const result = await response.json();
@@ -3863,27 +3863,27 @@ def serve_web_ui(event):
                     </div>
                     <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; margin: 20px 0;">
                         <div style="background: var(--success-color); color: white; padding: 20px; border-radius: 8px; text-align: center;">
-                            <h4 style="margin: 0; font-size: 2rem;">${{result.queued_count || 0}}</h4>
+                            <h4 style="margin: 0; font-size: 2rem;">${{{result.queued_count || 0}}}</h4>
                             <p style="margin: 5px 0 0 0;">Queued to SQS</p>
                         </div>
                         <div style="background: var(--warning-color); color: white; padding: 20px; border-radius: 8px; text-align: center;">
-                            <h4 style="margin: 0; font-size: 2rem;">${{result.failed_to_queue || 0}}</h4>
+                            <h4 style="margin: 0; font-size: 2rem;">${{{result.failed_to_queue || 0}}}</h4>
                             <p style="margin: 5px 0 0 0;">Failed to Queue</p>
                         </div>
                         <div style="background: var(--info-color); color: white; padding: 20px; border-radius: 8px; text-align: center;">
-                            <h4 style="margin: 0; font-size: 2rem;">${{result.total_contacts || 0}}</h4>
+                            <h4 style="margin: 0; font-size: 2rem;">${{{result.total_contacts || 0}}}</h4>
                             <p style="margin: 5px 0 0 0;">Total Contacts</p>
                         </div>
                     </div>
                     <div style="background: var(--gray-50); padding: 16px; border-radius: 8px; margin-top: 20px;">
-                        <p style="margin: 0; color: var(--gray-700);"><strong>Campaign ID:</strong> ${{result.campaign_id}}</p>
-                        <p style="margin: 5px 0 0 0; color: var(--gray-700);"><strong>Target Contacts:</strong> ${{filterDescription}}</p>
-                        <p style="margin: 5px 0 0 0; color: var(--gray-700);"><strong>Queue:</strong> ${{result.queue_name || 'bulk-email-queue'}}</p>
+                        <p style="margin: 0; color: var(--gray-700);"><strong>Campaign ID:</strong> ${{{result.campaign_id}}}</p>
+                        <p style="margin: 5px 0 0 0; color: var(--gray-700);"><strong>Target Contacts:</strong> ${{{filterDescription}}}</p>
+                        <p style="margin: 5px 0 0 0; color: var(--gray-700);"><strong>Queue:</strong> ${{{result.queue_name || 'bulk-email-queue'}}}</p>
                         <p style="margin: 10px 0 0 0; color: var(--gray-600); font-size: 0.9rem;">Check CloudWatch Logs to monitor email processing status</p>
                     </div>
                     <details style="margin-top: 20px;">
                         <summary style="cursor: pointer; color: var(--gray-600);">View Raw Response</summary>
-                        <pre style="background: var(--gray-100); padding: 16px; border-radius: 8px; margin-top: 10px; overflow-x: auto;">${{JSON.stringify(result, null, 2)}}</pre>
+                        <pre style="background: var(--gray-100); padding: 16px; border-radius: 8px; margin-top: 10px; overflow-x: auto;">${{{JSON.stringify(result, null, 2)}}}</pre>
                     </details>
                 `;
             resultDiv.classList.remove('hidden');
@@ -3897,10 +3897,10 @@ def serve_web_ui(event):
                 
             }} catch (error) {{
                 const resultDiv = document.getElementById('campaignResult');
-                Toast.error(`Campaign failed: ${error.message}`);
+                Toast.error(`Campaign failed: ${{error.message}}`);
                 resultDiv.innerHTML = `
                     <h3 style="color: var(--danger-color);">Campaign Failed</h3>
-                    <p style="color: var(--gray-600);">${error.message}</p>
+                    <p style="color: var(--gray-600);">${{error.message}}</p>
                 `;
                 resultDiv.classList.remove('hidden');
                 
@@ -3918,8 +3918,8 @@ def serve_web_ui(event):
         
         async function loadConfig() {{
             try {{
-                console.log('Loading config from:', `${API_URL}/config`);
-                const response = await fetch(`${API_URL}/config`);
+                console.log('Loading config from:', `${{API_URL}}/config`);
+                const response = await fetch(`${{API_URL}}/config`);
                 console.log('Config response status:', response.status);
                 
                 if (response.ok) {{
@@ -4020,19 +4020,19 @@ def serve_web_ui(event):
             document.getElementById('availableValuesArea').style.display = 'block';
             
             try {{
-                console.log(`Querying DynamoDB for distinct values of field: ${filterType}`);
+                console.log(`Querying DynamoDB for distinct values of field: ${{filterType}}`);
                 
                 // Call the backend API to get distinct values from DynamoDB
-                const response = await fetch(`${API_URL}/contacts/distinct?field=${encodeURIComponent(filterType)}`);
+                const response = await fetch(`${{API_URL}}/contacts/distinct?field=${{encodeURIComponent(filterType)}}`);
                 
                 if (!response.ok) {{
-                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                    throw new Error(`HTTP ${{response.status}}: ${{response.statusText}}`);
                 }}
                 
                 const result = await response.json();
                 const distinctValues = result.values || [];
                 
-                console.log(`Received ${distinctValues.length} distinct values for ${filterType} from DynamoDB`);
+                console.log(`Received ${{distinctValues.length}} distinct values for ${{filterType}} from DynamoDB`);
                 
                 if (distinctValues.length === 0) {{
                     availableValuesList.innerHTML = '<div style="padding: 20px; text-align: center; color: #9ca3af;"><span style="font-size: 13px;">No values found for this field</span></div>';
@@ -4054,11 +4054,11 @@ def serve_web_ui(event):
                     availableValuesList.appendChild(btn);
                 }});
                 
-                document.getElementById('availableCount').textContent = `${distinctValues.length} values available`;
+                document.getElementById('availableCount').textContent = `${{distinctValues.length}} values available`;
                 
             }} catch (error) {{
                 console.error('Error loading distinct values:', error);
-                availableValuesList.innerHTML = `<div style="padding: 20px; text-align: center; color: #ef4444;"><span style="font-size: 13px;">❌ Error loading values: ${error.message}</span></div>`;
+                availableValuesList.innerHTML = `<div style="padding: 20px; text-align: center; color: #ef4444;"><span style="font-size: 13px;">❌ Error loading values: ${{error.message}}</span></div>`;
                 document.getElementById('availableCount').textContent = 'Error loading values';
             }}
         }}
@@ -4158,9 +4158,9 @@ def serve_web_ui(event):
                         const tag = document.createElement('div');
                         tag.style.cssText = 'display: inline-flex; align-items: center; gap: 6px; padding: 6px 10px; background: #6366f1; color: white; border-radius: 6px; font-size: 13px; font-weight: 500;';
                         tag.innerHTML = `
-                            <span style="font-size: 11px; opacity: 0.9;">${{label}}:</span>
-                            <span>${{value}}</span>
-                            <button onclick="removeFilterValue('${{filterType}}', '${{value.replace(/'/g, "\\\\'")}}');" style="background: none; border: none; color: white; cursor: pointer; padding: 0 2px; font-size: 16px; line-height: 1; opacity: 0.8;" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.8'">
+                            <span style="font-size: 11px; opacity: 0.9;">${{{label}}}:</span>
+                            <span>${{{value}}}</span>
+                            <button onclick="removeFilterValue('${{{filterType}}}', '${{{value.replace(/'/g, "\\\\'")}}}');" style="background: none; border: none; color: white; cursor: pointer; padding: 0 2px; font-size: 16px; line-height: 1; opacity: 0.8;" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.8'">
                                 ×
                             </button>
                         `;
