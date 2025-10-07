@@ -3229,6 +3229,10 @@ def serve_web_ui(event):
                 selectedCampaignFilterValues[filterType].push(value);
                 console.log('Added campaign filter value:', filterType, value);
                 updateCampaignSelectedValuesTags();
+                
+                // Auto-apply the filter when a value is selected
+                console.log('Auto-applying filter after adding value...');
+                applyCampaignFilter();
             }}
         }}
         
@@ -3240,6 +3244,10 @@ def serve_web_ui(event):
                 }}
                 console.log('Removed campaign filter value:', filterType, value);
                 updateCampaignSelectedValuesTags();
+                
+                // Auto-apply the filter when a value is removed
+                console.log('Auto-applying filter after removing value...');
+                applyCampaignFilter();
             }}
         }}
         
@@ -3277,7 +3285,8 @@ def serve_web_ui(event):
             // If no filters selected, reset to null (means fetch all contacts when sending)
             if (Object.keys(selectedCampaignFilterValues).length === 0) {{
                 campaignFilteredContacts = null;  // null means no filter, will fetch all contacts
-                countDisplay.style.display = 'none';
+                countDisplay.style.display = 'block';  // Show the count display
+                countNumber.textContent = 'All Contacts';  // Show "All Contacts" instead of a number
                 console.log('No filters selected. Campaign will send to all contacts in database.');
                 return;
             }}
@@ -3328,7 +3337,13 @@ def serve_web_ui(event):
             currentCampaignFilterType = null;
             campaignFilteredContacts = null;  // null means no filter applied
             document.getElementById('campaignAvailableValuesArea').style.display = 'none';
-            document.getElementById('campaignContactCount').style.display = 'none';
+            
+            // Show "All Contacts" when no filters are applied
+            const countDisplay = document.getElementById('campaignContactCount');
+            const countNumber = document.getElementById('campaignContactCountNumber');
+            countDisplay.style.display = 'block';
+            countNumber.textContent = 'All Contacts';
+            
             updateCampaignSelectedValuesTags();
             updateCampaignButtonStyles();
         }}
@@ -3767,6 +3782,11 @@ def serve_web_ui(event):
             
             // Get user name from form
             const userName = document.getElementById('userName').value.trim() || 'Web User';
+            
+            // Validate that we have target contacts before proceeding
+            if (!targetContacts || targetContacts.length === 0) {{
+                throw new Error('No target contacts selected. Please either:\n1. Apply a filter to select specific contacts, or\n2. Clear filters to send to all contacts in the database.');
+            }}
             
             // Extract and validate email addresses
             const targetEmails = targetContacts.map(c => c?.email).filter(email => email && email.includes('@'));
