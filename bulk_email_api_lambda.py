@@ -2392,10 +2392,126 @@ def serve_web_ui(event):
             }}
         }}
         
+        function showDeleteConfirmation() {{
+            return new Promise((resolve) => {{
+                // Create modal overlay
+                const overlay = document.createElement('div');
+                overlay.style.cssText = `
+                    position: fixed;
+                    top: 0;
+                    left: 0;
+                    width: 100%;
+                    height: 100%;
+                    background: rgba(0, 0, 0, 0.5);
+                    display: flex;
+                    justify-content: center;
+                    align-items: center;
+                    z-index: 10000;
+                    animation: fadeIn 0.2s ease-in-out;
+                `;
+                
+                // Create confirmation dialog
+                const dialog = document.createElement('div');
+                dialog.style.cssText = `
+                    background: white;
+                    border-radius: 12px;
+                    padding: 30px;
+                    max-width: 450px;
+                    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+                    animation: slideIn 0.3s ease-out;
+                `;
+                
+                dialog.innerHTML = `
+                    <div style="text-align: center;">
+                        <div style="font-size: 48px; margin-bottom: 15px;">⚠️</div>
+                        <h3 style="margin: 0 0 10px 0; color: #1f2937; font-size: 18px; font-weight: 600;">
+                            JCDC Bulk Email asks
+                        </h3>
+                        <p style="margin: 0 0 25px 0; color: #6b7280; font-size: 15px; line-height: 1.5;">
+                            Are you sure you want to delete this contact?<br>
+                            <strong>This action cannot be undone.</strong>
+                        </p>
+                        <div style="display: flex; gap: 12px; justify-content: center;">
+                            <button id="cancelDelete" style="
+                                padding: 12px 28px;
+                                background: #f3f4f6;
+                                color: #374151;
+                                border: none;
+                                border-radius: 8px;
+                                font-size: 15px;
+                                font-weight: 600;
+                                cursor: pointer;
+                                transition: all 0.2s;
+                            ">Cancel</button>
+                            <button id="confirmDelete" style="
+                                padding: 12px 28px;
+                                background: #ef4444;
+                                color: white;
+                                border: none;
+                                border-radius: 8px;
+                                font-size: 15px;
+                                font-weight: 600;
+                                cursor: pointer;
+                                transition: all 0.2s;
+                            ">Delete</button>
+                        </div>
+                    </div>
+                `;
+                
+                overlay.appendChild(dialog);
+                document.body.appendChild(overlay);
+                
+                // Add hover effects
+                const cancelBtn = dialog.querySelector('#cancelDelete');
+                const confirmBtn = dialog.querySelector('#confirmDelete');
+                
+                cancelBtn.onmouseover = () => cancelBtn.style.background = '#e5e7eb';
+                cancelBtn.onmouseout = () => cancelBtn.style.background = '#f3f4f6';
+                confirmBtn.onmouseover = () => confirmBtn.style.background = '#dc2626';
+                confirmBtn.onmouseout = () => confirmBtn.style.background = '#ef4444';
+                
+                // Handle button clicks
+                cancelBtn.onclick = () => {{
+                    overlay.style.animation = 'fadeOut 0.2s ease-in-out';
+                    setTimeout(() => {{
+                        document.body.removeChild(overlay);
+                        resolve(false);
+                    }}, 200);
+                }};
+                
+                confirmBtn.onclick = () => {{
+                    overlay.style.animation = 'fadeOut 0.2s ease-in-out';
+                    setTimeout(() => {{
+                        document.body.removeChild(overlay);
+                        resolve(true);
+                    }}, 200);
+                }};
+                
+                // Add animations
+                const style = document.createElement('style');
+                style.textContent = `
+                    @keyframes fadeIn {{
+                        from {{ opacity: 0; }}
+                        to {{ opacity: 1; }}
+                    }}
+                    @keyframes fadeOut {{
+                        from {{ opacity: 1; }}
+                        to {{ opacity: 0; }}
+                    }}
+                    @keyframes slideIn {{
+                        from {{ transform: translateY(-20px); opacity: 0; }}
+                        to {{ transform: translateY(0); opacity: 1; }}
+                    }}
+                `;
+                document.head.appendChild(style);
+            }});
+        }}
+        
         async function deleteContactRow(contactId) {{
             try {{
-                // Confirm deletion
-                if (!confirm('Are you sure you want to delete this contact? This action cannot be undone.')) {{
+                // Custom confirmation using modal
+                const confirmed = await showDeleteConfirmation();
+                if (!confirmed) {{
                     return;
                 }}
                 
@@ -2411,12 +2527,15 @@ def serve_web_ui(event):
                 console.log('Delete response status:', response.status);
                 
                 if (response.ok) {{
-                    Toast.success('Contact deleted successfully!');
+                    // Show success toast that auto-fades (no OK button needed)
+                    Toast.success('✅ Contact deleted successfully', 3000);
+                    
                     // Remove the row from the table
                     const row = document.querySelector(`tr[data-contact-id="${{contactId}}"]`);
                     if (row) {{
                         row.remove();
                     }}
+                    
                     // Update the record count
                     const recordCount = document.getElementById('recordCount');
                     if (recordCount) {{
@@ -2425,11 +2544,11 @@ def serve_web_ui(event):
                     }}
                 }} else {{
                     const errorData = await response.json();
-                    alert(`Failed to delete contact: ${{errorData.error || 'Unknown error'}}`);
+                    Toast.error(`Failed to delete contact: ${{errorData.error || 'Unknown error'}}`);
                 }}
             }} catch (error) {{
                 console.error('Error deleting contact:', error);
-                alert('Failed to delete contact. Please try again.');
+                Toast.error('Failed to delete contact. Please try again.');
             }}
         }}
         

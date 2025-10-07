@@ -281,11 +281,13 @@ def lambda_handler(event, context):
         'total_expected_emails': 0
     }
     
-    for idx, record in enumerate(event['Records'], 1):
-        message_id = record.get('messageId', 'unknown')
-        logger.info(f"[Message {idx}/{len(event['Records'])}] Processing message ID: {message_id}")
-        
-        try:
+    # Wrap main processing in try-catch to prevent fatal errors from causing message re-delivery
+    try:
+        for idx, record in enumerate(event['Records'], 1):
+            message_id = record.get('messageId', 'unknown')
+            logger.info(f"[Message {idx}/{len(event['Records'])}] Processing message ID: {message_id}")
+            
+            try:
             # Parse message body (contains only campaign_id and contact_email)
             message = json.loads(record['body'])
             logger.debug(f"[Message {idx}] Raw message body: {record['body']}")
@@ -557,36 +559,51 @@ def lambda_handler(event, context):
     if results['rate_control_stats']['throttles_detected'] > 0:
         send_cloudwatch_metric('ThrottleExceptionsInBatch', results['rate_control_stats']['throttles_detected'], 'Count')
     
-    # Log rate control statistics and send rate metrics
-    rate_stats = results['rate_control_stats']
-    logger.info(f"=" * 80)
-    logger.info(f"📊 BATCH PROCESSING COMPLETE")
-    logger.info(f"=" * 80)
-    logger.info(f"Total messages: {len(event['Records'])}")
-    logger.info(f"✅ Successful: {results['successful']}")
-    logger.info(f"❌ Failed: {results['failed']}")
-    logger.info(f"⏱️  Duration: {duration:.2f} seconds")
-    logger.info(f"📈 Average: {duration/len(event['Records']):.2f} seconds per message")
-    logger.info(f"📧 Campaigns processed: {len(results['campaigns_processed'])}")
-    logger.info(f"-" * 80)
-    logger.info(f"📊 SEND RATE METRICS")
-    logger.info(f"-" * 80)
-    logger.info(f"📤 Send Rate: {send_rate_per_second:.2f} emails/second")
-    logger.info(f"📤 Send Rate: {send_rate_per_minute:.2f} emails/minute")
-    logger.info(f"✅ Success Rate: {success_rate:.1f}%")
-    logger.info(f"❌ Failure Rate: {failure_rate:.1f}%")
-    logger.info(f"-" * 80)
-    logger.info(f"Rate Control Statistics:")
-    logger.info(f"  Total delay applied: {rate_stats['total_delay_applied']:.3f} seconds")
-    logger.info(f"  Throttles detected: {rate_stats['throttles_detected']}")
-    logger.info(f"  Attachment delays applied: {rate_stats['attachment_delays_applied']}")
-    logger.info(f"  Current adaptive delay: {rate_control.current_delay:.3f} seconds")
-    if results['errors']:
-        logger.error(f"Errors encountered: {len(results['errors'])}")
-        for error in results['errors']:
-            logger.error(f"  - {error}")
+        # Log rate control statistics and send rate metrics
+        rate_stats = results['rate_control_stats']
+        logger.info(f"=" * 80)
+        logger.info(f"📊 BATCH PROCESSING COMPLETE")
+        logger.info(f"=" * 80)
+        logger.info(f"Total messages: {len(event['Records'])}")
+        logger.info(f"✅ Successful: {results['successful']}")
+        logger.info(f"❌ Failed: {results['failed']}")
+        logger.info(f"⏱️  Duration: {duration:.2f} seconds")
+        logger.info(f"📈 Average: {duration/len(event['Records']):.2f} seconds per message")
+        logger.info(f"📧 Campaigns processed: {len(results['campaigns_processed'])}")
+        logger.info(f"-" * 80)
+        logger.info(f"📊 SEND RATE METRICS")
+        logger.info(f"-" * 80)
+        logger.info(f"📤 Send Rate: {send_rate_per_second:.2f} emails/second")
+        logger.info(f"📤 Send Rate: {send_rate_per_minute:.2f} emails/minute")
+        logger.info(f"✅ Success Rate: {success_rate:.1f}%")
+        logger.info(f"❌ Failure Rate: {failure_rate:.1f}%")
+        logger.info(f"-" * 80)
+        logger.info(f"Rate Control Statistics:")
+        logger.info(f"  Total delay applied: {rate_stats['total_delay_applied']:.3f} seconds")
+        logger.info(f"  Throttles detected: {rate_stats['throttles_detected']}")
+        logger.info(f"  Attachment delays applied: {rate_stats['attachment_delays_applied']}")
+        logger.info(f"  Current adaptive delay: {rate_control.current_delay:.3f} seconds")
+        if results['errors']:
+            logger.error(f"Errors encountered: {len(results['errors'])}")
+            for error in results['errors']:
+                logger.error(f"  - {error}")
+    
+    except Exception as fatal_error:
+        # Critical: Catch any unhandled exceptions to prevent SQS message re-delivery
+        logger.error(f"=" * 80)
+        logger.error(f"❌ FATAL ERROR IN LAMBDA HANDLER")
+        logger.error(f"=" * 80)
+        logger.error(f"Exception Type: {type(fatal_error).__name__}")
+        logger.error(f"Exception Message: {str(fatal_error)}")
+        logger.exception(f"Full Stack Trace:")
+        logger.error(f"=" * 80)
+        logger.error(f"⚠️  RETURNING SUCCESS TO PREVENT MESSAGE RE-DELIVERY")
+        logger.error(f"=" * 80)
+    
     logger.info(f"=" * 80)
     
+    # Always return success (200) to ensure SQS deletes the messages
+    # Even if there were errors, we've logged them and handled them gracefully
     return {
         'statusCode': 200,
         'body': json.dumps(results)
