@@ -687,15 +687,40 @@ def serve_web_ui(event):
         function showTab(tabName, clickedElement) {{
             // Remove active class from all tabs
             document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-            
-            // Remove active class from all tab contents  
+
+            // Remove active class from all tab contents
             document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-            
-            // Add active class to clicked tab
-            clickedElement.classList.add('active');
-            
-            // Add active class to target tab content
-            document.getElementById(tabName).classList.add('active');
+
+            // Resolve the clicked element robustly (support calls that don't pass `this`)
+            var el = clickedElement;
+            try {{
+                if (!el && typeof event !== 'undefined' && event) {{
+                    el = event.currentTarget || event.target;
+                }}
+            }} catch (e) {{ /* ignore */ }}
+
+            // Fallback: find the tab element whose onclick references this tabName
+            if (!el) {{
+                el = Array.from(document.querySelectorAll('.tab')).find(t => {{
+                    const onclick = t.getAttribute('onclick') || '';
+                    return onclick.includes("showTab('" + tabName + "'") || onclick.includes('showTab(\"' + tabName + '\"');
+                }});
+            }}
+
+            if (el) {{
+                el.classList.add('active');
+            }}
+
+            // Activate the tab content if it exists
+            const content = document.getElementById(tabName);
+            if (content) {{
+                content.classList.add('active');
+            }}
+
+            // Convenience: when switching to contacts, auto-load them if the function is available
+            if (tabName === 'contacts') {{
+                setTimeout(() => {{ if (typeof loadContacts === 'function') loadContacts(); }}, 50);
+            }}
         }}
         
         

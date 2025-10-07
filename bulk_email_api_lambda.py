@@ -1642,21 +1642,34 @@ def serve_web_ui(event):
         // Initialize the application
         
         function showTab(tabName, clickedElement) {{
-            // Remove active class from all tabs
-            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-            
-            // Remove active class from all tab contents  
-            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-            
-            // Add active class to clicked tab
-            clickedElement.classList.add('active');
-            
-            // Add active class to target tab content
-            document.getElementById(tabName).classList.add('active');
-            
+            // Clear previous active states
+            document.querySelectorAll('.tab').forEach(tab => tab.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+
+            // Resolve clicked element robustly (supports onclick with or without 'this')
+            let el = clickedElement;
+            try {{
+                if (!el) {{
+                    if (typeof event !== 'undefined' && event && event.currentTarget) {{
+                        el = event.currentTarget;
+                    }} else {{
+                        const tabs = Array.from(document.querySelectorAll('.tab'));
+                        el = tabs.find(t => {{
+                            const onclick = t.getAttribute('onclick') || '';
+                            return onclick.includes(`showTab('${{tabName}}'`) || onclick.includes(`showTab("${{tabName}}"`);
+                        }});
+                    }}
+                }}
+            }} catch (e) {{
+                el = el || null;
+            }}
+
+            if (el) el.classList.add('active');
+            const content = document.getElementById(tabName);
+            if (content) content.classList.add('active');
+
             // Auto-load data when switching to specific tabs
             if (tabName === 'contacts' && paginationState.displayedContacts.length === 0) {{
-                // Auto-load contacts when first switching to Contacts tab
                 console.log('Auto-loading contacts...');
                 loadContacts();
             }}
