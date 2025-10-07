@@ -32,11 +32,9 @@ def set_concurrency(function_name, reserved_concurrency):
         # Set new concurrency
         print(f"\n🔧 Setting Reserved Concurrency to {reserved_concurrency}...")
         
-        lambda_client.put_provisioned_concurrency_config(
+        lambda_client.put_reserved_concurrency_config(
             FunctionName=function_name,
-            ReservedConcurrencyConfig={
-                'ReservedConcurrencyCount': reserved_concurrency
-            }
+            ReservedConcurrencyCount=reserved_concurrency
         )
         
         print(f"✅ Successfully set reserved concurrency to {reserved_concurrency}")
@@ -81,7 +79,7 @@ def remove_reserved_concurrency(function_name):
         print(f"\n📋 Current Reserved Concurrency: {current_reserved}")
         print(f"🔧 Removing reserved concurrency...")
         
-        lambda_client.delete_provisioned_concurrency_config(
+        lambda_client.delete_reserved_concurrency_config(
             FunctionName=function_name
         )
         
