@@ -1463,12 +1463,12 @@ def serve_web_ui(event):
             </div>
             <div class="form-group">
                 <label>📨 Subject:</label>
-                <input type="text" id="subject" placeholder="Hello {{{{first_name}}}}">
+                <input type="text" id="subject" placeholder="Hello {{first_name}}">
             </div>
             <div class="form-group">
                 <label>📄 Email Body:</label>
                 <div id="body" style="min-height: 200px; background: white;"></div>
-                <small>Available placeholders: {{{{first_name}}}}, {{{{last_name}}}}, {{{{email}}}}, {{{{title}}}}, {{{{entity_type}}}}, {{{{state}}}}, {{{{agency_name}}}}, {{{{sector}}}}, {{{{subsection}}}}, {{{{phone}}}}, {{{{ms_isac_member}}}}, {{{{soc_call}}}}, {{{{fusion_center}}}}, {{{{k12}}}}, {{{{water_wastewater}}}}, {{{{weekly_rollup}}}}, {{{{alternate_email}}}}, {{{{region}}}}, {{{{group}}}}</small>
+                <small>Available placeholders: {{first_name}}, {{last_name}}, {{email}}, {{title}}, {{entity_type}}, {{state}}, {{agency_name}}, {{sector}}, {{subsection}}, {{phone}}, {{ms_isac_member}}, {{soc_call}}, {{fusion_center}}, {{k12}}, {{water_wastewater}}, {{weekly_rollup}}, {{alternate_email}}, {{region}}, {{group}}</small>
             </div>
             
             <div class="form-group">
@@ -1624,7 +1624,7 @@ def serve_web_ui(event):
         document.addEventListener('DOMContentLoaded', function() {{
             quillEditor = new Quill('#body', {{
                 theme: 'snow',
-                placeholder: 'Dear {{{{first_name}}}} {{{{last_name}}}},\\n\\nYour message here...',
+                placeholder: 'Dear {{first_name}} {{last_name}},\\n\\nYour message here...',
                 modules: {{
                     toolbar: [
                         [{{ 'header': [1, 2, 3, false] }}],
@@ -2191,27 +2191,27 @@ def serve_web_ui(event):
                 row.setAttribute('data-email', contact.email);
                 row.setAttribute('data-contact-id', contact.contact_id || contact.email);
                 row.innerHTML = `
-                    <td style="background: #dbeafe; font-weight: 600; color: #1e40af; border-right: 2px solid #60a5fa;">${{{contact.email || ''}}}</td>
-                    <td contenteditable="true" data-field="first_name" class="editable-cell">${{{contact.first_name || ''}}}</td>
-                    <td contenteditable="true" data-field="last_name" class="editable-cell">${{{contact.last_name || ''}}}</td>
-                    <td contenteditable="true" data-field="title" class="editable-cell">${{{contact.title || ''}}}</td>
-                    <td contenteditable="true" data-field="entity_type" class="editable-cell">${{{contact.entity_type || ''}}}</td>
-                    <td contenteditable="true" data-field="state" class="editable-cell">${{{contact.state || ''}}}</td>
-                    <td contenteditable="true" data-field="agency_name" class="editable-cell">${{{contact.agency_name || ''}}}</td>
-                    <td contenteditable="true" data-field="sector" class="editable-cell">${{{contact.sector || ''}}}</td>
-                    <td contenteditable="true" data-field="subsection" class="editable-cell">${{{contact.subsection || ''}}}</td>
-                    <td contenteditable="true" data-field="phone" class="editable-cell">${{{contact.phone || ''}}}</td>
-                    <td contenteditable="true" data-field="ms_isac_member" class="editable-cell yes-no-cell">${{{contact.ms_isac_member || ''}}}</td>
-                    <td contenteditable="true" data-field="soc_call" class="editable-cell yes-no-cell">${{{contact.soc_call || ''}}}</td>
-                    <td contenteditable="true" data-field="fusion_center" class="editable-cell yes-no-cell">${{{contact.fusion_center || ''}}}</td>
-                    <td contenteditable="true" data-field="k12" class="editable-cell yes-no-cell">${{{contact.k12 || ''}}}</td>
-                    <td contenteditable="true" data-field="water_wastewater" class="editable-cell yes-no-cell">${{{contact.water_wastewater || ''}}}</td>
-                    <td contenteditable="true" data-field="weekly_rollup" class="editable-cell yes-no-cell">${{{contact.weekly_rollup || ''}}}</td>
-                    <td contenteditable="true" data-field="alternate_email" class="editable-cell">${{{contact.alternate_email || ''}}}</td>
-                    <td contenteditable="true" data-field="region" class="editable-cell">${{{contact.region || ''}}}</td>
+                    <td style="background: #dbeafe; font-weight: 600; color: #1e40af; border-right: 2px solid #60a5fa;">${{contact.email || ''}}</td>
+                    <td contenteditable="true" data-field="first_name" class="editable-cell">${{contact.first_name || ''}}</td>
+                    <td contenteditable="true" data-field="last_name" class="editable-cell">${{contact.last_name || ''}}</td>
+                    <td contenteditable="true" data-field="title" class="editable-cell">${{contact.title || ''}}</td>
+                    <td contenteditable="true" data-field="entity_type" class="editable-cell">${{contact.entity_type || ''}}</td>
+                    <td contenteditable="true" data-field="state" class="editable-cell">${{contact.state || ''}}</td>
+                    <td contenteditable="true" data-field="agency_name" class="editable-cell">${{contact.agency_name || ''}}</td>
+                    <td contenteditable="true" data-field="sector" class="editable-cell">${{contact.sector || ''}}</td>
+                    <td contenteditable="true" data-field="subsection" class="editable-cell">${{contact.subsection || ''}}</td>
+                    <td contenteditable="true" data-field="phone" class="editable-cell">${{contact.phone || ''}}</td>
+                    <td contenteditable="true" data-field="ms_isac_member" class="editable-cell yes-no-cell">${{contact.ms_isac_member || ''}}</td>
+                    <td contenteditable="true" data-field="soc_call" class="editable-cell yes-no-cell">${{contact.soc_call || ''}}</td>
+                    <td contenteditable="true" data-field="fusion_center" class="editable-cell yes-no-cell">${{contact.fusion_center || ''}}</td>
+                    <td contenteditable="true" data-field="k12" class="editable-cell yes-no-cell">${{contact.k12 || ''}}</td>
+                    <td contenteditable="true" data-field="water_wastewater" class="editable-cell yes-no-cell">${{contact.water_wastewater || ''}}</td>
+                    <td contenteditable="true" data-field="weekly_rollup" class="editable-cell yes-no-cell">${{contact.weekly_rollup || ''}}</td>
+                    <td contenteditable="true" data-field="alternate_email" class="editable-cell">${{contact.alternate_email || ''}}</td>
+                    <td contenteditable="true" data-field="region" class="editable-cell">${{contact.region || ''}}</td>
                     <td style="position: sticky; right: 0; background: #f8fafc; border-left: 2px solid #cbd5e1; box-shadow: -2px 0 4px rgba(0,0,0,0.05);">
-                        <button onclick="saveContactRow('${{{contact.email}}}')" class="btn-success" style="padding: 6px 12px; font-size: 12px; font-weight: 600; margin-right: 5px;">💾 Save</button>
-                        <button onclick="deleteContactRow('${{{contact.contact_id || contact.email}}}')" class="btn-danger" style="padding: 6px 12px; font-size: 12px; font-weight: 600; background: #ef4444;">🗑️ Delete</button>
+                        <button onclick="saveContactRow('${{contact.email}}')" class="btn-success" style="padding: 6px 12px; font-size: 12px; font-weight: 600; margin-right: 5px;">💾 Save</button>
+                        <button onclick="deleteContactRow('${{contact.contact_id || contact.email}}')" class="btn-danger" style="padding: 6px 12px; font-size: 12px; font-weight: 600; background: #ef4444;">🗑️ Delete</button>
                     </td>
                 `;
                 
@@ -2541,7 +2541,7 @@ def serve_web_ui(event):
                     }}
                 }} else {{
                     const errorData = await response.json();
-                    Toast.error(`Failed to delete contact: ${{{errorData.error || 'Unknown error'}}}`);
+                    Toast.error(`Failed to delete contact: ${{errorData.error || 'Unknown error'}}`);
                 }}
             }} catch (error) {{
                 console.error('Error deleting contact:', error);
@@ -2784,24 +2784,24 @@ def serve_web_ui(event):
             
             if (contact) {{
                 alert(`Contact Details:\\n\\n` +
-                    `Email: ${{{contact.email}}}\\n` +
-                    `Name: ${{{contact.first_name}}} ${{{contact.last_name}}}\\n` +
-                    `Title: ${{{contact.title || 'N/A'}}}\\n` +
-                    `Entity Type: ${{{contact.entity_type || 'N/A'}}}\\n` +
-                    `State: ${{{contact.state || 'N/A'}}}\\n` +
-                    `Agency: ${{{contact.agency_name || 'N/A'}}}\\n` +
-                    `Sector: ${{{contact.sector || 'N/A'}}}\\n` +
-                    `Subsection: ${{{contact.subsection || 'N/A'}}}\\n` +
-                    `Phone: ${{{contact.phone || 'N/A'}}}\\n` +
-                    `MS-ISAC Member: ${{{contact.ms_isac_member || 'N/A'}}}\\n` +
-                    `SOC Call: ${{{contact.soc_call || 'N/A'}}}\\n` +
-                    `Fusion Center: ${{{contact.fusion_center || 'N/A'}}}\\n` +
-                    `K-12: ${{{contact.k12 || 'N/A'}}}\\n` +
-                    `Water/Wastewater: ${{{contact.water_wastewater || 'N/A'}}}\\n` +
-                    `Weekly Rollup: ${{{contact.weekly_rollup || 'N/A'}}}\\n` +
-                    `Alternate Email: ${{{contact.alternate_email || 'N/A'}}}\\n` +
-                    `Region: ${{{contact.region || 'N/A'}}}\\n` +
-                    `Group: ${{{contact.group || 'N/A'}}}`
+                    `Email: ${{contact.email}}\\n` +
+                    `Name: ${{contact.first_name}} ${{contact.last_name}}\\n` +
+                    `Title: ${{contact.title || 'N/A'}}\\n` +
+                    `Entity Type: ${{contact.entity_type || 'N/A'}}\\n` +
+                    `State: ${{contact.state || 'N/A'}}\\n` +
+                    `Agency: ${{contact.agency_name || 'N/A'}}\\n` +
+                    `Sector: ${{contact.sector || 'N/A'}}\\n` +
+                    `Subsection: ${{contact.subsection || 'N/A'}}\\n` +
+                    `Phone: ${{contact.phone || 'N/A'}}\\n` +
+                    `MS-ISAC Member: ${{contact.ms_isac_member || 'N/A'}}\\n` +
+                    `SOC Call: ${{contact.soc_call || 'N/A'}}\\n` +
+                    `Fusion Center: ${{contact.fusion_center || 'N/A'}}\\n` +
+                    `K-12: ${{contact.k12 || 'N/A'}}\\n` +
+                    `Water/Wastewater: ${{contact.water_wastewater || 'N/A'}}\\n` +
+                    `Weekly Rollup: ${{contact.weekly_rollup || 'N/A'}}\\n` +
+                    `Alternate Email: ${{contact.alternate_email || 'N/A'}}\\n` +
+                    `Region: ${{contact.region || 'N/A'}}\\n` +
+                    `Group: ${{contact.group || 'N/A'}}`
                 );
             }}
         }}
@@ -3460,13 +3460,13 @@ def serve_web_ui(event):
                 const globalIndex = startIdx + index + 1;
                 const row = document.createElement('tr');
                 row.innerHTML = `
-                    <td style="font-weight: 600; color: #6b7280;">${{{globalIndex}}}</td>
-                    <td>${{{contact.first_name || contact.FirstName || '-'}}}</td>
-                    <td>${{{contact.last_name || contact.LastName || '-'}}}</td>
-                    <td style="color: #3b82f6; font-weight: 500;">${{{contact.email || '-'}}}</td>
-                    <td>${{{contact.agency_name || contact.AgencyName || '-'}}}</td>
-                    <td>${{{contact.state || contact.State || '-'}}}</td>
-                    <td>${{{contact.entity_type || contact.EntityType || '-'}}}</td>
+                    <td style="font-weight: 600; color: #6b7280;">${{globalIndex}}</td>
+                    <td>${{contact.first_name || contact.FirstName || '-'}}</td>
+                    <td>${{contact.last_name || contact.LastName || '-'}}</td>
+                    <td style="color: #3b82f6; font-weight: 500;">${{contact.email || '-'}}</td>
+                    <td>${{contact.agency_name || contact.AgencyName || '-'}}</td>
+                    <td>${{contact.state || contact.State || '-'}}</td>
+                    <td>${{contact.entity_type || contact.EntityType || '-'}}</td>
                 `;
                 tbody.appendChild(row);
             }});
@@ -3620,7 +3620,7 @@ def serve_web_ui(event):
                 </div>
             `).join('');
             
-            sizeDiv.innerHTML = `<strong>📊 Total size:</strong> ${{{totalSizeMB}}} MB / 40 MB ${{{totalSize > MAX_ATTACHMENT_SIZE ? '<span style="color: #ef4444;">❌ Exceeds limit!</span>' : '<span style="color: #10b981;">✅ OK</span>'}}}`;
+            sizeDiv.innerHTML = `<strong>📊 Total size:</strong> ${{totalSizeMB}} MB / 40 MB ${{totalSize > MAX_ATTACHMENT_SIZE ? '<span style="color: #ef4444;">❌ Exceeds limit!</span>' : '<span style="color: #10b981;">✅ OK</span>'}}`;
         }}
         
         function removeAttachment(index) {{
@@ -3670,7 +3670,6 @@ def serve_web_ui(event):
                 
             }} while (lastKey);  // Continue until no more pages
             
-            console.log(`✅ Pagination complete: Loaded ${{allContacts.length}} total contacts in ${{pageCount}} pages`);
             Toast.success(`Loaded ${{allContacts.length}} contacts successfully!`, 2000);
             
             return allContacts;
@@ -3696,13 +3695,6 @@ def serve_web_ui(event):
             let targetContacts = [];
             let filterDescription = 'All Contacts';
             
-            console.log('Campaign filter debug:', {{
-                campaignFilteredContacts: campaignFilteredContacts === null ? 'null (no filter)' : 
-                                         Array.isArray(campaignFilteredContacts) ? `array with ${{campaignFilteredContacts.length}} items` : 
-                                         'invalid',
-                selectedCampaignFilterValuesKeys: Object.keys(selectedCampaignFilterValues || {{}}).length,
-                selectedCampaignFilterValues: selectedCampaignFilterValues
-            }});
             
             // THREE STATES: null = no filter, [] = filter with no results, [...] = filtered contacts
             if (campaignFilteredContacts === null) {{
@@ -3784,11 +3776,6 @@ def serve_web_ui(event):
             const userName = document.getElementById('userName').value.trim() || 'Web User';
             
             // Validate that we have target contacts before proceeding
-            console.log('🔍 FRONTEND DEBUG - Target Contacts Validation:');
-            console.log('   targetContacts:', targetContacts);
-            console.log('   targetContacts.length:', targetContacts?.length || 0);
-            console.log('   targetContacts type:', typeof targetContacts);
-            console.log('   targetContacts is array:', Array.isArray(targetContacts));
             
             if (!targetContacts || targetContacts.length === 0) {{
                 console.error('❌ No target contacts found!');
@@ -3796,13 +3783,8 @@ def serve_web_ui(event):
             }}
             
             // Extract and validate email addresses
-            console.log('🔍 FRONTEND DEBUG - Email Extraction:');
-            console.log('   Processing', targetContacts.length, 'contacts...');
             
             const targetEmails = targetContacts.map(c => c?.email).filter(email => email && email.includes('@'));
-            console.log(`✅ Extracted ${{targetEmails.length}} valid emails from ${{targetContacts.length}} contacts`);
-            console.log('📧 Sample emails:', targetEmails.slice(0, 5));
-            console.log('📧 All target emails:', targetEmails);
             
             if (targetEmails.length === 0) {{
                 throw new Error('No valid email addresses found in contacts. Please check that your contacts have valid email addresses.');
@@ -3863,27 +3845,27 @@ def serve_web_ui(event):
                     </div>
                     <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; margin: 20px 0;">
                         <div style="background: var(--success-color); color: white; padding: 20px; border-radius: 8px; text-align: center;">
-                            <h4 style="margin: 0; font-size: 2rem;">${{{result.queued_count || 0}}}</h4>
+                            <h4 style="margin: 0; font-size: 2rem;">${{result.queued_count || 0}}</h4>
                             <p style="margin: 5px 0 0 0;">Queued to SQS</p>
                         </div>
                         <div style="background: var(--warning-color); color: white; padding: 20px; border-radius: 8px; text-align: center;">
-                            <h4 style="margin: 0; font-size: 2rem;">${{{result.failed_to_queue || 0}}}</h4>
+                            <h4 style="margin: 0; font-size: 2rem;">${{result.failed_to_queue || 0}}</h4>
                             <p style="margin: 5px 0 0 0;">Failed to Queue</p>
                         </div>
                         <div style="background: var(--info-color); color: white; padding: 20px; border-radius: 8px; text-align: center;">
-                            <h4 style="margin: 0; font-size: 2rem;">${{{result.total_contacts || 0}}}</h4>
+                            <h4 style="margin: 0; font-size: 2rem;">${{result.total_contacts || 0}}</h4>
                             <p style="margin: 5px 0 0 0;">Total Contacts</p>
                         </div>
                     </div>
                     <div style="background: var(--gray-50); padding: 16px; border-radius: 8px; margin-top: 20px;">
-                        <p style="margin: 0; color: var(--gray-700);"><strong>Campaign ID:</strong> ${{{result.campaign_id}}}</p>
-                        <p style="margin: 5px 0 0 0; color: var(--gray-700);"><strong>Target Contacts:</strong> ${{{filterDescription}}}</p>
-                        <p style="margin: 5px 0 0 0; color: var(--gray-700);"><strong>Queue:</strong> ${{{result.queue_name || 'bulk-email-queue'}}}</p>
+                        <p style="margin: 0; color: var(--gray-700);"><strong>Campaign ID:</strong> ${{result.campaign_id}}</p>
+                        <p style="margin: 5px 0 0 0; color: var(--gray-700);"><strong>Target Contacts:</strong> ${{filterDescription}}</p>
+                        <p style="margin: 5px 0 0 0; color: var(--gray-700);"><strong>Queue:</strong> ${{result.queue_name || 'bulk-email-queue'}}</p>
                         <p style="margin: 10px 0 0 0; color: var(--gray-600); font-size: 0.9rem;">Check CloudWatch Logs to monitor email processing status</p>
                     </div>
                     <details style="margin-top: 20px;">
                         <summary style="cursor: pointer; color: var(--gray-600);">View Raw Response</summary>
-                        <pre style="background: var(--gray-100); padding: 16px; border-radius: 8px; margin-top: 10px; overflow-x: auto;">${{{JSON.stringify(result, null, 2)}}}</pre>
+                        <pre style="background: var(--gray-100); padding: 16px; border-radius: 8px; margin-top: 10px; overflow-x: auto;">${{JSON.stringify(result, null, 2)}}</pre>
                     </details>
                 `;
             resultDiv.classList.remove('hidden');
@@ -3930,12 +3912,10 @@ def serve_web_ui(event):
                     
                     if (config && config.aws_region) {{
                         document.getElementById('awsRegion').value = config.aws_region;
-                        console.log('✅ AWS Region loaded from DynamoDB:', config.aws_region);
                     }}
                     
                     if (config && config.from_email) {{
                         document.getElementById('fromEmail').value = config.from_email;
-                        console.log('✅ From Email loaded from DynamoDB:', config.from_email);
                     }} else {{
                         console.log('⚠️ No from_email found in config - using defaults');
                     }}
@@ -4158,9 +4138,9 @@ def serve_web_ui(event):
                         const tag = document.createElement('div');
                         tag.style.cssText = 'display: inline-flex; align-items: center; gap: 6px; padding: 6px 10px; background: #6366f1; color: white; border-radius: 6px; font-size: 13px; font-weight: 500;';
                         tag.innerHTML = `
-                            <span style="font-size: 11px; opacity: 0.9;">${{{label}}}:</span>
-                            <span>${{{value}}}</span>
-                            <button onclick="removeFilterValue('${{{filterType}}}', '${{{value.replace(/'/g, "\\\\'")}}}');" style="background: none; border: none; color: white; cursor: pointer; padding: 0 2px; font-size: 16px; line-height: 1; opacity: 0.8;" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.8'">
+                            <span style="font-size: 11px; opacity: 0.9;">${{label}}:</span>
+                            <span>${{value}}</span>
+                            <button onclick="removeFilterValue('${{filterType}}', '${{value.replace(/'/g, "\\\\'")}}');" style="background: none; border: none; color: white; cursor: pointer; padding: 0 2px; font-size: 16px; line-height: 1; opacity: 0.8;" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.8'">
                                 ×
                             </button>
                         `;
@@ -4981,11 +4961,6 @@ def delete_contact(event, headers):
 def send_campaign(body, headers, event=None):
     """Send email campaign by saving to DynamoDB and queuing contacts to SQS"""
     try:
-        print("=" * 80)
-        print("🚀 SEND CAMPAIGN DEBUG - START")
-        print("=" * 80)
-        print(f"📋 Request body keys: {list(body.keys())}")
-        print(f"📋 Full request body: {json.dumps(body, indent=2)}")
         
         # Get email configuration
         config_response = email_config_table.get_item(Key={'config_id': 'default'})
@@ -4994,16 +4969,11 @@ def send_campaign(body, headers, event=None):
             return {'statusCode': 400, 'headers': headers, 'body': json.dumps({'error': 'Email configuration not found'})}
         
         config = config_response['Item']
-        print(f"✅ Email config found: {config.get('from_email', 'N/A')}")
         
         # Get target contacts from frontend filter
         target_contact_emails = body.get('target_contacts', [])
         filter_description = body.get('filter_description', 'All Contacts')
         
-        print(f"📧 Target contact emails received: {len(target_contact_emails)}")
-        print(f"📧 Sample emails: {target_contact_emails[:5]}")
-        print(f"📧 Filter description: {filter_description}")
-        print(f"📧 All target emails: {target_contact_emails}")
         
         if not target_contact_emails:
             print("❌ No target email addresses provided")
@@ -5024,15 +4994,10 @@ def send_campaign(body, headers, event=None):
                     'last_name': '',
                     'company': ''
                 })
-                print(f"   ✅ Valid email: {email}")
             else:
                 invalid_emails.append(email)
                 print(f"   ❌ Invalid email format, skipping: '{email}'")
         
-        print(f"📊 Email validation results:")
-        print(f"   ✅ Valid emails: {len(contacts)}")
-        print(f"   ❌ Invalid emails: {len(invalid_emails)}")
-        print(f"   📧 Campaign targeting {len(contacts)} valid email addresses ({filter_description})")
         
         if not contacts:
             error_msg = f'No valid email addresses found. Received {len(target_contact_emails)} entries but none are valid emails. Please check email format (must contain @).'
@@ -5083,17 +5048,13 @@ def send_campaign(body, headers, event=None):
         # Store recipient email list for tracking
         campaign_item['target_contacts'] = target_contact_emails
         
-        print(f"💾 Saving campaign to DynamoDB...")
         campaigns_table.put_item(Item=campaign_item)
-        print(f"✅ Campaign {campaign_id} saved to DynamoDB")
         
         # Get SQS queue URL
         queue_name = 'bulk-email-queue'
-        print(f"📨 Getting SQS queue URL for: {queue_name}")
         try:
             queue_url_response = sqs_client.get_queue_url(QueueName=queue_name)
             queue_url = queue_url_response['QueueUrl']
-            print(f"✅ SQS queue URL: {queue_url}")
         except sqs_client.exceptions.QueueDoesNotExist:
             print(f"❌ SQS queue '{queue_name}' does not exist")
             return {'statusCode': 500, 'headers': headers, 'body': json.dumps({'error': f'SQS queue "{queue_name}" does not exist. Please create it first.'})}
@@ -5102,13 +5063,10 @@ def send_campaign(body, headers, event=None):
         failed_to_queue = 0
         
         # Queue contact email addresses to SQS (minimal payload)
-        print(f"📨 Queuing {len(contacts)} contacts to SQS for campaign {campaign_id}")
-        print(f"📨 Queue URL: {queue_url}")
         
         for i, contact in enumerate(contacts):
             try:
                 email = contact.get('email')
-                print(f"📨 Processing contact {i+1}/{len(contacts)}: {email}")
                 
                 # Minimal message: only campaign_id and contact email
                 # Worker Lambda will retrieve campaign details from DynamoDB
@@ -5117,7 +5075,6 @@ def send_campaign(body, headers, event=None):
                     'contact_email': email
                 }
                 
-                print(f"📨 SQS message body: {json.dumps(message_body)}")
                 
                 # Send message to SQS
                 sqs_client.send_message(
@@ -5135,7 +5092,6 @@ def send_campaign(body, headers, event=None):
                     }
                 )
                 queued_count += 1
-                print(f"✅ Successfully queued email for {email}")
                 
             except Exception as e:
                 print(f"❌ Failed to queue email for {contact.get('email')}: {str(e)}")
@@ -5152,11 +5108,6 @@ def send_campaign(body, headers, event=None):
             }
         )
         
-        print(f"📊 Campaign {campaign_id} Summary:")
-        print(f"   ✅ Queued: {queued_count} emails")
-        print(f"   ❌ Failed: {failed_to_queue} emails")
-        print(f"   📧 Total contacts: {len(contacts)}")
-        print(f"   🎯 Filter: {filter_description}")
         
         response_data = {
             'success': True,
@@ -5170,10 +5121,6 @@ def send_campaign(body, headers, event=None):
             'note': 'Emails will be processed asynchronously from the SQS queue'
         }
         
-        print(f"📤 Sending response: {json.dumps(response_data, indent=2)}")
-        print("=" * 80)
-        print("✅ SEND CAMPAIGN DEBUG - END")
-        print("=" * 80)
         
         return {
             'statusCode': 200,
