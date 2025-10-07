@@ -2191,27 +2191,27 @@ def serve_web_ui(event):
                 row.setAttribute('data-email', contact.email);
                 row.setAttribute('data-contact-id', contact.contact_id || contact.email);
                 row.innerHTML = `
-                    <td style="background: #dbeafe; font-weight: 600; color: #1e40af; border-right: 2px solid #60a5fa;">${{contact.email || ''}}</td>
-                    <td contenteditable="true" data-field="first_name" class="editable-cell">${{contact.first_name || ''}}</td>
-                    <td contenteditable="true" data-field="last_name" class="editable-cell">${{contact.last_name || ''}}</td>
-                    <td contenteditable="true" data-field="title" class="editable-cell">${{contact.title || ''}}</td>
-                    <td contenteditable="true" data-field="entity_type" class="editable-cell">${{contact.entity_type || ''}}</td>
-                    <td contenteditable="true" data-field="state" class="editable-cell">${{contact.state || ''}}</td>
-                    <td contenteditable="true" data-field="agency_name" class="editable-cell">${{contact.agency_name || ''}}</td>
-                    <td contenteditable="true" data-field="sector" class="editable-cell">${{contact.sector || ''}}</td>
-                    <td contenteditable="true" data-field="subsection" class="editable-cell">${{contact.subsection || ''}}</td>
-                    <td contenteditable="true" data-field="phone" class="editable-cell">${{contact.phone || ''}}</td>
-                    <td contenteditable="true" data-field="ms_isac_member" class="editable-cell yes-no-cell">${{contact.ms_isac_member || ''}}</td>
-                    <td contenteditable="true" data-field="soc_call" class="editable-cell yes-no-cell">${{contact.soc_call || ''}}</td>
-                    <td contenteditable="true" data-field="fusion_center" class="editable-cell yes-no-cell">${{contact.fusion_center || ''}}</td>
-                    <td contenteditable="true" data-field="k12" class="editable-cell yes-no-cell">${{contact.k12 || ''}}</td>
-                    <td contenteditable="true" data-field="water_wastewater" class="editable-cell yes-no-cell">${{contact.water_wastewater || ''}}</td>
-                    <td contenteditable="true" data-field="weekly_rollup" class="editable-cell yes-no-cell">${{contact.weekly_rollup || ''}}</td>
-                    <td contenteditable="true" data-field="alternate_email" class="editable-cell">${{contact.alternate_email || ''}}</td>
-                    <td contenteditable="true" data-field="region" class="editable-cell">${{contact.region || ''}}</td>
+                    <td style="background: #dbeafe; font-weight: 600; color: #1e40af; border-right: 2px solid #60a5fa;">${contact.email || ''}</td>
+                    <td contenteditable="true" data-field="first_name" class="editable-cell">${contact.first_name || ''}</td>
+                    <td contenteditable="true" data-field="last_name" class="editable-cell">${contact.last_name || ''}</td>
+                    <td contenteditable="true" data-field="title" class="editable-cell">${contact.title || ''}</td>
+                    <td contenteditable="true" data-field="entity_type" class="editable-cell">${contact.entity_type || ''}</td>
+                    <td contenteditable="true" data-field="state" class="editable-cell">${contact.state || ''}</td>
+                    <td contenteditable="true" data-field="agency_name" class="editable-cell">${contact.agency_name || ''}</td>
+                    <td contenteditable="true" data-field="sector" class="editable-cell">${contact.sector || ''}</td>
+                    <td contenteditable="true" data-field="subsection" class="editable-cell">${contact.subsection || ''}</td>
+                    <td contenteditable="true" data-field="phone" class="editable-cell">${contact.phone || ''}</td>
+                    <td contenteditable="true" data-field="ms_isac_member" class="editable-cell yes-no-cell">${contact.ms_isac_member || ''}</td>
+                    <td contenteditable="true" data-field="soc_call" class="editable-cell yes-no-cell">${contact.soc_call || ''}</td>
+                    <td contenteditable="true" data-field="fusion_center" class="editable-cell yes-no-cell">${contact.fusion_center || ''}</td>
+                    <td contenteditable="true" data-field="k12" class="editable-cell yes-no-cell">${contact.k12 || ''}</td>
+                    <td contenteditable="true" data-field="water_wastewater" class="editable-cell yes-no-cell">${contact.water_wastewater || ''}</td>
+                    <td contenteditable="true" data-field="weekly_rollup" class="editable-cell yes-no-cell">${contact.weekly_rollup || ''}</td>
+                    <td contenteditable="true" data-field="alternate_email" class="editable-cell">${contact.alternate_email || ''}</td>
+                    <td contenteditable="true" data-field="region" class="editable-cell">${contact.region || ''}</td>
                     <td style="position: sticky; right: 0; background: #f8fafc; border-left: 2px solid #cbd5e1; box-shadow: -2px 0 4px rgba(0,0,0,0.05);">
-                        <button onclick="saveContactRow('${{contact.email}}')" class="btn-success" style="padding: 6px 12px; font-size: 12px; font-weight: 600; margin-right: 5px;">💾 Save</button>
-                        <button onclick="deleteContactRow('${{contact.contact_id || contact.email}}')" class="btn-danger" style="padding: 6px 12px; font-size: 12px; font-weight: 600; background: #ef4444;">🗑️ Delete</button>
+                        <button onclick="saveContactRow('${contact.email}')" class="btn-success" style="padding: 6px 12px; font-size: 12px; font-weight: 600; margin-right: 5px;">💾 Save</button>
+                        <button onclick="deleteContactRow('${contact.contact_id || contact.email}')" class="btn-danger" style="padding: 6px 12px; font-size: 12px; font-weight: 600; background: #ef4444;">🗑️ Delete</button>
                     </td>
                 `;
                 
@@ -2541,7 +2541,7 @@ def serve_web_ui(event):
                     }}
                 }} else {{
                     const errorData = await response.json();
-                    Toast.error(`Failed to delete contact: ${{errorData.error || 'Unknown error'}}`);
+                    Toast.error(`Failed to delete contact: ${errorData.error || 'Unknown error'}`);
                 }}
             }} catch (error) {{
                 console.error('Error deleting contact:', error);
@@ -2784,24 +2784,24 @@ def serve_web_ui(event):
             
             if (contact) {{
                 alert(`Contact Details:\\n\\n` +
-                    `Email: ${{contact.email}}\\n` +
-                    `Name: ${{contact.first_name}} ${{contact.last_name}}\\n` +
-                    `Title: ${{contact.title || 'N/A'}}\\n` +
-                    `Entity Type: ${{contact.entity_type || 'N/A'}}\\n` +
-                    `State: ${{contact.state || 'N/A'}}\\n` +
-                    `Agency: ${{contact.agency_name || 'N/A'}}\\n` +
-                    `Sector: ${{contact.sector || 'N/A'}}\\n` +
-                    `Subsection: ${{contact.subsection || 'N/A'}}\\n` +
-                    `Phone: ${{contact.phone || 'N/A'}}\\n` +
-                    `MS-ISAC Member: ${{contact.ms_isac_member || 'N/A'}}\\n` +
-                    `SOC Call: ${{contact.soc_call || 'N/A'}}\\n` +
-                    `Fusion Center: ${{contact.fusion_center || 'N/A'}}\\n` +
-                    `K-12: ${{contact.k12 || 'N/A'}}\\n` +
-                    `Water/Wastewater: ${{contact.water_wastewater || 'N/A'}}\\n` +
-                    `Weekly Rollup: ${{contact.weekly_rollup || 'N/A'}}\\n` +
-                    `Alternate Email: ${{contact.alternate_email || 'N/A'}}\\n` +
-                    `Region: ${{contact.region || 'N/A'}}\\n` +
-                    `Group: ${{contact.group || 'N/A'}}`
+                    `Email: ${contact.email}\\n` +
+                    `Name: ${contact.first_name} ${contact.last_name}\\n` +
+                    `Title: ${contact.title || 'N/A'}\\n` +
+                    `Entity Type: ${contact.entity_type || 'N/A'}\\n` +
+                    `State: ${contact.state || 'N/A'}\\n` +
+                    `Agency: ${contact.agency_name || 'N/A'}\\n` +
+                    `Sector: ${contact.sector || 'N/A'}\\n` +
+                    `Subsection: ${contact.subsection || 'N/A'}\\n` +
+                    `Phone: ${contact.phone || 'N/A'}\\n` +
+                    `MS-ISAC Member: ${contact.ms_isac_member || 'N/A'}\\n` +
+                    `SOC Call: ${contact.soc_call || 'N/A'}\\n` +
+                    `Fusion Center: ${contact.fusion_center || 'N/A'}\\n` +
+                    `K-12: ${contact.k12 || 'N/A'}\\n` +
+                    `Water/Wastewater: ${contact.water_wastewater || 'N/A'}\\n` +
+                    `Weekly Rollup: ${contact.weekly_rollup || 'N/A'}\\n` +
+                    `Alternate Email: ${contact.alternate_email || 'N/A'}\\n` +
+                    `Region: ${contact.region || 'N/A'}\\n` +
+                    `Group: ${contact.group || 'N/A'}`
                 );
             }}
         }}
@@ -3460,13 +3460,13 @@ def serve_web_ui(event):
                 const globalIndex = startIdx + index + 1;
                 const row = document.createElement('tr');
                 row.innerHTML = `
-                    <td style="font-weight: 600; color: #6b7280;">${{globalIndex}}</td>
-                    <td>${{contact.first_name || contact.FirstName || '-'}}</td>
-                    <td>${{contact.last_name || contact.LastName || '-'}}</td>
-                    <td style="color: #3b82f6; font-weight: 500;">${{contact.email || '-'}}</td>
-                    <td>${{contact.agency_name || contact.AgencyName || '-'}}</td>
-                    <td>${{contact.state || contact.State || '-'}}</td>
-                    <td>${{contact.entity_type || contact.EntityType || '-'}}</td>
+                    <td style="font-weight: 600; color: #6b7280;">${globalIndex}</td>
+                    <td>${contact.first_name || contact.FirstName || '-'}</td>
+                    <td>${contact.last_name || contact.LastName || '-'}</td>
+                    <td style="color: #3b82f6; font-weight: 500;">${contact.email || '-'}</td>
+                    <td>${contact.agency_name || contact.AgencyName || '-'}</td>
+                    <td>${contact.state || contact.State || '-'}</td>
+                    <td>${contact.entity_type || contact.EntityType || '-'}</td>
                 `;
                 tbody.appendChild(row);
             }});
@@ -3620,7 +3620,7 @@ def serve_web_ui(event):
                 </div>
             `).join('');
             
-            sizeDiv.innerHTML = `<strong>📊 Total size:</strong> ${{totalSizeMB}} MB / 40 MB ${{totalSize > MAX_ATTACHMENT_SIZE ? '<span style="color: #ef4444;">❌ Exceeds limit!</span>' : '<span style="color: #10b981;">✅ OK</span>'}}`;
+            sizeDiv.innerHTML = `<strong>📊 Total size:</strong> ${totalSizeMB} MB / 40 MB ${totalSize > MAX_ATTACHMENT_SIZE ? '<span style="color: #ef4444;">❌ Exceeds limit!</span>' : '<span style="color: #10b981;">✅ OK</span>'}`;
         }}
         
         function removeAttachment(index) {{
@@ -3863,27 +3863,27 @@ def serve_web_ui(event):
                     </div>
                     <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; margin: 20px 0;">
                         <div style="background: var(--success-color); color: white; padding: 20px; border-radius: 8px; text-align: center;">
-                            <h4 style="margin: 0; font-size: 2rem;">${{result.queued_count || 0}}</h4>
+                            <h4 style="margin: 0; font-size: 2rem;">${result.queued_count || 0}</h4>
                             <p style="margin: 5px 0 0 0;">Queued to SQS</p>
                         </div>
                         <div style="background: var(--warning-color); color: white; padding: 20px; border-radius: 8px; text-align: center;">
-                            <h4 style="margin: 0; font-size: 2rem;">${{result.failed_to_queue || 0}}</h4>
+                            <h4 style="margin: 0; font-size: 2rem;">${result.failed_to_queue || 0}</h4>
                             <p style="margin: 5px 0 0 0;">Failed to Queue</p>
                         </div>
                         <div style="background: var(--info-color); color: white; padding: 20px; border-radius: 8px; text-align: center;">
-                            <h4 style="margin: 0; font-size: 2rem;">${{result.total_contacts || 0}}</h4>
+                            <h4 style="margin: 0; font-size: 2rem;">${result.total_contacts || 0}</h4>
                             <p style="margin: 5px 0 0 0;">Total Contacts</p>
                         </div>
                     </div>
                     <div style="background: var(--gray-50); padding: 16px; border-radius: 8px; margin-top: 20px;">
-                        <p style="margin: 0; color: var(--gray-700);"><strong>Campaign ID:</strong> ${{result.campaign_id}}</p>
-                        <p style="margin: 5px 0 0 0; color: var(--gray-700);"><strong>Target Contacts:</strong> ${{filterDescription}}</p>
-                        <p style="margin: 5px 0 0 0; color: var(--gray-700);"><strong>Queue:</strong> ${{result.queue_name || 'bulk-email-queue'}}</p>
+                        <p style="margin: 0; color: var(--gray-700);"><strong>Campaign ID:</strong> ${result.campaign_id}</p>
+                        <p style="margin: 5px 0 0 0; color: var(--gray-700);"><strong>Target Contacts:</strong> ${filterDescription}</p>
+                        <p style="margin: 5px 0 0 0; color: var(--gray-700);"><strong>Queue:</strong> ${result.queue_name || 'bulk-email-queue'}</p>
                         <p style="margin: 10px 0 0 0; color: var(--gray-600); font-size: 0.9rem;">Check CloudWatch Logs to monitor email processing status</p>
                     </div>
                     <details style="margin-top: 20px;">
                         <summary style="cursor: pointer; color: var(--gray-600);">View Raw Response</summary>
-                        <pre style="background: var(--gray-100); padding: 16px; border-radius: 8px; margin-top: 10px; overflow-x: auto;">${{JSON.stringify(result, null, 2)}}</pre>
+                        <pre style="background: var(--gray-100); padding: 16px; border-radius: 8px; margin-top: 10px; overflow-x: auto;">${JSON.stringify(result, null, 2)}</pre>
                     </details>
                 `;
             resultDiv.classList.remove('hidden');
@@ -4158,9 +4158,9 @@ def serve_web_ui(event):
                         const tag = document.createElement('div');
                         tag.style.cssText = 'display: inline-flex; align-items: center; gap: 6px; padding: 6px 10px; background: #6366f1; color: white; border-radius: 6px; font-size: 13px; font-weight: 500;';
                         tag.innerHTML = `
-                            <span style="font-size: 11px; opacity: 0.9;">${{label}}:</span>
-                            <span>${{value}}</span>
-                            <button onclick="removeFilterValue('${{filterType}}', '${{value.replace(/'/g, "\\\\'")}}');" style="background: none; border: none; color: white; cursor: pointer; padding: 0 2px; font-size: 16px; line-height: 1; opacity: 0.8;" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.8'">
+                            <span style="font-size: 11px; opacity: 0.9;">${label}:</span>
+                            <span>${value}</span>
+                            <button onclick="removeFilterValue('${filterType}', '${value.replace(/'/g, "\\\\'")}');" style="background: none; border: none; color: white; cursor: pointer; padding: 0 2px; font-size: 16px; line-height: 1; opacity: 0.8;" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.8'">
                                 ×
                             </button>
                         `;
