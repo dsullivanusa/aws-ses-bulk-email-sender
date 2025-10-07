@@ -3784,14 +3784,25 @@ def serve_web_ui(event):
             const userName = document.getElementById('userName').value.trim() || 'Web User';
             
             // Validate that we have target contacts before proceeding
+            console.log('🔍 FRONTEND DEBUG - Target Contacts Validation:');
+            console.log('   targetContacts:', targetContacts);
+            console.log('   targetContacts.length:', targetContacts?.length || 0);
+            console.log('   targetContacts type:', typeof targetContacts);
+            console.log('   targetContacts is array:', Array.isArray(targetContacts));
+            
             if (!targetContacts || targetContacts.length === 0) {{
+                console.error('❌ No target contacts found!');
                 throw new Error('No target contacts selected. Please either:\n1. Apply a filter to select specific contacts, or\n2. Clear filters to send to all contacts in the database.');
             }}
             
             // Extract and validate email addresses
+            console.log('🔍 FRONTEND DEBUG - Email Extraction:');
+            console.log('   Processing', targetContacts.length, 'contacts...');
+            
             const targetEmails = targetContacts.map(c => c?.email).filter(email => email && email.includes('@'));
-            console.log(`Extracted ${{targetEmails.length}} valid emails from ${{targetContacts.length}} contacts`);
-            console.log('Sample emails:', targetEmails.slice(0, 5));
+            console.log(`✅ Extracted ${{targetEmails.length}} valid emails from ${{targetContacts.length}} contacts`);
+            console.log('📧 Sample emails:', targetEmails.slice(0, 5));
+            console.log('📧 All target emails:', targetEmails);
             
             if (targetEmails.length === 0) {{
                 throw new Error('No valid email addresses found in contacts. Please check that your contacts have valid email addresses.');
@@ -4970,27 +4981,42 @@ def delete_contact(event, headers):
 def send_campaign(body, headers, event=None):
     """Send email campaign by saving to DynamoDB and queuing contacts to SQS"""
     try:
+        print("=" * 80)
+        print("🚀 SEND CAMPAIGN DEBUG - START")
+        print("=" * 80)
+        print(f"📋 Request body keys: {list(body.keys())}")
+        print(f"📋 Full request body: {json.dumps(body, indent=2)}")
+        
         # Get email configuration
         config_response = email_config_table.get_item(Key={'config_id': 'default'})
         if 'Item' not in config_response:
+            print("❌ Email configuration not found")
             return {'statusCode': 400, 'headers': headers, 'body': json.dumps({'error': 'Email configuration not found'})}
         
         config = config_response['Item']
+        print(f"✅ Email config found: {config.get('from_email', 'N/A')}")
         
         # Get target contacts from frontend filter
         target_contact_emails = body.get('target_contacts', [])
         filter_description = body.get('filter_description', 'All Contacts')
         
-        print(f"Received campaign request with {len(target_contact_emails)} email addresses")
-        print(f"Sample emails: {target_contact_emails[:5]}")
+        print(f"📧 Target contact emails received: {len(target_contact_emails)}")
+        print(f"📧 Sample emails: {target_contact_emails[:5]}")
+        print(f"📧 Filter description: {filter_description}")
+        print(f"📧 All target emails: {target_contact_emails}")
         
         if not target_contact_emails:
+            print("❌ No target email addresses provided")
             return {'statusCode': 400, 'headers': headers, 'body': json.dumps({'error': 'No target email addresses specified. Please select recipients in the Campaign tab.'})}
         
         # Create contact objects directly from email addresses (independent of Contacts table)
         # This allows campaigns to work without requiring emails to exist in the Contacts table
+        print(f"🔍 Processing {len(target_contact_emails)} email addresses...")
         contacts = []
-        for email in target_contact_emails:
+        invalid_emails = []
+        
+        for i, email in enumerate(target_contact_emails):
+            print(f"   Email {i+1}: '{email}'")
             if email and '@' in email:  # Basic email validation
                 contacts.append({
                     'email': email,
@@ -4998,16 +5024,23 @@ def send_campaign(body, headers, event=None):
                     'last_name': '',
                     'company': ''
                 })
+                print(f"   ✅ Valid email: {email}")
             else:
-                print(f"Invalid email format, skipping: {email}")
+                invalid_emails.append(email)
+                print(f"   ❌ Invalid email format, skipping: '{email}'")
         
-        print(f"Campaign targeting {len(contacts)} valid email addresses ({filter_description})")
+        print(f"📊 Email validation results:")
+        print(f"   ✅ Valid emails: {len(contacts)}")
+        print(f"   ❌ Invalid emails: {len(invalid_emails)}")
+        print(f"   📧 Campaign targeting {len(contacts)} valid email addresses ({filter_description})")
         
         if not contacts:
             error_msg = f'No valid email addresses found. Received {len(target_contact_emails)} entries but none are valid emails. Please check email format (must contain @).'
+            print(f"❌ {error_msg}")
             return {'statusCode': 400, 'headers': headers, 'body': json.dumps({'error': error_msg})}
         
         campaign_id = f"campaign_{int(datetime.now().timestamp())}"
+        print(f"🆔 Generated campaign ID: {campaign_id}")
         
         # Get attachments
         attachments = body.get('attachments', [])
@@ -5050,31 +5083,41 @@ def send_campaign(body, headers, event=None):
         # Store recipient email list for tracking
         campaign_item['target_contacts'] = target_contact_emails
         
+        print(f"💾 Saving campaign to DynamoDB...")
         campaigns_table.put_item(Item=campaign_item)
-        print(f"Campaign {campaign_id} saved to DynamoDB")
+        print(f"✅ Campaign {campaign_id} saved to DynamoDB")
         
         # Get SQS queue URL
         queue_name = 'bulk-email-queue'
+        print(f"📨 Getting SQS queue URL for: {queue_name}")
         try:
             queue_url_response = sqs_client.get_queue_url(QueueName=queue_name)
             queue_url = queue_url_response['QueueUrl']
+            print(f"✅ SQS queue URL: {queue_url}")
         except sqs_client.exceptions.QueueDoesNotExist:
+            print(f"❌ SQS queue '{queue_name}' does not exist")
             return {'statusCode': 500, 'headers': headers, 'body': json.dumps({'error': f'SQS queue "{queue_name}" does not exist. Please create it first.'})}
         
         queued_count = 0
         failed_to_queue = 0
         
         # Queue contact email addresses to SQS (minimal payload)
-        print(f"Queuing {len(contacts)} contacts to SQS for campaign {campaign_id}")
+        print(f"📨 Queuing {len(contacts)} contacts to SQS for campaign {campaign_id}")
+        print(f"📨 Queue URL: {queue_url}")
         
-        for contact in contacts:
+        for i, contact in enumerate(contacts):
             try:
+                email = contact.get('email')
+                print(f"📨 Processing contact {i+1}/{len(contacts)}: {email}")
+                
                 # Minimal message: only campaign_id and contact email
                 # Worker Lambda will retrieve campaign details from DynamoDB
                 message_body = {
                     'campaign_id': campaign_id,
-                    'contact_email': contact.get('email')
+                    'contact_email': email
                 }
+                
+                print(f"📨 SQS message body: {json.dumps(message_body)}")
                 
                 # Send message to SQS
                 sqs_client.send_message(
@@ -5086,16 +5129,16 @@ def send_campaign(body, headers, event=None):
                             'DataType': 'String'
                         },
                         'contact_email': {
-                            'StringValue': contact.get('email', 'unknown'),
+                            'StringValue': email,
                             'DataType': 'String'
                         }
                     }
                 )
                 queued_count += 1
-                print(f"Queued email for {contact.get('email')}")
+                print(f"✅ Successfully queued email for {email}")
                 
             except Exception as e:
-                print(f"Failed to queue email for {contact.get('email')}: {str(e)}")
+                print(f"❌ Failed to queue email for {contact.get('email')}: {str(e)}")
                 failed_to_queue += 1
         
         # Update campaign status
@@ -5109,28 +5152,43 @@ def send_campaign(body, headers, event=None):
             }
         )
         
-        print(f"Campaign {campaign_id}: Queued {queued_count} emails, {failed_to_queue} failed to queue")
+        print(f"📊 Campaign {campaign_id} Summary:")
+        print(f"   ✅ Queued: {queued_count} emails")
+        print(f"   ❌ Failed: {failed_to_queue} emails")
+        print(f"   📧 Total contacts: {len(contacts)}")
+        print(f"   🎯 Filter: {filter_description}")
+        
+        response_data = {
+            'success': True,
+            'campaign_id': campaign_id,
+            'message': 'Campaign queued successfully',
+            'filter_description': filter_description,
+            'total_contacts': len(contacts),
+            'queued_count': queued_count,
+            'failed_to_queue': failed_to_queue,
+            'queue_name': queue_name,
+            'note': 'Emails will be processed asynchronously from the SQS queue'
+        }
+        
+        print(f"📤 Sending response: {json.dumps(response_data, indent=2)}")
+        print("=" * 80)
+        print("✅ SEND CAMPAIGN DEBUG - END")
+        print("=" * 80)
         
         return {
             'statusCode': 200,
             'headers': headers,
-            'body': json.dumps({
-                'success': True,
-                'campaign_id': campaign_id,
-                'message': 'Campaign queued successfully',
-                'filter_description': filter_description,
-                'total_contacts': len(contacts),
-                'queued_count': queued_count,
-                'failed_to_queue': failed_to_queue,
-                'queue_name': queue_name,
-                'note': 'Emails will be processed asynchronously from the SQS queue'
-            })
+            'body': json.dumps(response_data)
         }
         
     except Exception as e:
-        print(f"Campaign error: {str(e)}")
+        print("=" * 80)
+        print("❌ SEND CAMPAIGN ERROR")
+        print("=" * 80)
+        print(f"❌ Campaign error: {str(e)}")
         import traceback
         traceback.print_exc()
+        print("=" * 80)
         return {'statusCode': 500, 'headers': headers, 'body': json.dumps({'error': str(e)})}
 
 def send_ses_email(config, contact, subject, body):
