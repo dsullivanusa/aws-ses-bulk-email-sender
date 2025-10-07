@@ -37,7 +37,7 @@ def set_concurrency(concurrency):
     """Set reserved concurrency"""
     print(f"🔧 Setting reserved concurrency to {concurrency}...")
     
-    command = f"aws lambda put-reserved-concurrency-config --function-name {FUNCTION_NAME} --reserved-concurrency-count {concurrency} --region {REGION}"
+    command = f"aws lambda put-function-concurrency --function-name {FUNCTION_NAME} --reserved-concurrency-count {concurrency} --region {REGION}"
     
     success, output = run_aws_command(command)
     if success:
@@ -51,7 +51,7 @@ def remove_concurrency():
     """Remove reserved concurrency"""
     print(f"🔧 Removing reserved concurrency...")
     
-    command = f"aws lambda delete-reserved-concurrency-config --function-name {FUNCTION_NAME} --region {REGION}"
+    command = f"aws lambda delete-function-concurrency --function-name {FUNCTION_NAME} --region {REGION}"
     
     success, output = run_aws_command(command)
     if success:
