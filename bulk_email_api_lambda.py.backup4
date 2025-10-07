@@ -35,7 +35,7 @@ CUSTOM_API_URL = os.environ.get('CUSTOM_API_URL', None)
 
 # Cognito configuration (optional authentication)
 def load_cognito_config():
-    """.format(api_url=api_url)Load Cognito configuration if available"""
+    """Load Cognito configuration if available"""
     try:
         s3 = boto3.client('s3', region_name='us-gov-west-1')
         obj = s3.get_object(Bucket=ATTACHMENTS_BUCKET, Key='cognito_config.json')
@@ -114,7 +114,7 @@ def serve_web_ui(event):
         api_id = event.get('requestContext', {}).get('apiId', 'UNKNOWN')
         api_url = f"https://{api_id}.execute-api.us-gov-west-1.amazonaws.com/prod"
     
-    html_content = """<!DOCTYPE html>
+    html_content = f"""<!DOCTYPE html>
 <html>
 <head>
     <meta charset="UTF-8">
@@ -4202,7 +4202,7 @@ def serve_web_ui(event):
         }};
     </script>
 </body>
-</html>""".format(api_url=api_url)
+</html>"""
     
     return {
         'statusCode': 200,
@@ -5311,4 +5311,6 @@ def personalize_content(content, contact):
     # Legacy support
     content = content.replace('{{company}}', contact.get('agency_name', ''))
     
+    return content
+    return content
     return content

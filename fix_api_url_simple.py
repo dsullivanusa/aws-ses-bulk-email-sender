@@ -1,10 +1,8 @@
 #!/usr/bin/env python3
 """
-Fix API_URL Definition
+Fix API_URL Definition - Simple Approach
 This script fixes the API_URL definition issue in the Lambda function
 """
-
-import re
 
 def fix_api_url_definition():
     """Fix the API_URL definition issue"""
@@ -23,32 +21,20 @@ def fix_api_url_definition():
         # because of the JavaScript template literals inside it. We need to ensure the API_URL
         # is properly defined by using a different approach.
         
-        # Find the serve_web_ui function and fix the API_URL definition
-        def fix_serve_web_ui(match):
-            function_content = match.group(0)
-            
-            # Replace the f-string approach with string formatting
-            # Change from: html_content = f"""..."""
-            # To: html_content = """...""".format(api_url=api_url)
-            
-            # Find the html_content = f""" line
-            if 'html_content = f"""' in function_content:
-                # Replace f-string with regular string and format
-                function_content = function_content.replace(
-                    'html_content = f"""',
-                    'html_content = """'
-                )
-                function_content = function_content.replace(
-                    '"""',
-                    '""".format(api_url=api_url)',
-                    1
-                )
-            
-            return function_content
+        # Replace the f-string approach with string formatting
+        # Change from: html_content = f"""..."""
+        # To: html_content = """...""".format(api_url=api_url)
         
-        # Find and fix the serve_web_ui function
-        serve_web_ui_pattern = r'def serve_web_ui\(event\):.*?(?=def|\Z)'
-        content = re.sub(serve_web_ui_pattern, fix_serve_web_ui, content, flags=re.DOTALL)
+        if 'html_content = f"""' in content:
+            # Replace f-string with regular string and format
+            content = content.replace(
+                'html_content = f"""',
+                'html_content = """'
+            )
+            # Find the first """ and replace it with """.format(api_url=api_url)
+            first_quote = content.find('"""')
+            if first_quote != -1:
+                content = content[:first_quote] + '""".format(api_url=api_url)' + content[first_quote + 3:]
         
         # Write fixed content
         with open('bulk_email_api_lambda.py', 'w', encoding='utf-8') as f:
