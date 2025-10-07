@@ -3646,13 +3646,13 @@ def serve_web_ui(event):
                     urlParams.append('lastKey', JSON.stringify(lastKey));
                 }}
                 
-                const url = `${{API_URL}}/contacts?${{urlParams.toString()}}`;
-                console.log(`Fetching page ${{pageCount}} (batch size: ${{pageSize}})...`);
+                const url = `${API_URL}/contacts?${urlParams.toString()}`;
+                console.log(`Fetching page ${pageCount} (batch size: ${pageSize})...`);
                 
                 const response = await fetch(url);
                 
                 if (!response.ok) {{
-                    throw new Error(`HTTP ${{response.status}}: ${{response.statusText}}`);
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
                 }}
                 
                 const data = await response.json();
@@ -3661,17 +3661,17 @@ def serve_web_ui(event):
                 allContacts = allContacts.concat(contacts);
                 lastKey = data.lastEvaluatedKey || null;
                 
-                console.log(`Page ${{pageCount}}: Fetched ${{contacts.length}} contacts. Total so far: ${{allContacts.length}}`);
+                console.log(`Page ${pageCount}: Fetched ${contacts.length} contacts. Total so far: ${allContacts.length}`);
                 
                 // Show progress to user
                 if (pageCount % 5 === 0 || !lastKey) {{
-                    Toast.info(`Loading contacts... ${{allContacts.length}} loaded`, 1000);
+                    Toast.info(`Loading contacts... ${allContacts.length} loaded`, 1000);
                 }}
                 
             }} while (lastKey);  // Continue until no more pages
             
-            console.log(`✅ Pagination complete: Loaded ${{allContacts.length}} total contacts in ${{pageCount}} pages`);
-            Toast.success(`Loaded ${{allContacts.length}} contacts successfully!`, 2000);
+            console.log(`✅ Pagination complete: Loaded ${allContacts.length} total contacts in ${pageCount} pages`);
+            Toast.success(`Loaded ${allContacts.length} contacts successfully!`, 2000);
             
             return allContacts;
         }}
