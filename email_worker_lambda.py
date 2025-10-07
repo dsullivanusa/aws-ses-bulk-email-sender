@@ -288,277 +288,277 @@ def lambda_handler(event, context):
             logger.info(f"[Message {idx}/{len(event['Records'])}] Processing message ID: {message_id}")
             
             try:
-            # Parse message body (contains only campaign_id and contact_email)
-            message = json.loads(record['body'])
-            logger.debug(f"[Message {idx}] Raw message body: {record['body']}")
-            
-            campaign_id = message.get('campaign_id')
-            contact_email = message.get('contact_email')
-            
-            if not campaign_id or not contact_email:
-                raise ValueError("Missing campaign_id or contact_email in message")
-            
-            logger.info(f"[Message {idx}] Campaign ID: {campaign_id}, Contact: {contact_email}")
-            
-            # Track campaigns being processed
-            results['campaigns_processed'].add(campaign_id)
-            
-            # Retrieve campaign data from DynamoDB
-            logger.info(f"[Message {idx}] Retrieving campaign data from DynamoDB")
-            campaign_response = campaigns_table.get_item(Key={'campaign_id': campaign_id})
-            if 'Item' not in campaign_response:
-                logger.error(f"[Message {idx}] Campaign {campaign_id} not found in DynamoDB")
-                raise ValueError(f"Campaign {campaign_id} not found in DynamoDB")
-            
-            campaign = campaign_response['Item']
-            logger.info(f"[Message {idx}] Campaign retrieved: {campaign.get('campaign_name', 'Unnamed')}")
-            
-            # Convert Decimal types to appropriate Python types
-            for key, value in campaign.items():
-                if isinstance(value, Decimal):
-                    campaign[key] = int(value) if value % 1 == 0 else float(value)
-            
-            # Try to retrieve contact data from DynamoDB (optional - campaigns are independent)
-            logger.info(f"[Message {idx}] Attempting to retrieve contact data from DynamoDB")
-            contact = None
-            
-            try:
-                # Query using email-index GSI (email is not the primary key)
-                response = contacts_table.query(
-                    IndexName='email-index',
-                    KeyConditionExpression=Key('email').eq(contact_email),
-                    Limit=1
-                )
+                # Parse message body (contains only campaign_id and contact_email)
+                message = json.loads(record['body'])
+                logger.debug(f"[Message {idx}] Raw message body: {record['body']}")
                 
-                if response.get('Items'):
-                    contact = response['Items'][0]
-                    logger.info(f"[Message {idx}] Contact found: {contact.get('first_name', '')} {contact.get('last_name', '')}")
-                else:
-                    logger.info(f"[Message {idx}] Contact {contact_email} not in Contacts table (using email-only mode)")
-            except Exception as contact_error:
-                logger.warning(f"[Message {idx}] Could not query contact: {str(contact_error)}")
-            
-            # If contact not found, create minimal contact object with just email
-            if not contact:
-                logger.info(f"[Message {idx}] Using email-only contact for {contact_email}")
-                contact = {
-                    'email': contact_email,
-                    'first_name': '',
-                    'last_name': '',
-                    'company': '',
-                    'title': '',
-                    'agency_name': ''
-                }
-            
-            # Extract campaign details
-            subject = campaign.get('subject', '')
-            body = campaign.get('body', '')
-            from_email = campaign.get('from_email', '')
-            email_service = campaign.get('email_service', 'ses')
-            
-            logger.info(f"[Message {idx}] Email service: {email_service}")
-            logger.info(f"[Message {idx}] From: {from_email}")
-            logger.info(f"[Message {idx}] To: {contact_email}")
-            
-            # Personalize content
-            personalized_subject = personalize_content(subject, contact)
-            personalized_body = personalize_content(body, contact)
-            
-            logger.info(f"[Message {idx}] Subject: {personalized_subject}")
-            logger.debug(f"[Message {idx}] Body length: {len(personalized_body)} characters")
-            
-            # Apply adaptive rate control delay before sending
-            attachments = campaign.get('attachments', [])
-            delay = rate_control.get_delay_for_email(attachments)
-            
-            if delay > 0:
-                logger.info(f"[Message {idx}] Applying adaptive rate control delay: {delay:.3f}s")
-                time.sleep(delay)
-                results['rate_control_stats']['total_delay_applied'] += delay
+                campaign_id = message.get('campaign_id')
+                contact_email = message.get('contact_email')
                 
-                # Track if delay was due to attachments
-                if attachments:
-                    results['rate_control_stats']['attachment_delays_applied'] += 1
-                    
-                    # Send metric for attachment delays
-                    total_attachment_size = 0
-                    for attachment in attachments:
-                        try:
-                            s3_key = attachment.get('s3_key')
-                            if s3_key:
-                                response = s3_client.head_object(Bucket=ATTACHMENTS_BUCKET, Key=s3_key)
-                                total_attachment_size += response.get('ContentLength', 0)
-                        except:
-                            total_attachment_size += 1024 * 1024  # Estimate 1MB if unknown
-                    
-                    send_cloudwatch_metric(
-                        'AttachmentDelays',
-                        len(attachments),
-                        'Count',
-                        [
-                            {'Name': 'CampaignId', 'Value': campaign_id},
-                            {'Name': 'TotalSizeMB', 'Value': f"{total_attachment_size // 1024 // 1024}"}
-                        ]
-                    )
-            
-            # Send email via AWS SES or SMTP
-            logger.info(f"[Message {idx}] Sending email via {email_service.upper()}")
-            send_start = datetime.now()
-            
-            try:
-                if email_service == 'ses':
-                    success = send_ses_email(campaign, contact, from_email, personalized_subject, personalized_body, idx)
-                else:
-                    success = send_smtp_email(campaign, contact, from_email, personalized_subject, personalized_body, idx)
+                if not campaign_id or not contact_email:
+                    raise ValueError("Missing campaign_id or contact_email in message")
                 
-                send_duration = (datetime.now() - send_start).total_seconds()
-                logger.info(f"[Message {idx}] Email send attempt completed in {send_duration:.2f} seconds")
+                logger.info(f"[Message {idx}] Campaign ID: {campaign_id}, Contact: {contact_email}")
                 
-            except Exception as send_exception:
-                # Check if this is a throttle exception and handle it
-                if rate_control.detect_throttle_exception(send_exception):
-                    results['rate_control_stats']['throttles_detected'] += 1
-                    logger.warning(f"[Message {idx}] Throttle exception detected: {str(send_exception)}")
-                    
-                    # Send CloudWatch metric for throttle exception
-                    send_cloudwatch_metric(
-                        'ThrottleExceptions',
-                        1,
-                        'Count',
-                        [
-                            {'Name': 'CampaignId', 'Value': campaign_id},
-                            {'Name': 'ErrorType', 'Value': 'SES_Throttle'}
-                        ]
-                    )
-                    
-                    # Update rate control for future emails
-                    rate_control.handle_throttle_detected()
+                # Track campaigns being processed
+                results['campaigns_processed'].add(campaign_id)
                 
-                # Re-raise the exception to be handled by the outer try-catch
-                raise send_exception
-            
-            if success:
-                results['successful'] += 1
-                logger.info(f"[Message {idx}] SUCCESS: Email sent to {contact_email}")
+                # Retrieve campaign data from DynamoDB
+                logger.info(f"[Message {idx}] Retrieving campaign data from DynamoDB")
+                campaign_response = campaigns_table.get_item(Key={'campaign_id': campaign_id})
+                if 'Item' not in campaign_response:
+                    logger.error(f"[Message {idx}] Campaign {campaign_id} not found in DynamoDB")
+                    raise ValueError(f"Campaign {campaign_id} not found in DynamoDB")
                 
-                # Update campaign sent count and timestamp
-                try:
-                    # Update sent_count and set sent_at timestamp if first email
-                    campaigns_table.update_item(
-                        Key={'campaign_id': campaign_id},
-                        UpdateExpression="SET sent_count = sent_count + :inc, sent_at = if_not_exists(sent_at, :timestamp), #status = :status",
-                        ExpressionAttributeNames={'#status': 'status'},
-                        ExpressionAttributeValues={
-                            ':inc': 1,
-                            ':timestamp': datetime.now().isoformat(),
-                            ':status': 'sending'
-                        }
-                    )
-                    logger.debug(f"[Message {idx}] Campaign stats updated (sent_count incremented, sent_at set)")
-                except Exception as e:
-                    logger.warning(f"[Message {idx}] Could not update campaign stats: {str(e)}")
-            else:
-                results['failed'] += 1
-                error_msg = f"Failed to send email to {contact_email}"
-                results['errors'].append(error_msg)
-                logger.error(f"[Message {idx}] FAILED: {error_msg}")
-                
-                # Update campaign failed count
-                try:
-                    campaigns_table.update_item(
-                        Key={'campaign_id': campaign_id},
-                        UpdateExpression="SET failed_count = failed_count + :inc",
-                        ExpressionAttributeValues={':inc': 1}
-                    )
-                    logger.debug(f"[Message {idx}] Campaign stats updated (failed_count incremented)")
-                except Exception as e:
-                    logger.warning(f"[Message {idx}] Could not update campaign stats: {str(e)}")
-                    
-        except Exception as e:
-            results['failed'] += 1
-            error_msg = f"Error processing message: {str(e)}"
-            results['errors'].append(error_msg)
-            logger.error(f"[Message {idx}] EXCEPTION: {error_msg}")
-            logger.exception(f"[Message {idx}] Stack trace:")
-    
-    end_time = datetime.now()
-    duration = (end_time - start_time).total_seconds()
-    
-    # Check campaign completion status and send metrics
-    for campaign_id in results['campaigns_processed']:
-        try:
-            # Get campaign details to check completion
-            campaign_response = campaigns_table.get_item(Key={'campaign_id': campaign_id})
-            if 'Item' in campaign_response:
                 campaign = campaign_response['Item']
-                total_contacts = campaign.get('total_contacts', 0)
-                sent_count = campaign.get('sent_count', 0)
-                failed_count = campaign.get('failed_count', 0)
+                logger.info(f"[Message {idx}] Campaign retrieved: {campaign.get('campaign_name', 'Unnamed')}")
                 
-                # Check if campaign appears to be stuck or incomplete
-                if total_contacts > 0:
-                    check_campaign_completion_status(campaign_id, total_contacts)
+                # Convert Decimal types to appropriate Python types
+                for key, value in campaign.items():
+                    if isinstance(value, Decimal):
+                        campaign[key] = int(value) if value % 1 == 0 else float(value)
+                
+                # Try to retrieve contact data from DynamoDB (optional - campaigns are independent)
+                logger.info(f"[Message {idx}] Attempting to retrieve contact data from DynamoDB")
+                contact = None
+                
+                try:
+                    # Query using email-index GSI (email is not the primary key)
+                    response = contacts_table.query(
+                        IndexName='email-index',
+                        KeyConditionExpression=Key('email').eq(contact_email),
+                        Limit=1
+                    )
                     
-                    # Calculate campaign-specific send rate
-                    campaign_total_processed = sent_count + failed_count
-                    if campaign_total_processed > 0 and total_contacts > 0:
-                        campaign_progress = (campaign_total_processed / total_contacts) * 100
+                    if response.get('Items'):
+                        contact = response['Items'][0]
+                        logger.info(f"[Message {idx}] Contact found: {contact.get('first_name', '')} {contact.get('last_name', '')}")
+                    else:
+                        logger.info(f"[Message {idx}] Contact {contact_email} not in Contacts table (using email-only mode)")
+                except Exception as contact_error:
+                    logger.warning(f"[Message {idx}] Could not query contact: {str(contact_error)}")
+                
+                # If contact not found, create minimal contact object with just email
+                if not contact:
+                    logger.info(f"[Message {idx}] Using email-only contact for {contact_email}")
+                    contact = {
+                        'email': contact_email,
+                        'first_name': '',
+                        'last_name': '',
+                        'company': '',
+                        'title': '',
+                        'agency_name': ''
+                    }
+                
+                # Extract campaign details
+                subject = campaign.get('subject', '')
+                body = campaign.get('body', '')
+                from_email = campaign.get('from_email', '')
+                email_service = campaign.get('email_service', 'ses')
+                
+                logger.info(f"[Message {idx}] Email service: {email_service}")
+                logger.info(f"[Message {idx}] From: {from_email}")
+                logger.info(f"[Message {idx}] To: {contact_email}")
+                
+                # Personalize content
+                personalized_subject = personalize_content(subject, contact)
+                personalized_body = personalize_content(body, contact)
+                
+                logger.info(f"[Message {idx}] Subject: {personalized_subject}")
+                logger.debug(f"[Message {idx}] Body length: {len(personalized_body)} characters")
+                
+                # Apply adaptive rate control delay before sending
+                attachments = campaign.get('attachments', [])
+                delay = rate_control.get_delay_for_email(attachments)
+                
+                if delay > 0:
+                    logger.info(f"[Message {idx}] Applying adaptive rate control delay: {delay:.3f}s")
+                    time.sleep(delay)
+                    results['rate_control_stats']['total_delay_applied'] += delay
+                    
+                    # Track if delay was due to attachments
+                    if attachments:
+                        results['rate_control_stats']['attachment_delays_applied'] += 1
                         
-                        # Send campaign-specific metrics
-                        send_cloudwatch_metric(
-                            'CampaignProgress',
-                            campaign_progress,
-                            'Percent',
-                            [
-                                {'Name': 'CampaignId', 'Value': campaign_id}
-                            ]
-                        )
+                        # Send metric for attachment delays
+                        total_attachment_size = 0
+                        for attachment in attachments:
+                            try:
+                                s3_key = attachment.get('s3_key')
+                                if s3_key:
+                                    response = s3_client.head_object(Bucket=ATTACHMENTS_BUCKET, Key=s3_key)
+                                    total_attachment_size += response.get('ContentLength', 0)
+                            except:
+                                total_attachment_size += 1024 * 1024  # Estimate 1MB if unknown
                         
                         send_cloudwatch_metric(
-                            'CampaignEmailsSent',
-                            sent_count,
+                            'AttachmentDelays',
+                            len(attachments),
                             'Count',
                             [
-                                {'Name': 'CampaignId', 'Value': campaign_id}
+                                {'Name': 'CampaignId', 'Value': campaign_id},
+                                {'Name': 'TotalSizeMB', 'Value': f"{total_attachment_size // 1024 // 1024}"}
                             ]
                         )
+                
+                # Send email via AWS SES or SMTP
+                logger.info(f"[Message {idx}] Sending email via {email_service.upper()}")
+                send_start = datetime.now()
+                
+                try:
+                    if email_service == 'ses':
+                        success = send_ses_email(campaign, contact, from_email, personalized_subject, personalized_body, idx)
+                    else:
+                        success = send_smtp_email(campaign, contact, from_email, personalized_subject, personalized_body, idx)
                     
-                    # Send general campaign processing metric
-                    send_cloudwatch_metric(
-                        'CampaignProcessing',
-                        1,
-                        'Count',
-                        [
-                            {'Name': 'CampaignId', 'Value': campaign_id},
-                            {'Name': 'TotalContacts', 'Value': str(total_contacts)}
-                        ]
-                    )
-        except Exception as e:
-            logger.warning(f"Error checking campaign completion for {campaign_id}: {str(e)}")
-    
-    # Calculate send rate metrics
-    total_emails = results['successful'] + results['failed']
-    send_rate_per_second = total_emails / duration if duration > 0 else 0
-    send_rate_per_minute = send_rate_per_second * 60
-    success_rate = (results['successful'] / total_emails * 100) if total_emails > 0 else 0
-    failure_rate = (results['failed'] / total_emails * 100) if total_emails > 0 else 0
-    
-    # Send batch processing metrics
-    send_cloudwatch_metric('BatchProcessing', 1, 'Count')
-    send_cloudwatch_metric('EmailsProcessed', total_emails, 'Count')
-    send_cloudwatch_metric('EmailsSentSuccessfully', results['successful'], 'Count')
-    send_cloudwatch_metric('EmailsFailed', results['failed'], 'Count')
-    send_cloudwatch_metric('ProcessingDuration', duration, 'Seconds')
-    
-    # Send rate metrics
-    send_cloudwatch_metric('SendRatePerSecond', send_rate_per_second, 'Count/Second')
-    send_cloudwatch_metric('SendRatePerMinute', send_rate_per_minute, 'Count/Second')  # SES measures in emails/second
-    send_cloudwatch_metric('SuccessRate', success_rate, 'Percent')
-    send_cloudwatch_metric('FailureRate', failure_rate, 'Percent')
-    
-    if results['rate_control_stats']['throttles_detected'] > 0:
-        send_cloudwatch_metric('ThrottleExceptionsInBatch', results['rate_control_stats']['throttles_detected'], 'Count')
-    
+                    send_duration = (datetime.now() - send_start).total_seconds()
+                    logger.info(f"[Message {idx}] Email send attempt completed in {send_duration:.2f} seconds")
+                    
+                except Exception as send_exception:
+                    # Check if this is a throttle exception and handle it
+                    if rate_control.detect_throttle_exception(send_exception):
+                        results['rate_control_stats']['throttles_detected'] += 1
+                        logger.warning(f"[Message {idx}] Throttle exception detected: {str(send_exception)}")
+                        
+                        # Send CloudWatch metric for throttle exception
+                        send_cloudwatch_metric(
+                            'ThrottleExceptions',
+                            1,
+                            'Count',
+                            [
+                                {'Name': 'CampaignId', 'Value': campaign_id},
+                                {'Name': 'ErrorType', 'Value': 'SES_Throttle'}
+                            ]
+                        )
+                        
+                        # Update rate control for future emails
+                        rate_control.handle_throttle_detected()
+                    
+                    # Re-raise the exception to be handled by the outer try-catch
+                    raise send_exception
+                
+                if success:
+                    results['successful'] += 1
+                    logger.info(f"[Message {idx}] SUCCESS: Email sent to {contact_email}")
+                    
+                    # Update campaign sent count and timestamp
+                    try:
+                        # Update sent_count and set sent_at timestamp if first email
+                        campaigns_table.update_item(
+                            Key={'campaign_id': campaign_id},
+                            UpdateExpression="SET sent_count = sent_count + :inc, sent_at = if_not_exists(sent_at, :timestamp), #status = :status",
+                            ExpressionAttributeNames={'#status': 'status'},
+                            ExpressionAttributeValues={
+                                ':inc': 1,
+                                ':timestamp': datetime.now().isoformat(),
+                                ':status': 'sending'
+                            }
+                        )
+                        logger.debug(f"[Message {idx}] Campaign stats updated (sent_count incremented, sent_at set)")
+                    except Exception as e:
+                        logger.warning(f"[Message {idx}] Could not update campaign stats: {str(e)}")
+                else:
+                    results['failed'] += 1
+                    error_msg = f"Failed to send email to {contact_email}"
+                    results['errors'].append(error_msg)
+                    logger.error(f"[Message {idx}] FAILED: {error_msg}")
+                    
+                    # Update campaign failed count
+                    try:
+                        campaigns_table.update_item(
+                            Key={'campaign_id': campaign_id},
+                            UpdateExpression="SET failed_count = failed_count + :inc",
+                            ExpressionAttributeValues={':inc': 1}
+                        )
+                        logger.debug(f"[Message {idx}] Campaign stats updated (failed_count incremented)")
+                    except Exception as e:
+                        logger.warning(f"[Message {idx}] Could not update campaign stats: {str(e)}")
+                    
+            except Exception as e:
+                results['failed'] += 1
+                error_msg = f"Error processing message: {str(e)}"
+                results['errors'].append(error_msg)
+                logger.error(f"[Message {idx}] EXCEPTION: {error_msg}")
+                logger.exception(f"[Message {idx}] Stack trace:")
+        
+        end_time = datetime.now()
+        duration = (end_time - start_time).total_seconds()
+        
+        # Check campaign completion status and send metrics
+        for campaign_id in results['campaigns_processed']:
+            try:
+                # Get campaign details to check completion
+                campaign_response = campaigns_table.get_item(Key={'campaign_id': campaign_id})
+                if 'Item' in campaign_response:
+                    campaign = campaign_response['Item']
+                    total_contacts = campaign.get('total_contacts', 0)
+                    sent_count = campaign.get('sent_count', 0)
+                    failed_count = campaign.get('failed_count', 0)
+                    
+                    # Check if campaign appears to be stuck or incomplete
+                    if total_contacts > 0:
+                        check_campaign_completion_status(campaign_id, total_contacts)
+                        
+                        # Calculate campaign-specific send rate
+                        campaign_total_processed = sent_count + failed_count
+                        if campaign_total_processed > 0 and total_contacts > 0:
+                            campaign_progress = (campaign_total_processed / total_contacts) * 100
+                            
+                            # Send campaign-specific metrics
+                            send_cloudwatch_metric(
+                                'CampaignProgress',
+                                campaign_progress,
+                                'Percent',
+                                [
+                                    {'Name': 'CampaignId', 'Value': campaign_id}
+                                ]
+                            )
+                            
+                            send_cloudwatch_metric(
+                                'CampaignEmailsSent',
+                                sent_count,
+                                'Count',
+                                [
+                                    {'Name': 'CampaignId', 'Value': campaign_id}
+                                ]
+                            )
+                        
+                        # Send general campaign processing metric
+                        send_cloudwatch_metric(
+                            'CampaignProcessing',
+                            1,
+                            'Count',
+                            [
+                                {'Name': 'CampaignId', 'Value': campaign_id},
+                                {'Name': 'TotalContacts', 'Value': str(total_contacts)}
+                            ]
+                        )
+            except Exception as e:
+                logger.warning(f"Error checking campaign completion for {campaign_id}: {str(e)}")
+        
+        # Calculate send rate metrics
+        total_emails = results['successful'] + results['failed']
+        send_rate_per_second = total_emails / duration if duration > 0 else 0
+        send_rate_per_minute = send_rate_per_second * 60
+        success_rate = (results['successful'] / total_emails * 100) if total_emails > 0 else 0
+        failure_rate = (results['failed'] / total_emails * 100) if total_emails > 0 else 0
+        
+        # Send batch processing metrics
+        send_cloudwatch_metric('BatchProcessing', 1, 'Count')
+        send_cloudwatch_metric('EmailsProcessed', total_emails, 'Count')
+        send_cloudwatch_metric('EmailsSentSuccessfully', results['successful'], 'Count')
+        send_cloudwatch_metric('EmailsFailed', results['failed'], 'Count')
+        send_cloudwatch_metric('ProcessingDuration', duration, 'Seconds')
+        
+        # Send rate metrics
+        send_cloudwatch_metric('SendRatePerSecond', send_rate_per_second, 'Count/Second')
+        send_cloudwatch_metric('SendRatePerMinute', send_rate_per_minute, 'Count/Second')  # SES measures in emails/second
+        send_cloudwatch_metric('SuccessRate', success_rate, 'Percent')
+        send_cloudwatch_metric('FailureRate', failure_rate, 'Percent')
+        
+        if results['rate_control_stats']['throttles_detected'] > 0:
+            send_cloudwatch_metric('ThrottleExceptionsInBatch', results['rate_control_stats']['throttles_detected'], 'Count')
+        
         # Log rate control statistics and send rate metrics
         rate_stats = results['rate_control_stats']
         logger.info(f"=" * 80)
