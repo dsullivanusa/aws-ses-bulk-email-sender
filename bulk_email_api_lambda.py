@@ -31,9 +31,6 @@ ATTACHMENTS_BUCKET = 'jcdc-ses-contact-list'
 # 3. Make sure your custom domain routes to this Lambda function
 # If not set, it will automatically use the API Gateway URL
 CUSTOM_API_URL = os.environ.get('CUSTOM_API_URL', None)
-###*** for NOW
-CUSTOM_API_URL = None
-### *** for NOW
 
 
 # Cognito configuration (optional authentication)
@@ -3810,6 +3807,14 @@ def serve_web_ui(event):
                 headers: {{'Content-Type': 'application/json'}},
                 body: JSON.stringify(campaign)
             }});
+            
+            // Check if response is JSON
+            const contentType = response.headers.get('content-type');
+            if (!contentType || !contentType.includes('application/json')) {{
+                const responseText = await response.text();
+                console.error('API returned non-JSON response:', responseText);
+                throw new Error(`API returned HTML instead of JSON. Status: ${{response.status}}. This usually means the Lambda function crashed or there's a server error. Check CloudWatch logs for details.`);
+            }}
             
             const result = await response.json();
             const resultDiv = document.getElementById('campaignResult');
