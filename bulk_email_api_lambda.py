@@ -5263,11 +5263,61 @@ def get_aws_credentials_from_secrets_manager(secret_name):
         print(f"Error retrieving credentials from Secrets Manager: {str(e)}")
         raise
 
+def clean_quill_html_for_email(html_content):
+    """
+    Clean Quill editor HTML content for email sending.
+    Removes Quill-specific CSS classes and graphics that appear as transparent icons.
+    """
+    import re
+    
+    if not html_content:
+        return html_content
+    
+    # Remove Quill-specific CSS classes that add graphics
+    quill_classes_to_remove = [
+        r'class="[^"]*ql-[^"]*"',  # Remove all ql-* classes
+        r'class="[^"]*ql-editor[^"]*"',  # Remove ql-editor class
+        r'class="[^"]*ql-container[^"]*"',  # Remove ql-container class
+        r'class="[^"]*ql-snow[^"]*"',  # Remove ql-snow class
+        r'class="[^"]*ql-bubble[^"]*"',  # Remove ql-bubble class
+    ]
+    
+    for pattern in quill_classes_to_remove:
+        html_content = re.sub(pattern, '', html_content)
+    
+    # Remove Quill-specific attributes
+    quill_attrs_to_remove = [
+        r'data-[^=]*="[^"]*"',  # Remove data-* attributes
+        r'spellcheck="[^"]*"',  # Remove spellcheck
+        r'autocorrect="[^"]*"',  # Remove autocorrect
+        r'autocapitalize="[^"]*"',  # Remove autocapitalize
+    ]
+    
+    for pattern in quill_attrs_to_remove:
+        html_content = re.sub(pattern, '', html_content)
+    
+    # Clean up empty class attributes
+    html_content = re.sub(r'class=""', '', html_content)
+    html_content = re.sub(r'class="\s*"', '', html_content)
+    
+    # Remove Quill-specific div wrappers but keep content
+    html_content = re.sub(r'<div[^>]*class="[^"]*ql-editor[^"]*"[^>]*>', '', html_content)
+    html_content = re.sub(r'</div>\s*$', '', html_content)  # Remove trailing div
+    
+    # Clean up multiple spaces
+    html_content = re.sub(r'\s+', ' ', html_content)
+    html_content = html_content.strip()
+    
+    return html_content
+
 def personalize_content(content, contact):
     """Replace placeholders with contact data - supports all CISA fields"""
     if not content:
         return content
-        
+    
+    # Clean Quill HTML first to remove graphics
+    content = clean_quill_html_for_email(content)
+    
     # Basic contact info
     content = content.replace('{{first_name}}', contact.get('first_name', ''))
     content = content.replace('{{last_name}}', contact.get('last_name', ''))
