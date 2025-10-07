@@ -1081,9 +1081,9 @@ def serve_web_ui(event):
         </div>
         
         <div class="tabs">
-            <div class="tab active" onclick="showTab('config', this)">⚙️ Email Config</div>
-            <div class="tab" onclick="showTab('contacts', this)">👥 Contacts</div>
-            <div class="tab" onclick="showTab('campaign', this)">📧 Send Campaign</div>
+            <div class="tab active" data-tab="config" onclick="showTab('config', this)">⚙️ Email Config</div>
+            <div class="tab" data-tab="contacts" onclick="showTab('contacts', this)">👥 Contacts</div>
+            <div class="tab" data-tab="campaign" onclick="showTab('campaign', this)">📧 Send Campaign</div>
         </div>
         
         <div id="config" class="tab-content active">
@@ -1656,7 +1656,7 @@ def serve_web_ui(event):
                         const tabs = Array.from(document.querySelectorAll('.tab'));
                         el = tabs.find(t => {{
                             const onclick = t.getAttribute('onclick') || '';
-                            return onclick.includes(`showTab('${{tabName}}'`) || onclick.includes(`showTab("${{tabName}}"`);
+                            return onclick.includes("showTab('" + tabName + "'") || onclick.includes('showTab(\"' + tabName + '\"');
                         }});
                     }}
                 }}
@@ -1674,6 +1674,31 @@ def serve_web_ui(event):
                 loadContacts();
             }}
         }}
+        
+        // Ensure tabs work even if onclick attributes are not invoked (robust fallback)
+        document.addEventListener('DOMContentLoaded', function() {{
+            try {{
+                document.querySelectorAll('.tab').forEach(tab => {{
+                    // Attach a safe click handler that uses data-tab or falls back to parsing onclick
+                    tab.addEventListener('click', function(ev) {{
+                        const name = tab.getAttribute('data-tab') || (function() {{
+                            const onclick = tab.getAttribute('onclick') || '';
+                            const m = onclick.match(/showTab\(['\"]([^'\"]+)['\"]/);
+                            return m ? m[1] : null;
+                        }})();
+                        if (name) {{
+                            showTab(name, tab);
+                        }} else {{
+                            // Last resort: try to infer from id
+                            const inferred = tab.id || tab.dataset.tabName;
+                            if (inferred) showTab(inferred, tab);
+                        }}
+                    }});
+                }});
+            }} catch (e) {{
+                console.warn('Tab initializer failed:', e);
+            }}
+        }});
         
         
         async function saveConfig() {{

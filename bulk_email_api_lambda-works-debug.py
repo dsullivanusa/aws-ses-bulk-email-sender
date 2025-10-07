@@ -12,7 +12,6 @@ from datetime import datetime
 from decimal import Decimal
 
 # Initialize clients
-dynamodb = boto3.resource('dynamodb', region_name='us-gov-west-1')
 contacts_table = dynamodb.Table('EmailContacts')
 campaigns_table = dynamodb.Table('EmailCampaigns')
 email_config_table = dynamodb.Table('EmailConfig')
@@ -478,9 +477,9 @@ def serve_web_ui(event):
         </div>
         
         <div class="tabs">
-            <div class="tab active" onclick="showTab('config', this)">Email Config</div>
-            <div class="tab" onclick="showTab('contacts', this)">Contacts</div>
-            <div class="tab" onclick="showTab('campaign', this)">Send Campaign</div>
+            <div class="tab active" data-tab="config" onclick="showTab('config', this)">Email Config</div>
+            <div class="tab" data-tab="contacts" onclick="showTab('contacts', this)">Contacts</div>
+            <div class="tab" data-tab="campaign" onclick="showTab('campaign', this)">Send Campaign</div>
         </div>
         
         <div id="config" class="tab-content active">
@@ -1747,7 +1746,6 @@ def send_campaign(body, headers):
                 'note': 'Emails will be processed asynchronously from the SQS queue'
             })
         }
-        
     except Exception as e:
         print(f"Campaign error: {str(e)}")
         import traceback
