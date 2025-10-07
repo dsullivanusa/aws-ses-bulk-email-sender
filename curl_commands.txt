@@ -1,0 +1,75 @@
+API Gateway URL: https://yi6ss4dsoe.execute-api.us-gov-west-1.amazonaws.com/prod
+
+================================================================================
+COPY-PASTE READY CURL COMMANDS
+================================================================================
+
+# 1. Health Check (GET /)
+curl -X GET "https://yi6ss4dsoe.execute-api.us-gov-west-1.amazonaws.com/prod/" -H "Content-Type: application/json"
+
+# 2. Get Contacts (GET /contacts) - Limit 5
+curl -X GET "https://yi6ss4dsoe.execute-api.us-gov-west-1.amazonaws.com/prod/contacts?limit=5" -H "Content-Type: application/json"
+
+# 3. Get Contacts with Pagination
+curl -X GET "https://yi6ss4dsoe.execute-api.us-gov-west-1.amazonaws.com/prod/contacts?limit=25" -H "Content-Type: application/json"
+
+# 4. Add Contact (POST /contacts)
+curl -X POST "https://yi6ss4dsoe.execute-api.us-gov-west-1.amazonaws.com/prod/contacts" -H "Content-Type: application/json" -d '{"contact":{"email":"testuser@example.com","first_name":"Test","last_name":"User","company":"Test Corp"}}'
+
+# 5. Get Distinct Companies
+curl -X GET "https://yi6ss4dsoe.execute-api.us-gov-west-1.amazonaws.com/prod/contacts/distinct?field=company" -H "Content-Type: application/json"
+
+# 6. Get Distinct States
+curl -X GET "https://yi6ss4dsoe.execute-api.us-gov-west-1.amazonaws.com/prod/contacts/distinct?field=state" -H "Content-Type: application/json"
+
+# 7. Filter Contacts by Company (POST /contacts/filter)
+curl -X POST "https://yi6ss4dsoe.execute-api.us-gov-west-1.amazonaws.com/prod/contacts/filter" -H "Content-Type: application/json" -d '{"filters":[{"field":"company","values":["ACME Corp"]}]}'
+
+# 8. Search Contacts (POST /contacts/search)
+curl -X POST "https://yi6ss4dsoe.execute-api.us-gov-west-1.amazonaws.com/prod/contacts/search" -H "Content-Type: application/json" -d '{"search_term":"john"}'
+
+# 9. Send Test Campaign (POST /campaign) - CHANGE EMAIL TO YOUR VERIFIED ADDRESS!
+curl -X POST "https://yi6ss4dsoe.execute-api.us-gov-west-1.amazonaws.com/prod/campaign" -H "Content-Type: application/json" -d '{"campaign_name":"Curl Test Campaign","subject":"Test Email from Curl","body":"<p>Hello,</p><p>This is a test email sent via curl command.</p>","launched_by":"Curl Test","target_contacts":["YOUR-VERIFIED-EMAIL@example.com"],"filter_description":"Curl Test"}'
+
+# 10. Check Campaign Status (GET /campaign/{campaign_id}) - Replace campaign_id
+curl -X GET "https://yi6ss4dsoe.execute-api.us-gov-west-1.amazonaws.com/prod/campaign/campaign_1234567890" -H "Content-Type: application/json"
+
+================================================================================
+VERBOSE OPTIONS
+================================================================================
+
+# Show full request/response headers
+curl -v -X GET "https://yi6ss4dsoe.execute-api.us-gov-west-1.amazonaws.com/prod/contacts?limit=1" -H "Content-Type: application/json"
+
+# Show response headers only
+curl -i -X GET "https://yi6ss4dsoe.execute-api.us-gov-west-1.amazonaws.com/prod/contacts?limit=1" -H "Content-Type: application/json"
+
+# Show HTTP status code
+curl -w "\nHTTP Status: %{http_code}\n" -X GET "https://yi6ss4dsoe.execute-api.us-gov-west-1.amazonaws.com/prod/contacts?limit=1" -H "Content-Type: application/json"
+
+================================================================================
+TROUBLESHOOTING
+================================================================================
+
+# If you get 403 Forbidden:
+# - Check API Gateway is deployed to 'prod' stage
+# - Verify URL is correct
+
+# If you get 500 Internal Server Error:
+# - Check Lambda logs: python view_lambda_errors.py BulkEmailAPI 1
+# - Check Lambda has proper permissions
+
+# If you get connection refused:
+# - Verify URL is accessible
+# - Check region is correct (us-gov-west-1)
+
+# If response is not formatted:
+# - Pipe to python: curl ... | python -m json.tool
+# - Or use jq: curl ... | jq
+
+================================================================================
+QUICK TEST
+================================================================================
+
+# Single command to test if API is working:
+curl -X GET "https://yi6ss4dsoe.execute-api.us-gov-west-1.amazonaws.com/prod/contacts?limit=1" -H "Content-Type: application/json" && echo -e "\n✅ API is working!"
