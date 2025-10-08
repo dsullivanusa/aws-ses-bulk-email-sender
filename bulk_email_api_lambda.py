@@ -31,6 +31,8 @@ ATTACHMENTS_BUCKET = 'jcdc-ses-contact-list'
 # 3. Make sure your custom domain routes to this Lambda function
 # If not set, it will automatically use the API Gateway URL
 CUSTOM_API_URL = os.environ.get('CUSTOM_API_URL', None)
+print ("ver 8-Oct-2025 0719")
+print (CUSTOM_API_URL)
 
 def lambda_handler(event, context):
     """Bulk Email API with Web UI"""
