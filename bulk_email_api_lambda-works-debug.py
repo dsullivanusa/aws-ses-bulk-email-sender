@@ -12,6 +12,9 @@ from datetime import datetime
 from decimal import Decimal
 
 # Initialize clients
+# Ensure the DynamoDB resource is created before referencing tables
+dynamodb = boto3.resource('dynamodb', region_name='us-gov-west-1')
+
 contacts_table = dynamodb.Table('EmailContacts')
 campaigns_table = dynamodb.Table('EmailCampaigns')
 email_config_table = dynamodb.Table('EmailConfig')
