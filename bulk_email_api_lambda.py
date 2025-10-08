@@ -1460,6 +1460,18 @@ def serve_web_ui(event):
                 <input type="text" id="userName" placeholder="Enter your name (saved in browser)" onchange="saveUserName()">
                 <small style="color: #6b7280;">This will be recorded as who launched the campaign. Your name is saved in your browser.</small>
             </div>
+
+            <div style="display:flex; gap:12px; margin-top:8px;">
+                <div style="flex:1;">
+                    <label for="campaignCc" style="font-size:12px; color:var(--gray-600)">CC (comma-separated)</label>
+                    <input type="text" id="campaignCc" placeholder="alice@example.com, bob@example.com" style="width:100%; padding:8px; border-radius:6px; border:1px solid #e5e7eb;">
+                </div>
+                <div style="flex:1;">
+                    <label for="campaignBcc" style="font-size:12px; color:var(--gray-600)">BCC (comma-separated)</label>
+                    <input type="text" id="campaignBcc" placeholder="hidden@example.com" style="width:100%; padding:8px; border-radius:6px; border:1px solid #e5e7eb;">
+                </div>
+            </div>
+            
             <div class="form-group">
                 <label>📝 Campaign Name:</label>
                 <input type="text" id="campaignName">
@@ -1817,9 +1829,21 @@ def serve_web_ui(event):
             // Clear user name field if it exists
             const userName = document.getElementById('userName');
             if (userName) userName.value = '';
+
+            // Clear CC and BCC fields if they exist
+            const campaignCc = document.getElementById('campaignCc');
+            if (campaignCc) campaignCc.value = '';
+            const campaignBcc = document.getElementById('campaignBcc');
+            if (campaignBcc) campaignBcc.value = '';
             
             console.log('Campaign form cleared');
         }};
+        
+        // Helper to parse comma-separated email lists into arrays
+        function parseEmails(input) {{
+            if (!input) return [];
+            return input.split(',').map(s => s.trim()).filter(s => s.length > 0);
+        }}
         
         async function loadContacts(resetPagination = true) {{
             console.log('loadContacts called, resetPagination:', resetPagination);
@@ -3771,6 +3795,10 @@ def serve_web_ui(event):
             // Get user name from form
             const userName = document.getElementById('userName').value.trim() || 'Web User';
             
+            // Read CC/BCC inputs and parse into arrays
+            const ccList = parseEmails(document.getElementById('campaignCc')?.value || '');
+            const bccList = parseEmails(document.getElementById('campaignBcc')?.value || '');
+            
             // Extract and validate email addresses
             const targetEmails = targetContacts.map(c => c?.email).filter(email => email && email.includes('@'));
             console.log(`Extracted ${{targetEmails.length}} valid emails from ${{targetContacts.length}} contacts`);
@@ -3784,13 +3812,13 @@ def serve_web_ui(event):
                 campaign_name: document.getElementById('campaignName').value,
                 subject: document.getElementById('subject').value,
                 body: emailBody,
-                launched_by: userName,  // Send user identity to backend
+                launched_by: userName,                                                                 //Send user identity to backend
                 filter_type: Object.keys(selectedCampaignFilterValues).length > 0 ? 'custom' : null,
-                filter_values: Object.keys(selectedCampaignFilterValues).length > 0 
-                    ? JSON.stringify(selectedCampaignFilterValues)
-                    : null,
+                filter_values: Object.keys(selectedCampaignFilterValues).length > 0 ? JSON.stringify(selectedCampaignFilterValues): null,
                 filter_description: filterDescription,
                 target_contacts: targetEmails,  // Send email list to backend
+                cc: ccList,   // array of CC emails
+                bcc: bccList, // array of BCC emails
                 attachments: campaignAttachments  // Include attachments
             }};
                 
