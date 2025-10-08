@@ -31,23 +31,6 @@ ATTACHMENTS_BUCKET = 'jcdc-ses-contact-list'
 # 3. Make sure your custom domain routes to this Lambda function
 # If not set, it will automatically use the API Gateway URL
 CUSTOM_API_URL = os.environ.get('CUSTOM_API_URL', None)
-###*** for NOW
-CUSTOM_API_URL = None
-### *** for NOW
-
-
-# Cognito configuration (optional authentication)
-def load_cognito_config():
-    """Load Cognito configuration if available"""
-    try:
-        s3 = boto3.client('s3', region_name='us-gov-west-1')
-        obj = s3.get_object(Bucket=ATTACHMENTS_BUCKET, Key='cognito_config.json')
-        config = json.loads(obj['Body'].read().decode('utf-8'))
-        return config if config.get('enabled', False) else None
-    except:
-        return None  # Cognito not configured or disabled
-
-COGNITO_CONFIG = load_cognito_config()
 
 def lambda_handler(event, context):
     """Bulk Email API with Web UI"""
@@ -78,11 +61,7 @@ def lambda_handler(event, context):
         elif path == '/config' and method == 'GET':
             return get_email_config(headers)
         elif path == '/contacts' and method == 'GET':
-            return get_contacts(headers, event)
-        elif path == '/contacts/distinct' and method == 'GET':
-            return get_distinct_values(headers, event)
-        elif path == '/contacts/filter' and method == 'POST':
-            return filter_contacts(body, headers)
+            return get_contacts(headers)
         elif path == '/contacts' and method == 'POST':
             return add_contact(body, headers)
         elif path == '/contacts' and method == 'PUT':
@@ -98,7 +77,7 @@ def lambda_handler(event, context):
         elif path == '/upload-attachment' and method == 'POST':
             return upload_attachment(body, headers)
         elif path == '/campaign' and method == 'POST':
-            return send_campaign(body, headers, event)
+            return send_campaign(body, headers)
         elif path == '/campaign/{campaign_id}' and method == 'GET':
             campaign_id = event['pathParameters']['campaign_id']
             return get_campaign_status(campaign_id, headers)
@@ -123,12 +102,6 @@ def serve_web_ui(event):
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>CISA Email Campaign Management System</title>
-    
-    <!-- Favicon to prevent 403 error -->
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📧</text></svg>">
-    
-    <!-- Font Awesome Icons -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     
     <!-- Quill Rich Text Editor -->
     <link href="https://cdn.quilljs.com/1.3.6/quill.snow.css" rel="stylesheet">
@@ -225,34 +198,29 @@ def serve_web_ui(event):
         .tab {{ 
             flex: 1; 
             padding: 16px 24px; 
-            background: white;
+            background: transparent; 
             cursor: pointer; 
             text-align: center; 
             border-radius: 8px; 
             transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); 
             font-weight: 600; 
-            color: #1e40af;
+            color: var(--gray-600);
             position: relative;
             overflow: hidden;
             z-index: 10;
             pointer-events: auto;
             user-select: none;
-            border: 2px solid #3b82f6;
-            box-shadow: 0 2px 4px rgba(59, 130, 246, 0.1);
         }}
         .tab:hover {{ 
-            background: linear-gradient(135deg, #dbeafe, #bfdbfe); 
-            color: #1e40af;
+            background: rgba(99, 102, 241, 0.1); 
+            color: var(--primary-color);
             transform: translateY(-1px);
-            border-color: #2563eb;
-            box-shadow: 0 4px 8px rgba(59, 130, 246, 0.2);
         }}
         .tab.active {{ 
-            background: linear-gradient(135deg, #1e40af, #1e3a8a); 
+            background: linear-gradient(135deg, var(--primary-color), var(--primary-dark)); 
             color: white; 
-            box-shadow: 0 6px 12px rgba(30, 64, 175, 0.4);
+            box-shadow: var(--shadow-lg);
             transform: translateY(-2px);
-            border-color: #1e3a8a;
         }}
         .tab.active::before {{
             content: '';
@@ -587,496 +555,9 @@ def serve_web_ui(event):
             0% {{ transform: rotate(0deg); }}
             100% {{ transform: rotate(360deg); }}
         }}
-        
-        /* Editable Table Cells */
-        .editable-cell {{
-            cursor: text;
-            padding: 8px;
-            min-height: 20px;
-            transition: background-color 0.2s;
-            border: 1px solid transparent;
-        }}
-        .editable-cell:hover {{
-            background: #f0f9ff !important;
-            border: 1px solid #bae6fd;
-        }}
-        .editable-cell:focus {{
-            outline: 2px solid #3b82f6;
-            outline-offset: -2px;
-            background: #fff3cd !important;
-        }}
-        .editable-cell:empty:before {{
-            content: attr(placeholder);
-            color: #9ca3af;
-        }}
-        .yes-no-cell {{
-            text-align: center;
-        }}
-        #contactsTable {{
-            border-collapse: separate;
-            border-spacing: 0;
-        }}
-        #contactsTable th {{
-            position: sticky;
-            top: 0;
-            background: linear-gradient(135deg, #1e40af, #1e3a8a);
-            color: white;
-            z-index: 10;
-            font-weight: 700;
-            font-size: 13px;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-            padding: 14px 10px;
-            border-bottom: 3px solid #3b82f6;
-            border-right: 1px solid #1e3a8a;
-            text-shadow: 0 1px 2px rgba(0,0,0,0.3);
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        }}
-        #contactsTable td {{
-            border-bottom: 1px solid #e5e7eb;
-            border-right: 1px solid #f3f4f6;
-            padding: 8px 10px;
-            background: white;
-        }}
-        #contactsTable tr:hover td {{
-            background: #eff6ff;
-        }}
-        
-        /* Filter Type Button Styling */
-        .filter-type-btn {{
-            transition: all 0.2s ease;
-            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
-        }}
-        .filter-type-btn:hover {{
-            transform: translateY(-1px);
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-        }}
-        .filter-type-btn:active {{
-            transform: translateY(0);
-        }}
-        
-        /* Available Value Button Styling */
-        .available-value-btn:hover {{
-            transform: translateY(-1px);
-            box-shadow: 0 2px 4px rgba(99, 102, 241, 0.2);
-        }}
-        
-        /* Filter Tags Animation */
-        @keyframes slideIn {{
-            from {{
-                opacity: 0;
-                transform: translateX(-10px);
-            }}
-            to {{
-                opacity: 1;
-                transform: translateX(0);
-            }}
-        }}
-        
-        #selectedValuesTags > div {{
-            animation: slideIn 0.3s ease;
-        }}
-        
-        /* ============================================
-           TOAST NOTIFICATION SYSTEM
-           ============================================ */
-        #toastContainer {{
-            position: fixed;
-            top: 20px;
-            right: 20px;
-            z-index: 9999;
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
-            max-width: 400px;
-        }}
-        
-        .toast {{
-            padding: 16px 20px;
-            border-radius: 12px;
-            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15), 0 0 1px rgba(0, 0, 0, 0.05);
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            animation: toastSlideIn 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55);
-            backdrop-filter: blur(10px);
-            color: white;
-            font-size: 14px;
-            font-weight: 500;
-            min-width: 300px;
-            position: relative;
-            overflow: hidden;
-        }}
-        
-        .toast::before {{
-            content: '';
-            position: absolute;
-            left: 0;
-            top: 0;
-            bottom: 0;
-            width: 4px;
-            background: currentColor;
-        }}
-        
-        .toast-success {{
-            background: linear-gradient(135deg, #10b981, #059669);
-        }}
-        
-        .toast-error {{
-            background: linear-gradient(135deg, #ef4444, #dc2626);
-        }}
-        
-        .toast-warning {{
-            background: linear-gradient(135deg, #f59e0b, #d97706);
-        }}
-        
-        .toast-info {{
-            background: linear-gradient(135deg, #3b82f6, #2563eb);
-        }}
-        
-        .toast i {{
-            font-size: 20px;
-            flex-shrink: 0;
-        }}
-        
-        .toast-message {{
-            flex: 1;
-        }}
-        
-        .toast-close {{
-            background: rgba(255, 255, 255, 0.2);
-            border: none;
-            border-radius: 50%;
-            width: 24px;
-            height: 24px;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: white;
-            font-size: 16px;
-            transition: background 0.2s;
-            flex-shrink: 0;
-        }}
-        
-        .toast-close:hover {{
-            background: rgba(255, 255, 255, 0.3);
-        }}
-        
-        @keyframes toastSlideIn {{
-            from {{
-                transform: translateX(400px);
-                opacity: 0;
-            }}
-            to {{
-                transform: translateX(0);
-                opacity: 1;
-            }}
-        }}
-        
-        .toast.removing {{
-            animation: toastSlideOut 0.3s ease forwards;
-        }}
-        
-        @keyframes toastSlideOut {{
-            to {{
-                transform: translateX(400px);
-                opacity: 0;
-            }}
-        }}
-        
-        /* ============================================
-           SKELETON LOADING STATES
-           ============================================ */
-        .skeleton {{
-            background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
-            background-size: 200% 100%;
-            animation: skeletonLoading 1.5s ease-in-out infinite;
-            border-radius: 4px;
-        }}
-        
-        @keyframes skeletonLoading {{
-            0% {{
-                background-position: 200% 0;
-            }}
-            100% {{
-                background-position: -200% 0;
-            }}
-        }}
-        
-        .skeleton-text {{
-            height: 16px;
-            margin-bottom: 8px;
-            border-radius: 4px;
-        }}
-        
-        .skeleton-button {{
-            height: 40px;
-            width: 120px;
-            border-radius: 8px;
-        }}
-        
-        .skeleton-row {{
-            height: 48px;
-            margin-bottom: 4px;
-            border-radius: 6px;
-        }}
-        
-        /* ============================================
-           ENHANCED BUTTON ANIMATIONS
-           ============================================ */
-        button {{
-            position: relative;
-            overflow: hidden;
-            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-        }}
-        
-        button::before {{
-            content: '';
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            width: 0;
-            height: 0;
-            border-radius: 50%;
-            background: rgba(255, 255, 255, 0.3);
-            transform: translate(-50%, -50%);
-            transition: width 0.6s, height 0.6s;
-        }}
-        
-        button:active::before {{
-            width: 300px;
-            height: 300px;
-        }}
-        
-        button:hover {{
-            transform: translateY(-2px);
-            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
-        }}
-        
-        button:active {{
-            transform: translateY(0);
-        }}
-        
-        /* Loading spinner for buttons */
-        .btn-loading {{
-            pointer-events: none;
-            position: relative;
-        }}
-        
-        .btn-loading::after {{
-            content: '';
-            position: absolute;
-            width: 16px;
-            height: 16px;
-            top: 50%;
-            left: 50%;
-            margin-left: -8px;
-            margin-top: -8px;
-            border: 2px solid rgba(255, 255, 255, 0.3);
-            border-top-color: white;
-            border-radius: 50%;
-            animation: spin 0.6s linear infinite;
-        }}
-        
-        @keyframes spin {{
-            to {{
-                transform: rotate(360deg);
-            }}
-        }}
-        
-        /* ============================================
-           SMOOTH TRANSITIONS
-           ============================================ */
-        * {{
-            transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease;
-        }}
-        
-        .fade-in {{
-            animation: fadeIn 0.4s ease;
-        }}
-        
-        @keyframes fadeIn {{
-            from {{
-                opacity: 0;
-                transform: translateY(10px);
-            }}
-            to {{
-                opacity: 1;
-                transform: translateY(0);
-            }}
-        }}
-        
-        /* Enhanced table row hover */
-        table tbody tr {{
-            transition: all 0.2s ease;
-        }}
-        
-        table tbody tr:hover {{
-            transform: scale(1.01);
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
-        }}
-        
-        /* Smooth scroll */
-        html {{
-            scroll-behavior: smooth;
-        }}
-        
-        /* Focus states for accessibility */
-        button:focus,
-        input:focus,
-        select:focus,
-        textarea:focus {{
-            outline: 2px solid var(--primary-color);
-            outline-offset: 2px;
-        }}
-        
-        /* Progress bar animation */
-        .progress-bar {{
-            position: relative;
-            overflow: hidden;
-        }}
-        
-        .progress-bar::after {{
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            bottom: 0;
-            right: 0;
-            background: linear-gradient(90deg, 
-                transparent, 
-                rgba(255, 255, 255, 0.3), 
-                transparent
-            );
-            animation: shimmer 2s infinite;
-        }}
-        
-        @keyframes shimmer {{
-            0% {{
-                transform: translateX(-100%);
-            }}
-            100% {{
-                transform: translateX(100%);
-            }}
-        }}
-        
-        /* ============================================
-           MODAL STYLES
-           ============================================ */
-        .modal {{
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0, 0, 0, 0.6);
-            backdrop-filter: blur(4px);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            z-index: 10000;
-            animation: modalFadeIn 0.3s ease;
-        }}
-        
-        @keyframes modalFadeIn {{
-            from {{
-                opacity: 0;
-            }}
-            to {{
-                opacity: 1;
-            }}
-        }}
-        
-        .modal-content {{
-            background: white;
-            border-radius: 16px;
-            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
-            max-height: 90vh;
-            overflow-y: auto;
-            animation: modalSlideUp 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55);
-        }}
-        
-        @keyframes modalSlideUp {{
-            from {{
-                transform: translateY(50px);
-                opacity: 0;
-            }}
-            to {{
-                transform: translateY(0);
-                opacity: 1;
-            }}
-        }}
-        
-        .modal-header {{
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 24px 30px;
-            border-bottom: 2px solid #e5e7eb;
-            background: linear-gradient(135deg, #f9fafb, #f3f4f6);
-        }}
-        
-        .modal-header h2 {{
-            margin: 0;
-            color: #1f2937;
-            font-size: 24px;
-            font-weight: 700;
-        }}
-        
-        .modal-close {{
-            background: none;
-            border: none;
-            font-size: 32px;
-            color: #6b7280;
-            cursor: pointer;
-            width: 40px;
-            height: 40px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            border-radius: 50%;
-            transition: all 0.2s;
-            line-height: 1;
-            padding: 0;
-        }}
-        
-        .modal-close:hover {{
-            background: #f3f4f6;
-            color: #1f2937;
-            transform: rotate(90deg);
-        }}
-        
-        .modal-body {{
-            padding: 30px;
-        }}
-        
-        /* Modal table styles */
-        .modal-content table tbody tr {{
-            border-bottom: 1px solid #f3f4f6;
-        }}
-        
-        .modal-content table tbody tr:hover {{
-            background: #f9fafb;
-            transform: none;
-            box-shadow: none;
-        }}
-        
-        .modal-content table tbody td {{
-            padding: 12px;
-            font-size: 13px;
-            color: #374151;
-        }}
-        
-        .modal-content table tbody tr:nth-child(even) {{
-            background: #fafafa;
-        }}
     </style>
 </head>
 <body>
-    <!-- Toast Notification Container -->
-    <div id="toastContainer"></div>
-    
     <div class="container">
         <div class="header">
             <h1>CISA Email Campaign Management System</h1>
@@ -1100,6 +581,10 @@ def serve_web_ui(event):
                 <label>📧 From Email:</label>
                 <input type="email" id="fromEmail">
             </div>
+            <div class="form-group">
+                <label>⏱️ Emails per minute:</label>
+                <input type="number" id="emailsPerMinute" value="60">
+            </div>
             <div style="display: flex; gap: 10px; margin-top: 20px;">
                 <button onclick="saveConfig()">💾 Save Configuration</button>
                 <!-- <button onclick="loadConfig()" style="background: #007bff;">Test Load Config</button> -->
@@ -1109,79 +594,41 @@ def serve_web_ui(event):
         <div id="contacts" class="tab-content">
             <h2>👥 Contact Management</h2>
             <div class="form-group">
-                <label style="font-size: 16px; font-weight: 700; color: #1f2937; margin-bottom: 12px; display: block;">🔍 Contact Filter</label>
-                
-                <!-- Filter Type Selection (Buttons/Checkboxes) -->
-                <div style="margin-bottom: 15px;">
-                    <label style="display: block; margin-bottom: 8px; font-size: 13px; font-weight: 600; color: #374151;">Select Filter Category:</label>
-                    <div id="filterTypeButtons" style="display: flex; flex-wrap: wrap; gap: 8px;">
-                        <button class="filter-type-btn" data-filter="" onclick="selectFilterType('')" style="padding: 8px 16px; border: 2px solid #e5e7eb; background: white; color: #374151; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.2s;">
-                            All
-                        </button>
-                        <button class="filter-type-btn" data-filter="entity_type" onclick="selectFilterType('entity_type')" style="padding: 8px 16px; border: 2px solid #e5e7eb; background: white; color: #374151; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.2s;">
-                            Entity Type
-                        </button>
-                        <button class="filter-type-btn" data-filter="state" onclick="selectFilterType('state')" style="padding: 8px 16px; border: 2px solid #e5e7eb; background: white; color: #374151; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.2s;">
-                            State
-                        </button>
-                        <button class="filter-type-btn" data-filter="agency_name" onclick="selectFilterType('agency_name')" style="padding: 8px 16px; border: 2px solid #e5e7eb; background: white; color: #374151; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.2s;">
-                            Agency
-                        </button>
-                        <button class="filter-type-btn" data-filter="sector" onclick="selectFilterType('sector')" style="padding: 8px 16px; border: 2px solid #e5e7eb; background: white; color: #374151; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.2s;">
-                            Sector
-                        </button>
-                        <button class="filter-type-btn" data-filter="subsection" onclick="selectFilterType('subsection')" style="padding: 8px 16px; border: 2px solid #e5e7eb; background: white; color: #374151; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.2s;">
-                            Sub-section
-                        </button>
-                        <button class="filter-type-btn" data-filter="ms_isac_member" onclick="selectFilterType('ms_isac_member')" style="padding: 8px 16px; border: 2px solid #e5e7eb; background: white; color: #374151; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.2s;">
-                            MS-ISAC Member
-                        </button>
-                        <button class="filter-type-btn" data-filter="soc_call" onclick="selectFilterType('soc_call')" style="padding: 8px 16px; border: 2px solid #e5e7eb; background: white; color: #374151; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.2s;">
-                            SOC Call
-                        </button>
-                        <button class="filter-type-btn" data-filter="fusion_center" onclick="selectFilterType('fusion_center')" style="padding: 8px 16px; border: 2px solid #e5e7eb; background: white; color: #374151; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.2s;">
-                            Fusion Center
-                        </button>
-                        <button class="filter-type-btn" data-filter="k12" onclick="selectFilterType('k12')" style="padding: 8px 16px; border: 2px solid #e5e7eb; background: white; color: #374151; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.2s;">
-                            K-12
-                        </button>
-                        <button class="filter-type-btn" data-filter="water_wastewater" onclick="selectFilterType('water_wastewater')" style="padding: 8px 16px; border: 2px solid #e5e7eb; background: white; color: #374151; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.2s;">
-                            Water/Wastewater
-                        </button>
-                        <button class="filter-type-btn" data-filter="weekly_rollup" onclick="selectFilterType('weekly_rollup')" style="padding: 8px 16px; border: 2px solid #e5e7eb; background: white; color: #374151; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.2s;">
-                            Weekly Rollup
-                        </button>
-                        <button class="filter-type-btn" data-filter="region" onclick="selectFilterType('region')" style="padding: 8px 16px; border: 2px solid #e5e7eb; background: white; color: #374151; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.2s;">
-                            Region
-                        </button>
+                <label>🔍 Contact Filter:</label>
+                <div style="display: grid; grid-template-columns: 1fr 2fr; gap: 10px; align-items: start;">
+                    <select id="filterType" onchange="loadFilterValues()" title="Select a filter type - you can change this anytime">
+                        <option value="">All Contacts</option>
+                        <option value="group">Group</option>
+                        <option value="entity_type">Entity Type</option>
+                        <option value="state">State</option>
+                        <option value="agency_name">Agency Name</option>
+                        <option value="sector">Sector</option>
+                        <option value="subsection">Subsection</option>
+                        <option value="ms_isac_member">MS-ISAC Member</option>
+                        <option value="soc_call">SOC Call</option>
+                        <option value="fusion_center">Fusion Center</option>
+                        <option value="k12">K-12</option>
+                        <option value="water_wastewater">Water/Wastewater</option>
+                        <option value="weekly_rollup">Weekly Rollup</option>
+                        <option value="region">Region</option>
+                </select>
+                    <div id="filterValueContainer" style="display: none;">
+                        <div style="max-height: 300px; overflow-y: auto; padding: 12px; background: #f9fafb; border-radius: 8px; border: 1px solid #e5e7eb;">
+                            <div style="margin-bottom: 12px; padding-bottom: 10px; border-bottom: 1px solid #e5e7eb; display: flex; justify-content: space-between; align-items: center;">
+                                <div>
+                                    <button onclick="selectAllFilterValues()" style="padding: 6px 12px; font-size: 13px; background: #10b981; margin-right: 8px;">✅ Select All</button>
+                                    <button onclick="clearAllFilterValues()" style="padding: 6px 12px; font-size: 13px; background: #ef4444;">❌ Clear All</button>
+            </div>
+                                <small style="color: #6b7280; margin: 0;">Click checkboxes to load filtered contacts</small>
+                            </div>
+                            <div id="filterValueCheckboxes"></div>
+                        </div>
+                        <small style="display: block; margin-top: 8px; color: #6b7280;" id="filterCount"></small>
                     </div>
-                </div>
-                
-                <!-- Available Values Area (shown when a filter type is selected) -->
-                <div id="availableValuesArea" style="display: none; margin-bottom: 15px;">
-                    <label style="display: block; margin-bottom: 8px; font-size: 13px; font-weight: 600; color: #374151;">Available Values (click to add):</label>
-                    <div id="availableValuesList" style="max-height: 200px; overflow-y: auto; padding: 12px; background: #f9fafb; border: 2px solid #e5e7eb; border-radius: 8px; display: flex; flex-wrap: wrap; gap: 6px;">
-                        <!-- Dynamic value buttons will appear here -->
-                    </div>
-                    <small id="availableCount" style="display: block; margin-top: 6px; color: #6b7280;"></small>
-                </div>
-                
-                <!-- Selected Filter Values (tags with remove buttons) -->
-                <div id="selectedValuesArea" style="margin-bottom: 15px;">
-                    <label style="display: block; margin-bottom: 8px; font-size: 13px; font-weight: 600; color: #374151;">Filter Values:</label>
-                    <div id="selectedValuesTags" style="min-height: 44px; padding: 10px; background: white; border: 2px solid #e5e7eb; border-radius: 8px; display: flex; flex-wrap: wrap; gap: 8px; align-items: center;">
-                        <small style="color: #9ca3af; font-style: italic;">No filters selected - showing all contacts</small>
-                    </div>
-                </div>
-                
-                <div style="display: flex; gap: 10px;">
-                    <button onclick="applyContactFilter()" class="btn-primary" style="padding: 10px 20px; font-weight: 600; font-size: 14px;">🔍 Apply Filter</button>
-                    <button onclick="clearAllFilters()" class="btn-secondary" style="padding: 10px 20px; font-weight: 600; font-size: 14px; background: #6b7280;">🔄 Clear All</button>
                 </div>
             </div>
             <button onclick="loadContacts()">🔄 Load Contacts</button>
-            <button class="btn-success" onclick="addEmptyRow()">➕ Add Row (Inline)</button>
-            <button onclick="showAddContact()">📝 Add Contact (Form)</button>
+            <button class="btn-success" onclick="showAddContact()">➕ Add Contact</button>
             <input type="file" id="csvFile" accept=".csv" style="display: none;" onchange="uploadCSV()">
             <button onclick="document.getElementById('csvFile').click()">📤 Upload CSV (Batch)</button>
             
@@ -1243,6 +690,7 @@ def serve_web_ui(event):
                     </select>
                     <input type="email" id="newAlternateEmail" placeholder="Alternate Email">
                     <input type="text" id="newRegion" placeholder="Region">
+                    <input type="text" id="newGroup" placeholder="Group">
                 </div>
                 <div style="margin-top: 20px;">
                     <button class="btn-success" onclick="addContact()">✅ Add</button>
@@ -1295,6 +743,7 @@ def serve_web_ui(event):
                     </select>
                     <input type="email" id="editAlternateEmail" placeholder="Alternate Email">
                     <input type="text" id="editRegion" placeholder="Region">
+                    <input type="text" id="editGroup" placeholder="Group">
                 </div>
                 <div style="margin-top: 20px;">
                     <button class="btn-success" onclick="saveContactEdit()">💾 Save Changes</button>
@@ -1316,149 +765,56 @@ def serve_web_ui(event):
                 <small id="searchResults" style="color: #6b7280;"></small>
             </div>
             
-            <!-- Contacts List Title -->
-            <h2 style="margin: 30px 0 20px 0; color: #1f2937; font-size: 1.8rem; font-weight: 700; border-bottom: 3px solid #6366f1; padding-bottom: 10px;">
-                📋 Contacts List
-            </h2>
-            
-            <!-- Pagination Controls -->
-            <div style="display: flex; justify-content: space-between; align-items: center; margin: 20px 0; padding: 15px; background: #f9fafb; border-radius: 8px; border: 1px solid #e5e7eb;">
-                <div style="display: flex; gap: 10px; align-items: center;">
-                    <span id="pageInfo" style="color: #6b7280; font-weight: 500;">Page 1</span>
-                </div>
-                <div style="display: flex; gap: 10px;">
-                    <button id="prevPageBtn" onclick="previousPage()" disabled style="padding: 8px 16px; background: #6b7280; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 500;">⬅️ Previous</button>
-                    <button id="nextPageBtn" onclick="nextPage()" disabled style="padding: 8px 16px; background: #3b82f6; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 500;">Next ➡️</button>
-                </div>
-            </div>
-            
             <div style="overflow-x: auto;">
             <table id="contactsTable">
                 <thead>
                         <tr>
-                            <th style="min-width: 200px;">Email</th>
-                            <th style="min-width: 120px;">First Name</th>
-                            <th style="min-width: 120px;">Last Name</th>
-                            <th style="min-width: 150px;">Title</th>
-                            <th style="min-width: 150px;">Entity Type</th>
-                            <th style="min-width: 80px;">State</th>
-                            <th style="min-width: 150px;">Agency</th>
-                            <th style="min-width: 120px;">Sector</th>
-                            <th style="min-width: 120px;">Subsection</th>
-                            <th style="min-width: 120px;">Phone</th>
-                            <th style="min-width: 100px;">MS-ISAC</th>
-                            <th style="min-width: 100px;">SOC Call</th>
-                            <th style="min-width: 120px;">Fusion Center</th>
-                            <th style="min-width: 80px;">K-12</th>
-                            <th style="min-width: 150px;">Water/Wastewater</th>
-                            <th style="min-width: 130px;">Weekly Rollup</th>
-                            <th style="min-width: 200px;">Alt Email</th>
-                            <th style="min-width: 100px;">Region</th>
-                            <th style="min-width: 100px; position: sticky; right: 0; background: linear-gradient(135deg, #1e40af, #1e3a8a); box-shadow: -2px 0 4px rgba(0,0,0,0.2);">Actions</th>
+                            <th>Email Address</th>
+                            <th>Name</th>
+                            <th>Group</th>
+                            <th>Agency</th>
+                            <th>Actions</th>
                         </tr>
                 </thead>
                 <tbody id="contactsBody"></tbody>
             </table>
-            </div>
-            
-            <div style="margin-top: 15px; padding: 10px; background: #f3f4f6; border-radius: 6px; text-align: center;">
-                <span id="recordCount" style="color: #6b7280; font-size: 14px;"></span>
             </div>
         </div>
         
         <div id="campaign" class="tab-content">
             <h2>📧 Send Campaign</h2>
             <div id="formStatus" class="form-status" style="display: none; padding: 10px; margin-bottom: 15px; border-radius: 4px; background: #fff3cd; border: 1px solid #ffeaa7; color: #856404;"></div>
-            
-            <div class="form-group" style="border: 2px solid #cbd5e1; border-radius: 12px; padding: 20px; background: #f8fafc;">
-                <label style="font-size: 16px; font-weight: 700; color: #1f2937; margin-bottom: 12px; display: block;">🎯 Target Group Filter</label>
-                
-                <!-- Filter Type Selection (Buttons) -->
-                <div style="margin-bottom: 15px;">
-                    <label style="display: block; margin-bottom: 8px; font-size: 13px; font-weight: 600; color: #374151;">Select Filter Category:</label>
-                    <div id="campaignFilterTypeButtons" style="display: flex; flex-wrap: wrap; gap: 8px;">
-                        <button class="campaign-filter-type-btn" data-filter="" onclick="selectCampaignFilterType('')" style="padding: 8px 16px; border: 2px solid #e5e7eb; background: white; color: #374151; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.2s;">
-                            All
-                        </button>
-                        <button class="campaign-filter-type-btn" data-filter="entity_type" onclick="selectCampaignFilterType('entity_type')" style="padding: 8px 16px; border: 2px solid #e5e7eb; background: white; color: #374151; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.2s;">
-                            Entity Type
-                        </button>
-                        <button class="campaign-filter-type-btn" data-filter="state" onclick="selectCampaignFilterType('state')" style="padding: 8px 16px; border: 2px solid #e5e7eb; background: white; color: #374151; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.2s;">
-                            State
-                        </button>
-                        <button class="campaign-filter-type-btn" data-filter="agency_name" onclick="selectCampaignFilterType('agency_name')" style="padding: 8px 16px; border: 2px solid #e5e7eb; background: white; color: #374151; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.2s;">
-                            Agency
-                        </button>
-                        <button class="campaign-filter-type-btn" data-filter="sector" onclick="selectCampaignFilterType('sector')" style="padding: 8px 16px; border: 2px solid #e5e7eb; background: white; color: #374151; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.2s;">
-                            Sector
-                        </button>
-                        <button class="campaign-filter-type-btn" data-filter="subsection" onclick="selectCampaignFilterType('subsection')" style="padding: 8px 16px; border: 2px solid #e5e7eb; background: white; color: #374151; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.2s;">
-                            Sub-section
-                        </button>
-                        <button class="campaign-filter-type-btn" data-filter="ms_isac_member" onclick="selectCampaignFilterType('ms_isac_member')" style="padding: 8px 16px; border: 2px solid #e5e7eb; background: white; color: #374151; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.2s;">
-                            MS-ISAC Member
-                        </button>
-                        <button class="campaign-filter-type-btn" data-filter="soc_call" onclick="selectCampaignFilterType('soc_call')" style="padding: 8px 16px; border: 2px solid #e5e7eb; background: white; color: #374151; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.2s;">
-                            SOC Call
-                        </button>
-                        <button class="campaign-filter-type-btn" data-filter="fusion_center" onclick="selectCampaignFilterType('fusion_center')" style="padding: 8px 16px; border: 2px solid #e5e7eb; background: white; color: #374151; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.2s;">
-                            Fusion Center
-                        </button>
-                        <button class="campaign-filter-type-btn" data-filter="k12" onclick="selectCampaignFilterType('k12')" style="padding: 8px 16px; border: 2px solid #e5e7eb; background: white; color: #374151; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.2s;">
-                            K-12
-                        </button>
-                        <button class="campaign-filter-type-btn" data-filter="water_wastewater" onclick="selectCampaignFilterType('water_wastewater')" style="padding: 8px 16px; border: 2px solid #e5e7eb; background: white; color: #374151; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.2s;">
-                            Water/Wastewater
-                        </button>
-                        <button class="campaign-filter-type-btn" data-filter="weekly_rollup" onclick="selectCampaignFilterType('weekly_rollup')" style="padding: 8px 16px; border: 2px solid #e5e7eb; background: white; color: #374151; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.2s;">
-                            Weekly Rollup
-                        </button>
-                        <button class="campaign-filter-type-btn" data-filter="region" onclick="selectCampaignFilterType('region')" style="padding: 8px 16px; border: 2px solid #e5e7eb; background: white; color: #374151; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.2s;">
-                            Region
-                        </button>
-                    </div>
-                </div>
-                
-                <!-- Available Values Area (shown when a filter type is selected) -->
-                <div id="campaignAvailableValuesArea" style="display: none; margin-bottom: 15px;">
-                    <label style="display: block; margin-bottom: 8px; font-size: 13px; font-weight: 600; color: #374151;">Available Values (click to add):</label>
-                    <div id="campaignAvailableValuesList" style="max-height: 200px; overflow-y: auto; padding: 12px; background: #f9fafb; border: 2px solid #e5e7eb; border-radius: 8px; display: flex; flex-wrap: wrap; gap: 6px;">
-                        <!-- Dynamic value buttons will appear here -->
-                    </div>
-                    <small id="campaignAvailableCount" style="display: block; margin-top: 6px; color: #6b7280;"></small>
-                </div>
-                
-                <!-- Selected Filter Values (tags with remove buttons) -->
-                <div id="campaignSelectedValuesArea" style="margin-bottom: 15px;">
-                    <label style="display: block; margin-bottom: 8px; font-size: 13px; font-weight: 600; color: #374151;">Filter Values:</label>
-                    <div id="campaignSelectedValuesTags" style="min-height: 44px; padding: 10px; background: white; border: 2px solid #e5e7eb; border-radius: 8px; display: flex; flex-wrap: wrap; gap: 8px; align-items: center;">
-                        <small style="color: #9ca3af; font-style: italic;">No filters selected - will send to all contacts</small>
-                    </div>
-                </div>
-                
-                <!-- Apply Filter Button -->
-                <div style="display: flex; gap: 10px; margin-bottom: 15px;">
-                    <button onclick="applyCampaignFilter()" class="btn-primary" style="padding: 10px 20px; font-weight: 600; font-size: 14px;">🔍 Apply Filter</button>
-                    <button onclick="clearAllCampaignFilters()" class="btn-secondary" style="padding: 10px 20px; font-weight: 600; font-size: 14px; background: #6b7280;">🔄 Clear All</button>
-                </div>
-                
-                <!-- Contact Count Display -->
-                <div id="campaignContactCount" style="padding: 12px; background: #f0f9ff; border: 2px solid #3b82f6; border-radius: 8px; margin-bottom: 15px; display: none;">
-                    <div style="display: flex; align-items: center; justify-content: space-between;">
-                        <div>
-                            <strong style="color: #1e40af; font-size: 14px;">📊 Target Contacts:</strong>
-                            <span id="campaignContactCountNumber" style="color: #1e40af; font-size: 14px; font-weight: 700; margin-left: 8px;">0</span>
-                        </div>
-                        <button onclick="openTargetContactsModal()" style="padding: 8px 16px; background: linear-gradient(135deg, #3b82f6, #2563eb); color: white; border: none; border-radius: 6px; font-size: 13px; font-weight: 600; cursor: pointer;">
-                            <i class="fas fa-eye"></i> View Target Contacts
-                        </button>
-                    </div>
-                </div>
-            </div>
             <div class="form-group">
-                <label>👤 Your Name:</label>
-                <input type="text" id="userName" placeholder="Enter your name (saved in browser)" onchange="saveUserName()">
-                <small style="color: #6b7280;">This will be recorded as who launched the campaign. Your name is saved in your browser.</small>
+                <label>🎯 Target Contacts:</label>
+                <div style="display: grid; grid-template-columns: 1fr 2fr; gap: 10px; align-items: start;">
+                    <select id="campaignFilterType" onchange="loadCampaignFilterValues()">
+                        <option value="">All Contacts</option>
+                        <option value="test_group">🧪 Test Group Only</option>
+                        <option value="group">Group</option>
+                        <option value="entity_type">Entity Type</option>
+                        <option value="state">State</option>
+                        <option value="agency_name">Agency Name</option>
+                        <option value="sector">Sector</option>
+                        <option value="subsection">Subsection</option>
+                        <option value="ms_isac_member">MS-ISAC Member</option>
+                        <option value="soc_call">SOC Call</option>
+                        <option value="fusion_center">Fusion Center</option>
+                        <option value="k12">K-12</option>
+                        <option value="water_wastewater">Water/Wastewater</option>
+                        <option value="weekly_rollup">Weekly Rollup</option>
+                        <option value="region">Region</option>
+                </select>
+                    <div id="campaignFilterValueContainer" style="display: none;">
+                        <div style="max-height: 300px; overflow-y: auto; padding: 12px; background: #f9fafb; border-radius: 8px; border: 1px solid #e5e7eb;">
+                            <div style="margin-bottom: 12px; padding-bottom: 10px; border-bottom: 1px solid #e5e7eb;">
+                                <button onclick="selectAllCampaignFilters()" style="padding: 6px 12px; font-size: 13px; background: #10b981; margin-right: 8px;">✅ Select All</button>
+                                <button onclick="clearAllCampaignFilters()" style="padding: 6px 12px; font-size: 13px; background: #ef4444;">❌ Clear All</button>
+                            </div>
+                            <div id="campaignFilterCheckboxes"></div>
+                        </div>
+                        <small style="display: block; margin-top: 8px; color: #6b7280;" id="campaignFilterCount"></small>
+                    </div>
+                </div>
             </div>
             <div class="form-group">
                 <label>📝 Campaign Name:</label>
@@ -1489,7 +845,7 @@ def serve_web_ui(event):
             </div>
             
             <div style="display: flex; gap: 15px; margin-top: 20px;">
-            <button class="btn-success" onclick="sendCampaign(event)">🚀 Send Campaign</button>
+            <button class="btn-success" onclick="sendCampaign()">🚀 Send Campaign</button>
                 <button onclick="clearCampaignForm()">🗑️ Clear Form</button>
             </div>
             
@@ -1497,130 +853,8 @@ def serve_web_ui(event):
         </div>
     </div>
     
-    <!-- Target Contacts Modal -->
-    <div id="targetContactsModal" class="modal" style="display: none;">
-        <div class="modal-content" style="max-width: 1200px; width: 90%;">
-            <div class="modal-header">
-                <h2><i class="fas fa-users"></i> Target Contacts Preview</h2>
-                <button class="modal-close" onclick="closeTargetContactsModal()">×</button>
-            </div>
-            <div class="modal-body">
-                <div id="targetContactsInfo" style="margin-bottom: 15px; padding: 12px; background: #f0f9ff; border-left: 4px solid #3b82f6; border-radius: 4px;">
-                    <strong>Total Target Contacts:</strong> <span id="modalTotalCount">0</span>
-                </div>
-                
-                <!-- Contacts Table -->
-                <div style="overflow-x: auto; max-height: 500px; border: 1px solid #e5e7eb; border-radius: 8px;">
-                    <table style="width: 100%; border-collapse: collapse;">
-                        <thead style="background: linear-gradient(135deg, #1e40af, #1e3a8a); color: white; position: sticky; top: 0; z-index: 10;">
-                            <tr>
-                                <th style="padding: 12px; text-align: left; font-weight: 600; font-size: 13px; border-bottom: 2px solid #1e3a8a;">#</th>
-                                <th style="padding: 12px; text-align: left; font-weight: 600; font-size: 13px; border-bottom: 2px solid #1e3a8a;">First Name</th>
-                                <th style="padding: 12px; text-align: left; font-weight: 600; font-size: 13px; border-bottom: 2px solid #1e3a8a;">Last Name</th>
-                                <th style="padding: 12px; text-align: left; font-weight: 600; font-size: 13px; border-bottom: 2px solid #1e3a8a;">Email</th>
-                                <th style="padding: 12px; text-align: left; font-weight: 600; font-size: 13px; border-bottom: 2px solid #1e3a8a;">Agency</th>
-                                <th style="padding: 12px; text-align: left; font-weight: 600; font-size: 13px; border-bottom: 2px solid #1e3a8a;">State</th>
-                                <th style="padding: 12px; text-align: left; font-weight: 600; font-size: 13px; border-bottom: 2px solid #1e3a8a;">Entity Type</th>
-                            </tr>
-                        </thead>
-                        <tbody id="targetContactsTableBody">
-                            <!-- Dynamic rows will be inserted here -->
-                        </tbody>
-                    </table>
-                </div>
-                
-                <!-- Pagination Controls -->
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 20px; padding: 15px; background: #f9fafb; border-radius: 8px;">
-                    <button id="modalPrevBtn" onclick="loadTargetContactsPage('prev')" style="padding: 8px 16px; background: #6b7280; color: white; border: none; border-radius: 6px; font-weight: 600; cursor: pointer;" disabled>
-                        <i class="fas fa-chevron-left"></i> Previous
-                    </button>
-                    <div style="font-weight: 600; color: #374151;">
-                        Page <span id="modalCurrentPage">1</span> of <span id="modalTotalPages">1</span>
-                        <span style="margin-left: 15px; color: #6b7280; font-weight: normal;">(Showing <span id="modalShowingCount">0</span> contacts)</span>
-                    </div>
-                    <button id="modalNextBtn" onclick="loadTargetContactsPage('next')" style="padding: 8px 16px; background: #3b82f6; color: white; border: none; border-radius: 6px; font-weight: 600; cursor: pointer;">
-                        Next <i class="fas fa-chevron-right"></i>
-                    </button>
-                </div>
-            </div>
-        </div>
-    </div>
-    
     <script>
         const API_URL = '{api_url}';
-        
-        // ============================================
-        // TOAST NOTIFICATION SYSTEM
-        // ============================================
-        const Toast = {{
-            show: function(message, type = 'info', duration = 4000) {{
-                const container = document.getElementById('toastContainer');
-                const toast = document.createElement('div');
-                toast.className = `toast toast-${{type}}`;
-                
-                const icons = {{
-                    success: '<i class="fas fa-check-circle"></i>',
-                    error: '<i class="fas fa-exclamation-circle"></i>',
-                    warning: '<i class="fas fa-exclamation-triangle"></i>',
-                    info: '<i class="fas fa-info-circle"></i>'
-                }};
-                
-                toast.innerHTML = `
-                    ${{icons[type] || icons.info}}
-                    <div class="toast-message">${{message}}</div>
-                    <button class="toast-close" onclick="Toast.close(this.parentElement)">×</button>
-                `;
-                
-                container.appendChild(toast);
-                
-                // Auto remove after duration
-                if (duration > 0) {{
-                    setTimeout(() => {{
-                        Toast.close(toast);
-                    }}, duration);
-                }}
-                
-                return toast;
-            }},
-            
-            success: function(message, duration = 4000) {{
-                return this.show(message, 'success', duration);
-            }},
-            
-            error: function(message, duration = 5000) {{
-                return this.show(message, 'error', duration);
-            }},
-            
-            warning: function(message, duration = 4500) {{
-                return this.show(message, 'warning', duration);
-            }},
-            
-            info: function(message, duration = 4000) {{
-                return this.show(message, 'info', duration);
-            }},
-            
-            close: function(toast) {{
-                toast.classList.add('removing');
-                setTimeout(() => {{
-                    toast.remove();
-                }}, 300);
-            }}
-        }};
-        
-        // ============================================
-        // LOADING SKELETON HELPER
-        // ============================================
-        function showSkeleton(containerId, count = 5) {{
-            const container = document.getElementById(containerId);
-            if (!container) return;
-            
-            container.innerHTML = '';
-            for (let i = 0; i < count; i++) {{
-                const skeleton = document.createElement('div');
-                skeleton.className = 'skeleton skeleton-row';
-                container.appendChild(skeleton);
-            }}
-        }}
         
         // Initialize Quill Rich Text Editor
         let quillEditor;
@@ -1656,13 +890,6 @@ def serve_web_ui(event):
             
             // Add active class to target tab content
             document.getElementById(tabName).classList.add('active');
-            
-            // Auto-load data when switching to specific tabs
-            if (tabName === 'contacts' && paginationState.displayedContacts.length === 0) {{
-                // Auto-load contacts when first switching to Contacts tab
-                console.log('Auto-loading contacts...');
-                loadContacts();
-            }}
         }}
         
         
@@ -1679,7 +906,8 @@ def serve_web_ui(event):
                 const config = {{
                     email_service: 'ses',
                     aws_region: document.getElementById('awsRegion').value,
-                    from_email: document.getElementById('fromEmail').value
+                    from_email: document.getElementById('fromEmail').value,
+                    emails_per_minute: parseInt(document.getElementById('emailsPerMinute').value)
                 }};
                 
                 console.log('Saving config:', config);
@@ -1698,7 +926,6 @@ def serve_web_ui(event):
                 if (result.success) {{
                     button.textContent = 'Saved!';
                     button.style.background = 'linear-gradient(135deg, var(--success-color), #059669)';
-                    Toast.success('Configuration saved successfully!');
                     setTimeout(() => {{
                         button.textContent = originalText;
                         button.style.background = '';
@@ -1711,7 +938,6 @@ def serve_web_ui(event):
                 console.error('Save config error:', error);
                 button.textContent = 'Error';
                 button.style.background = 'linear-gradient(135deg, var(--danger-color), #dc2626)';
-                Toast.error(`Failed to save configuration: ${{error.message}}`);
                 setTimeout(() => {{
                     button.textContent = originalText;
                     button.style.background = '';
@@ -1733,15 +959,6 @@ def serve_web_ui(event):
         let allGroups = [];
         let userSessionId = Math.random().toString(36).substr(2, 9);
         console.log('User session ID:', userSessionId);
-        
-        // Pagination state
-        let paginationState = {{
-            currentPage: 1,
-            pageSize: 25,
-            paginationKeys: [null], // Stack of LastEvaluatedKeys for each page
-            hasNextPage: false,
-            displayedContacts: []
-        }};
         
         
         function showFormStatus(message, type = 'warning') {{
@@ -1795,74 +1012,33 @@ def serve_web_ui(event):
                 return;
             }}
             
-            // Clear form fields (with null checks)
-            const campaignName = document.getElementById('campaignName');
-            if (campaignName) campaignName.value = '';
+            document.getElementById('campaignName').value = '';
+            document.getElementById('subject').value = '';
+            quillEditor.setContents([]);
             
-            const subject = document.getElementById('subject');
-            if (subject) subject.value = '';
-            
-            // Clear Quill editor
-            if (quillEditor) {{
-                quillEditor.setContents([]);
-            }}
-            
-            // Clear campaign filters
+            // Clear campaign filter
+            document.getElementById('campaignFilterType').value = '';
+            document.getElementById('campaignFilterValueContainer').style.display = 'none';
             clearAllCampaignFilters();
             
             // Clear attachments
             campaignAttachments = [];
             displayAttachments();
-            
-            // Clear user name field if it exists
-            const userName = document.getElementById('userName');
-            if (userName) userName.value = '';
-            
-            console.log('Campaign form cleared');
         }};
         
-        async function loadContacts(resetPagination = true) {{
-            console.log('loadContacts called, resetPagination:', resetPagination);
+        async function loadContacts() {{
+            console.log('loadContacts called');
             const button = event?.target || document.querySelector('button[onclick="loadContacts()"]');
-            const originalText = button?.textContent || '🔄 Load Contacts';
-            
-            if (resetPagination) {{
-                // Reset pagination to first page
-                paginationState = {{
-                    currentPage: 1,
-                    pageSize: 25,  // Fixed page size (page size dropdown removed)
-                    paginationKeys: [null],
-                    hasNextPage: false,
-                    displayedContacts: []
-                }};
-            }}
+            const originalText = button?.textContent || 'Load Contacts';
             
             try {{
                 if (button) {{
-                    button.textContent = '⏳ Loading...';
+                    button.textContent = 'Loading...';
                     button.disabled = true;
                 }}
                 
-                // Show skeleton loading state
-                const tbody = document.querySelector('#contactsTable tbody');
-                if (tbody) {{
-                    tbody.innerHTML = '';
-                    for (let i = 0; i < paginationState.pageSize; i++) {{
-                        tbody.innerHTML += '<tr><td colspan="20" class="skeleton skeleton-row"></td></tr>';
-                    }}
-                }}
-                
-                // Get the pagination key for the current page
-                const paginationKey = paginationState.paginationKeys[paginationState.currentPage - 1];
-                
-                // Build URL with pagination parameters
-                let url = `${{API_URL}}/contacts?limit=${{paginationState.pageSize}}`;
-                if (paginationKey) {{
-                    url += `&lastKey=${{encodeURIComponent(JSON.stringify(paginationKey))}}`;
-                }}
-                
-                console.log('Fetching contacts from:', url);
-                const response = await fetch(url);
+                console.log('Fetching contacts from:', `${{API_URL}}/contacts`);
+                const response = await fetch(`${{API_URL}}/contacts`);
                 console.log('Contacts response status:', response.status);
                 
                 if (!response.ok) {{
@@ -1872,22 +1048,14 @@ def serve_web_ui(event):
                 const result = await response.json();
                 console.log('Contacts result:', result);
                 
-                paginationState.displayedContacts = result.contacts || [];
-                paginationState.hasNextPage = result.lastEvaluatedKey ? true : false;
+                allContacts = result.contacts || [];
+                console.log('Loaded contacts count:', allContacts.length);
+                console.log('First contact:', allContacts[0]);
                 
-                // Store the lastEvaluatedKey for the next page
-                if (result.lastEvaluatedKey && paginationState.paginationKeys.length === paginationState.currentPage) {{
-                    paginationState.paginationKeys.push(result.lastEvaluatedKey);
-                }}
-                
-                console.log('Loaded contacts count:', paginationState.displayedContacts.length);
-                console.log('Has next page:', paginationState.hasNextPage);
-                
-                displayContacts(paginationState.displayedContacts);
-                updatePaginationControls();
+                applyContactFilter();
                 
                 if (button) {{
-                    button.textContent = '✅ Loaded';
+                    button.textContent = 'Loaded';
                     setTimeout(() => {{
                         button.textContent = originalText;
                     }}, 1500);
@@ -1896,7 +1064,7 @@ def serve_web_ui(event):
             }} catch (error) {{
                 console.error('Error loading contacts:', error);
                 const tbody = document.getElementById('contactsBody');
-                tbody.innerHTML = '<tr><td colspan="3" style="text-align: center; color: var(--danger-color); padding: 40px;">Error loading contacts: ' + error.message + '</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: var(--danger-color); padding: 40px;">Error loading contacts: ' + error.message + '</td></tr>';
                 
                 if (button) {{
                     button.textContent = 'Error';
@@ -1910,39 +1078,6 @@ def serve_web_ui(event):
                 }}
             }}
         }}
-        
-        function updatePaginationControls() {{
-            // Update page info
-            document.getElementById('pageInfo').textContent = `Page ${{paginationState.currentPage}}`;
-            
-            // Update prev button
-            const prevBtn = document.getElementById('prevPageBtn');
-            prevBtn.disabled = paginationState.currentPage === 1;
-            prevBtn.style.background = paginationState.currentPage === 1 ? '#9ca3af' : '#6b7280';
-            prevBtn.style.cursor = paginationState.currentPage === 1 ? 'not-allowed' : 'pointer';
-            
-            // Update next button
-            const nextBtn = document.getElementById('nextPageBtn');
-            nextBtn.disabled = !paginationState.hasNextPage;
-            nextBtn.style.background = !paginationState.hasNextPage ? '#9ca3af' : '#3b82f6';
-            nextBtn.style.cursor = !paginationState.hasNextPage ? 'not-allowed' : 'pointer';
-        }}
-        
-        async function nextPage() {{
-            if (!paginationState.hasNextPage) return;
-            
-            paginationState.currentPage++;
-            await loadContacts(false);
-        }}
-        
-        async function previousPage() {{
-            if (paginationState.currentPage === 1) return;
-            
-            paginationState.currentPage--;
-            await loadContacts(false);
-        }}
-        
-        // changePageSize function removed - page size dropdown removed from UI (fixed at 25 contacts per page)
         
         async function loadAllContacts() {{
             await loadContacts();
@@ -1974,92 +1109,170 @@ def serve_web_ui(event):
             }}
         }}
         
-        async function loadContactsWithFilter() {{
-            // Legacy function - now just loads all contacts and applies filter
-            await loadContacts();
-            await applyContactFilter();
-        }}
-        
-        async function applyContactFilter() {{
-            console.log('Applying contact filter from DynamoDB...', selectedFilterValues);
+        async function loadFilterValues() {{
+            const filterType = document.getElementById('filterType').value;
+            const filterValueContainer = document.getElementById('filterValueContainer');
+            const filterValueCheckboxes = document.getElementById('filterValueCheckboxes');
+            const filterTypeDropdown = document.getElementById('filterType');
             
-            // Clear the contacts table
-            allContacts = [];
-            displayContacts([]);
+            // Always keep filter type dropdown enabled
+            filterTypeDropdown.disabled = false;
             
-            // Show loading message
-            const tbody = document.querySelector('#contactsTable tbody');
-            tbody.innerHTML = '<tr><td colspan="20" style="text-align: center; padding: 40px; color: #6b7280; font-size: 14px;">⏳ Querying DynamoDB with filters...</td></tr>';
+            if (!filterType) {{
+                // No filter type selected - show all contacts
+                filterValueContainer.style.display = 'none';
+                // Clear search if switching to "All Contacts"
+                document.getElementById('nameSearch').value = '';
+                document.getElementById('searchResults').textContent = '';
+                applyContactFilter();
+                return;
+            }}
             
-            // Check if any filters are selected
-            const hasFilters = Object.keys(selectedFilterValues).length > 0;
-            
-            if (hasFilters) {{
-                try {{
-                    // Build query parameters for backend
-                    const filters = Object.entries(selectedFilterValues)
-                        .filter(([key, values]) => values && values.length > 0)
-                        .map(([field, values]) => ({{
-                            field: field,
-                            values: values
-                        }}));
-                    
-                    console.log('Querying DynamoDB with filters:', filters);
-                    
-                    // Call backend API with filters
-                    const response = await fetch(`${{API_URL}}/contacts/filter`, {{
-                        method: 'POST',
-                        headers: {{
-                            'Content-Type': 'application/json'
-                        }},
-                        body: JSON.stringify({{ filters: filters }})
-                    }});
-                    
-                    if (!response.ok) {{
-                        throw new Error(`HTTP ${{response.status}}: ${{response.statusText}}`);
-                    }}
-                    
-                    const result = await response.json();
-                    const filteredContacts = result.contacts || [];
-                    
-                    console.log(`Received ${{filteredContacts.length}} contacts from DynamoDB query`);
-                    
-                    // Update allContacts with filtered results
-                    allContacts = filteredContacts;
-                    
-                    // Display the filtered results
-                    displayContacts(filteredContacts);
-                    
-                    // Update status message
-                    const filterCount = Object.values(selectedFilterValues).reduce((sum, vals) => sum + vals.length, 0);
-                    const statusMsg = document.createElement('small');
-                    statusMsg.style.cssText = 'color: #059669; font-weight: 600;';
-                    statusMsg.textContent = `Showing ${{filteredContacts.length}} contact(s) from DynamoDB (${{filterCount}} filter(s) applied)`;
-                    
-                    const tagsContainer = document.getElementById('selectedValuesTags');
-                    const existingStatus = tagsContainer.querySelector('.filter-status');
-                    if (existingStatus) existingStatus.remove();
-                    
-                    statusMsg.className = 'filter-status';
-                    tagsContainer.appendChild(statusMsg);
-                    
-                }} catch (error) {{
-                    console.error('Error querying DynamoDB with filters:', error);
-                    tbody.innerHTML = '<tr><td colspan="20" style="text-align: center; padding: 40px; color: #ef4444; font-size: 14px;">❌ Error loading filtered contacts: ' + error.message + '</td></tr>';
-                }}
-            }} else {{
-                // No filters selected - load all contacts
-                console.log('No filters selected - loading all contacts from DynamoDB');
+            // Auto-load contacts if not already loaded
+            if (allContacts.length === 0) {{
+                console.log('Contacts not loaded yet, loading now...');
                 await loadContacts();
             }}
             
-            // Reset pagination
-            if (typeof paginationState !== 'undefined') {{
-                paginationState.currentPage = 1;
-                paginationState.lastKeys = [null];
+            // Get distinct values for selected field from loaded contacts
+            const distinctValues = [...new Set(
+                allContacts
+                    .map(c => c[filterType])
+                    .filter(v => v && v.trim() !== '')
+            )].sort();
+            
+            console.log(`Found ${{distinctValues.length}} distinct values for ${{filterType}}`);
+            
+            // Populate filter value checkboxes
+            filterValueCheckboxes.innerHTML = '';
+            distinctValues.forEach((value, index) => {{
+                const checkboxDiv = document.createElement('div');
+                checkboxDiv.style.marginBottom = '5px';
+                checkboxDiv.innerHTML = `
+                    <label style="display: flex; align-items: center; padding: 8px; cursor: pointer; border-radius: 4px; transition: background 0.2s;" onmouseover="this.style.background='#e0e7ff'" onmouseout="this.style.background='transparent'">
+                        <input type="checkbox" class="filterCheckbox" value="${{value}}" onchange="onFilterCheckboxChange()" style="margin-right: 10px; width: auto;">
+                        <span>${{value}}</span>
+                    </label>
+                `;
+                filterValueCheckboxes.appendChild(checkboxDiv);
+            }});
+            
+            filterValueContainer.style.display = 'block';
+            updateFilterCount();
+        }}
+        
+        async function onFilterCheckboxChange() {{
+            const checkedBoxes = document.querySelectorAll('.filterCheckbox:checked');
+            
+            console.log(`Filter checkbox changed. ${{checkedBoxes.length}} selected`);
+            
+            // If any checkboxes are selected, load contacts from DynamoDB
+            if (checkedBoxes.length > 0) {{
+                console.log('Loading contacts from DynamoDB based on filter selection...');
+                await loadContactsWithFilter();
+            }} else {{
+                // No checkboxes selected - just update count
+                updateFilterCount();
+                displayContacts(allContacts);
             }}
         }}
         
+        async function loadContactsWithFilter() {{
+            const filterType = document.getElementById('filterType').value;
+            const checkedBoxes = document.querySelectorAll('.filterCheckbox:checked');
+            
+            if (!filterType || checkedBoxes.length === 0) {{
+                // No filter active - load all contacts
+                await loadContacts();
+                return;
+            }}
+            
+            const selectedValues = Array.from(checkedBoxes).map(cb => cb.value);
+            
+            try {{
+                console.log(`Querying DynamoDB for ${{filterType}} IN [${{selectedValues.join(', ')}}]...`);
+                
+                // Load all contacts from DynamoDB
+                const response = await fetch(`${{API_URL}}/contacts`);
+                
+                if (response.ok) {{
+                    const result = await response.json();
+                    allContacts = result.contacts || [];
+                    
+                    // Filter based on selection
+                    const filteredContacts = allContacts.filter(contact => 
+                        contact[filterType] && selectedValues.includes(contact[filterType])
+                    );
+                    
+                    console.log(`Loaded ${{allContacts.length}} total contacts, ${{filteredContacts.length}} match filter`);
+                    
+                    updateFilterCount();
+                    displayContacts(filteredContacts);
+                }} else {{
+                    console.error('Failed to load contacts:', response.status);
+                }}
+            }} catch (error) {{
+                console.error('Error loading contacts with filter:', error);
+            }}
+        }}
+        
+        async function applyContactFilter() {{
+            const searchTerm = document.getElementById('nameSearch').value.trim();
+            
+            // If there's a search term, always use DynamoDB search instead
+            if (searchTerm && searchTerm.length >= 2) {{
+                console.log('Search term detected - using DynamoDB search instead of local filter');
+                await searchContactsByName();
+                return;
+            }}
+            
+            // Auto-load contacts if not already loaded
+            if (allContacts.length === 0) {{
+                console.log('Auto-loading contacts for filter...');
+                await loadContacts();
+                return; // loadContacts will call applyContactFilter when done
+            }}
+            
+            const filterType = document.getElementById('filterType').value;
+            const checkedBoxes = document.querySelectorAll('.filterCheckbox:checked');
+            
+            let filteredContacts = allContacts;
+            
+            // Apply category filter from checked checkboxes
+            if (filterType && checkedBoxes.length > 0) {{
+                const selectedValues = Array.from(checkedBoxes).map(cb => cb.value);
+                
+                filteredContacts = filteredContacts.filter(contact => 
+                    contact[filterType] && selectedValues.includes(contact[filterType])
+                );
+                
+                console.log(`Filtered by ${{filterType}} IN [${{selectedValues.join(', ')}}]: ${{filteredContacts.length}} contacts`);
+            }} else if (!filterType) {{
+                // Show all contacts when no filter type selected
+                console.log(`Showing all contacts: ${{filteredContacts.length}}`);
+            }} else {{
+                // Filter type selected but no checkboxes checked - show all
+                console.log('Filter type selected but no values checked - showing all');
+            }}
+            
+            document.getElementById('searchResults').textContent = '';
+            updateFilterCount();
+            displayContacts(filteredContacts);
+        }}
+        
+        async function selectAllFilterValues() {{
+            const checkboxes = document.querySelectorAll('.filterCheckbox');
+            checkboxes.forEach(cb => cb.checked = true);
+            await onFilterCheckboxChange();
+        }}
+        
+        async function clearAllFilterValues() {{
+            const checkboxes = document.querySelectorAll('.filterCheckbox');
+            checkboxes.forEach(cb => cb.checked = false);
+            updateFilterCount();
+            // When cleared, show all contacts or apply just category filter
+            await applyContactFilter();
+        }}
         
         // Debounce search to avoid too many API calls while typing
         let searchTimeout;
@@ -2088,8 +1301,14 @@ def serve_web_ui(event):
         }}
         
         function updateFilterCount() {{
-            // Legacy function - filter count is now displayed in the tags area
-            // This is kept for compatibility with old code
+            const checkedBoxes = document.querySelectorAll('.filterCheckbox:checked');
+            const filterCount = document.getElementById('filterCount');
+            
+            if (checkedBoxes.length > 0) {{
+                filterCount.textContent = `${{checkedBoxes.length}} filter(s) selected`;
+            }} else {{
+                filterCount.textContent = 'No filters selected - showing all';
+            }}
         }}
         
         async function searchContactsByName() {{
@@ -2125,15 +1344,11 @@ def serve_web_ui(event):
                     body: JSON.stringify({{ search_term: searchTerm }})
                 }});
                 
-                console.log('Search response status:', response.status);
-                console.log('Search response ok:', response.ok);
-                
                 if (response.ok) {{
                     const result = await response.json();
-                    console.log('Search result:', result);
                     const searchedContacts = result.contacts || [];
                     
-                    console.log(`✅ Found ${{searchedContacts.length}} contacts matching "${{searchTerm}}"`);
+                    console.log(`Found ${{searchedContacts.length}} contacts matching "${{searchTerm}}"`);
                     
                     // Apply category filter on search results if active
                     const filterType = document.getElementById('filterType').value;
@@ -2143,10 +1358,9 @@ def serve_web_ui(event):
                     
                     if (filterType && checkedBoxes.length > 0) {{
                         const selectedValues = Array.from(checkedBoxes).map(cb => cb.value);
-                        finalContacts = searchedContacts.filter(contact => {{
-                            const contactValue = getFieldValue(contact, filterType);
-                            return contactValue && selectedValues.includes(contactValue);
-                        }});
+                        finalContacts = searchedContacts.filter(contact => 
+                            contact[filterType] && selectedValues.includes(contact[filterType])
+                        );
                         searchResults.textContent = `Found ${{finalContacts.length}} contact(s) matching "${{searchTerm}}" with selected filters`;
                     }} else {{
                         searchResults.textContent = `Found ${{finalContacts.length}} contact(s) matching "${{searchTerm}}"`;
@@ -2158,9 +1372,8 @@ def serve_web_ui(event):
                     // Hide searching indicator with fade-out
                     hideSearchingIndicator();
                 }} else {{
-                    const errorText = await response.text();
-                    console.error('❌ Search failed:', response.status, errorText);
-                    searchResults.textContent = `Search failed (HTTP ${{response.status}}). Check console for details.`;
+                    console.error('Search failed:', response.status);
+                    searchResults.textContent = 'Search failed. Please try again.';
                     searchResults.style.color = '#ef4444';  // Red for error
                     hideSearchingIndicator();
                 }}
@@ -2189,451 +1402,23 @@ def serve_web_ui(event):
             tbody.innerHTML = '';
             
             if (contacts && contacts.length > 0) {{
-                contacts.forEach((contact, index) => {{
+                contacts.forEach(contact => {{
                 const row = tbody.insertRow();
-                row.setAttribute('data-email', contact.email);
-                row.setAttribute('data-contact-id', contact.contact_id || contact.email);
+                    const fullName = `${{contact.first_name || ''}} ${{contact.last_name || ''}}`.trim();
                 row.innerHTML = `
-                    <td style="background: #dbeafe; font-weight: 600; color: #1e40af; border-right: 2px solid #60a5fa;">${{contact.email || ''}}</td>
-                    <td contenteditable="true" data-field="first_name" class="editable-cell">${{contact.first_name || ''}}</td>
-                    <td contenteditable="true" data-field="last_name" class="editable-cell">${{contact.last_name || ''}}</td>
-                    <td contenteditable="true" data-field="title" class="editable-cell">${{contact.title || ''}}</td>
-                    <td contenteditable="true" data-field="entity_type" class="editable-cell">${{contact.entity_type || ''}}</td>
-                    <td contenteditable="true" data-field="state" class="editable-cell">${{contact.state || ''}}</td>
-                    <td contenteditable="true" data-field="agency_name" class="editable-cell">${{contact.agency_name || ''}}</td>
-                    <td contenteditable="true" data-field="sector" class="editable-cell">${{contact.sector || ''}}</td>
-                    <td contenteditable="true" data-field="subsection" class="editable-cell">${{contact.subsection || ''}}</td>
-                    <td contenteditable="true" data-field="phone" class="editable-cell">${{contact.phone || ''}}</td>
-                    <td contenteditable="true" data-field="ms_isac_member" class="editable-cell yes-no-cell">${{contact.ms_isac_member || ''}}</td>
-                    <td contenteditable="true" data-field="soc_call" class="editable-cell yes-no-cell">${{contact.soc_call || ''}}</td>
-                    <td contenteditable="true" data-field="fusion_center" class="editable-cell yes-no-cell">${{contact.fusion_center || ''}}</td>
-                    <td contenteditable="true" data-field="k12" class="editable-cell yes-no-cell">${{contact.k12 || ''}}</td>
-                    <td contenteditable="true" data-field="water_wastewater" class="editable-cell yes-no-cell">${{contact.water_wastewater || ''}}</td>
-                    <td contenteditable="true" data-field="weekly_rollup" class="editable-cell yes-no-cell">${{contact.weekly_rollup || ''}}</td>
-                    <td contenteditable="true" data-field="alternate_email" class="editable-cell">${{contact.alternate_email || ''}}</td>
-                    <td contenteditable="true" data-field="region" class="editable-cell">${{contact.region || ''}}</td>
-                    <td style="position: sticky; right: 0; background: #f8fafc; border-left: 2px solid #cbd5e1; box-shadow: -2px 0 4px rgba(0,0,0,0.05);">
-                        <button onclick="saveContactRow('${{contact.email}}')" class="btn-success" style="padding: 6px 12px; font-size: 12px; font-weight: 600; margin-right: 5px;">💾 Save</button>
-                        <button onclick="deleteContactRow('${{contact.contact_id || contact.email}}')" class="btn-danger" style="padding: 6px 12px; font-size: 12px; font-weight: 600; background: #ef4444;">🗑️ Delete</button>
-                    </td>
+                    <td>${{contact.email}}</td>
+                        <td>${{fullName}}</td>
+                        <td>${{contact.group || ''}}</td>
+                        <td>${{contact.agency_name || ''}}</td>
+                        <td>
+                            <button class="btn-danger" onclick="deleteContact('${{contact.email}}')">🗑️ Delete</button>
+                            <button class="btn-info" onclick="viewContact('${{contact.email}}')">👁️ View</button>
+                            <button class="btn-warning" onclick="editContact('${{contact.email}}')">✏️ Edit</button>
+                        </td>
                 `;
-                
-                // Add blur event to cells to detect changes
-                const editableCells = row.querySelectorAll('.editable-cell');
-                editableCells.forEach(cell => {{
-                    cell.addEventListener('focus', function() {{
-                        this.setAttribute('data-original', this.textContent);
-                        this.style.background = '#fff3cd';
-                    }});
-                    cell.addEventListener('blur', function() {{
-                        if (this.textContent !== this.getAttribute('data-original')) {{
-                            this.style.background = '#fef3c7'; // Changed indicator
-                            row.style.background = '#fffbeb';
-                        }} else {{
-                            this.style.background = '';
-                        }}
-                    }});
-                }});
             }});
             }} else {{
-                tbody.innerHTML = '<tr><td colspan="19" style="text-align: center; color: var(--gray-500); padding: 40px;">No contacts found. Add some contacts to get started!</td></tr>';
-            }}
-            
-            // Update record count
-            const recordCount = document.getElementById('recordCount');
-            const startRecord = ((paginationState.currentPage - 1) * paginationState.pageSize) + 1;
-            const endRecord = startRecord + contacts.length - 1;
-            recordCount.textContent = `Showing records ${{startRecord}} - ${{endRecord}}`;
-        }}
-        
-        function addEmptyRow() {{
-            const tbody = document.getElementById('contactsBody');
-            
-            // Check if there's already a new row being added
-            if (document.querySelector('tr.new-contact-row')) {{
-                alert('Please complete or cancel the current new contact before adding another');
-                return;
-            }}
-            
-            // Insert new row at the top
-            const row = tbody.insertRow(0);
-            row.classList.add('new-contact-row');
-            row.style.background = '#f0fdf4'; // Light green background
-            
-            row.innerHTML = `
-                <td contenteditable="true" data-field="email" class="editable-cell" placeholder="email@example.com" style="background: #dcfce7; font-weight: 600; border-right: 2px solid #86efac;">
-                    <span style="color: #9ca3af; font-style: italic;">email@example.com</span>
-                </td>
-                <td contenteditable="true" data-field="first_name" class="editable-cell" placeholder="First Name"></td>
-                <td contenteditable="true" data-field="last_name" class="editable-cell" placeholder="Last Name"></td>
-                <td contenteditable="true" data-field="title" class="editable-cell" placeholder="Title"></td>
-                <td contenteditable="true" data-field="entity_type" class="editable-cell" placeholder="Entity Type"></td>
-                <td contenteditable="true" data-field="state" class="editable-cell" placeholder="State"></td>
-                <td contenteditable="true" data-field="agency_name" class="editable-cell" placeholder="Agency"></td>
-                <td contenteditable="true" data-field="sector" class="editable-cell" placeholder="Sector"></td>
-                <td contenteditable="true" data-field="subsection" class="editable-cell" placeholder="Subsection"></td>
-                <td contenteditable="true" data-field="phone" class="editable-cell" placeholder="Phone"></td>
-                <td contenteditable="true" data-field="ms_isac_member" class="editable-cell yes-no-cell" placeholder="Yes/No"></td>
-                <td contenteditable="true" data-field="soc_call" class="editable-cell yes-no-cell" placeholder="Yes/No"></td>
-                <td contenteditable="true" data-field="fusion_center" class="editable-cell yes-no-cell" placeholder="Yes/No"></td>
-                <td contenteditable="true" data-field="k12" class="editable-cell yes-no-cell" placeholder="Yes/No"></td>
-                <td contenteditable="true" data-field="water_wastewater" class="editable-cell yes-no-cell" placeholder="Yes/No"></td>
-                <td contenteditable="true" data-field="weekly_rollup" class="editable-cell yes-no-cell" placeholder="Yes/No"></td>
-                <td contenteditable="true" data-field="alternate_email" class="editable-cell" placeholder="Alt Email"></td>
-                <td contenteditable="true" data-field="region" class="editable-cell" placeholder="Region"></td>
-                <td style="position: sticky; right: 0; background: #f0fdf4; border-left: 2px solid #cbd5e1; box-shadow: -2px 0 4px rgba(0,0,0,0.05);">
-                    <button onclick="saveNewContact()" class="btn-success" style="padding: 6px 12px; font-size: 12px; font-weight: 600; margin-right: 5px;">💾 Save</button>
-                    <button onclick="cancelNewContact()" class="btn-danger" style="padding: 6px 12px; font-size: 12px; font-weight: 600; background: #ef4444;">❌ Cancel</button>
-                </td>
-            `;
-            
-            // Clear placeholder text on focus
-            const emailCell = row.querySelector('td[data-field="email"]');
-            emailCell.addEventListener('focus', function() {{
-                if (this.textContent.trim() === 'email@example.com' || this.querySelector('span')) {{
-                    this.textContent = '';
-                    this.style.color = '#1e40af';
-                }}
-            }});
-            
-            // Focus on email field
-            setTimeout(() => emailCell.focus(), 100);
-            
-            console.log('✅ New empty row added');
-        }}
-        
-        function cancelNewContact() {{
-            const newRow = document.querySelector('tr.new-contact-row');
-            if (newRow) {{
-                newRow.remove();
-                console.log('❌ New contact cancelled');
-            }}
-        }}
-        
-        async function saveNewContact() {{
-            try {{
-                const row = document.querySelector('tr.new-contact-row');
-                if (!row) {{
-                    alert('New contact row not found');
-                    return;
-                }}
-                
-                // Get all cells
-                const cells = row.querySelectorAll('.editable-cell');
-                
-                // Build contact object
-                const contactData = {{}};
-                let emailFound = false;
-                
-                cells.forEach(cell => {{
-                    const field = cell.getAttribute('data-field');
-                    let value = cell.textContent.trim();
-                    
-                    // Skip placeholder text
-                    if (field === 'email' && (value === 'email@example.com' || !value)) {{
-                        value = '';
-                    }}
-                    
-                    if (field === 'email' && value) {{
-                        emailFound = true;
-                    }}
-                    
-                    contactData[field] = value;
-                }});
-                
-                // Validate email
-                if (!emailFound || !contactData.email) {{
-                    alert('Email is required!');
-                    return;
-                }}
-                
-                console.log('Creating new contact:', contactData);
-                
-                // Show saving state
-                const saveBtn = row.querySelector('.btn-success');
-                const originalText = saveBtn.textContent;
-                saveBtn.textContent = '⏳ Saving...';
-                saveBtn.disabled = true;
-                
-                // Send POST request to create contact
-                const response = await fetch(`${{API_URL}}/contacts`, {{
-                    method: 'POST',
-                    headers: {{'Content-Type': 'application/json'}},
-                    body: JSON.stringify(contactData)
-                }});
-                
-                const result = await response.json();
-                
-                if (result.success) {{
-                    console.log('✅ New contact created');
-                    
-                    // Remove the new row
-                    row.remove();
-                    
-                    // Show success message
-                    alert('Contact added successfully!');
-                    
-                    // Reload contacts to show the new one
-                    await loadContacts(false);
-                }} else {{
-                    throw new Error(result.error || 'Save failed');
-                }}
-                
-            }} catch (error) {{
-                console.error('❌ Error creating contact:', error);
-                alert('Error creating contact: ' + error.message);
-                
-                const row = document.querySelector('tr.new-contact-row');
-                if (row) {{
-                    const saveBtn = row.querySelector('.btn-success');
-                    saveBtn.textContent = '💾 Save';
-                    saveBtn.disabled = false;
-                }}
-            }}
-        }}
-        
-        function showDeleteConfirmation() {{
-            return new Promise((resolve) => {{
-                // Create modal overlay
-                const overlay = document.createElement('div');
-                overlay.style.cssText = `
-                    position: fixed;
-                    top: 0;
-                    left: 0;
-                    width: 100%;
-                    height: 100%;
-                    background: rgba(0, 0, 0, 0.5);
-                    display: flex;
-                    justify-content: center;
-                    align-items: center;
-                    z-index: 10000;
-                    animation: fadeIn 0.2s ease-in-out;
-                `;
-                
-                // Create confirmation dialog
-                const dialog = document.createElement('div');
-                dialog.style.cssText = `
-                    background: white;
-                    border-radius: 12px;
-                    padding: 30px;
-                    max-width: 450px;
-                    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
-                    animation: slideIn 0.3s ease-out;
-                `;
-                
-                dialog.innerHTML = `
-                    <div style="text-align: center;">
-                        <div style="font-size: 48px; margin-bottom: 15px;">⚠️</div>
-                        <h3 style="margin: 0 0 10px 0; color: #1f2937; font-size: 18px; font-weight: 600;">
-                            JCDC Bulk Email asks
-                        </h3>
-                        <p style="margin: 0 0 25px 0; color: #6b7280; font-size: 15px; line-height: 1.5;">
-                            Are you sure you want to delete this contact?<br>
-                            <strong>This action cannot be undone.</strong>
-                        </p>
-                        <div style="display: flex; gap: 12px; justify-content: center;">
-                            <button id="cancelDelete" style="
-                                padding: 12px 28px;
-                                background: #f3f4f6;
-                                color: #374151;
-                                border: none;
-                                border-radius: 8px;
-                                font-size: 15px;
-                                font-weight: 600;
-                                cursor: pointer;
-                                transition: all 0.2s;
-                            ">Cancel</button>
-                            <button id="confirmDelete" style="
-                                padding: 12px 28px;
-                                background: #ef4444;
-                                color: white;
-                                border: none;
-                                border-radius: 8px;
-                                font-size: 15px;
-                                font-weight: 600;
-                                cursor: pointer;
-                                transition: all 0.2s;
-                            ">Delete</button>
-                        </div>
-                    </div>
-                `;
-                
-                overlay.appendChild(dialog);
-                document.body.appendChild(overlay);
-                
-                // Add hover effects
-                const cancelBtn = dialog.querySelector('#cancelDelete');
-                const confirmBtn = dialog.querySelector('#confirmDelete');
-                
-                cancelBtn.onmouseover = () => cancelBtn.style.background = '#e5e7eb';
-                cancelBtn.onmouseout = () => cancelBtn.style.background = '#f3f4f6';
-                confirmBtn.onmouseover = () => confirmBtn.style.background = '#dc2626';
-                confirmBtn.onmouseout = () => confirmBtn.style.background = '#ef4444';
-                
-                // Handle button clicks
-                cancelBtn.onclick = () => {{
-                    overlay.style.animation = 'fadeOut 0.2s ease-in-out';
-                    setTimeout(() => {{
-                        document.body.removeChild(overlay);
-                        resolve(false);
-                    }}, 200);
-                }};
-                
-                confirmBtn.onclick = () => {{
-                    overlay.style.animation = 'fadeOut 0.2s ease-in-out';
-                    setTimeout(() => {{
-                        document.body.removeChild(overlay);
-                        resolve(true);
-                    }}, 200);
-                }};
-                
-                // Add animations
-                const style = document.createElement('style');
-                style.textContent = `
-                    @keyframes fadeIn {{
-                        from {{ opacity: 0; }}
-                        to {{ opacity: 1; }}
-                    }}
-                    @keyframes fadeOut {{
-                        from {{ opacity: 1; }}
-                        to {{ opacity: 0; }}
-                    }}
-                    @keyframes slideIn {{
-                        from {{ transform: translateY(-20px); opacity: 0; }}
-                        to {{ transform: translateY(0); opacity: 1; }}
-                    }}
-                `;
-                document.head.appendChild(style);
-            }});
-        }}
-        
-        async function deleteContactRow(contactId) {{
-            try {{
-                // Custom confirmation using modal
-                const confirmed = await showDeleteConfirmation();
-                if (!confirmed) {{
-                    return;
-                }}
-                
-                console.log('Deleting contact:', contactId);
-                
-                const response = await fetch(`${{API_URL}}/contacts?contact_id=${{encodeURIComponent(contactId)}}`, {{
-                    method: 'DELETE',
-                    headers: {{
-                        'Content-Type': 'application/json'
-                    }}
-                }});
-                
-                console.log('Delete response status:', response.status);
-                
-                if (response.ok) {{
-                    // Show success toast that auto-fades (no OK button needed)
-                    Toast.success('✅ Contact deleted successfully', 3000);
-                    
-                    // Remove the row from the table
-                    const row = document.querySelector(`tr[data-contact-id="${{contactId}}"]`);
-                    if (row) {{
-                        row.remove();
-                    }}
-                    
-                    // Update the record count
-                    const recordCount = document.getElementById('recordCount');
-                    if (recordCount) {{
-                        const currentCount = parseInt(recordCount.textContent.match(/\\d+/)[0] || 0);
-                        recordCount.textContent = `${{currentCount - 1}} records`;
-                    }}
-                }} else {{
-                    const errorData = await response.json();
-                    Toast.error(`Failed to delete contact: ${{errorData.error || 'Unknown error'}}`);
-                }}
-            }} catch (error) {{
-                console.error('Error deleting contact:', error);
-                Toast.error('Failed to delete contact. Please try again.');
-            }}
-        }}
-        
-        async function saveContactRow(email) {{
-            try {{
-                // Find the row with this email
-                const row = document.querySelector(`tr[data-email="${{email}}"]`);
-                if (!row) {{
-                    Toast.error('Row not found');
-                    return;
-                }}
-                
-                // Get contact_id from row attribute
-                const contactId = row.getAttribute('data-contact-id');
-                
-                // Get all editable cells in this row
-                const cells = row.querySelectorAll('.editable-cell');
-                
-                // Build updated contact object
-                const contactData = {{
-                    email: email,
-                    contact_id: contactId  // Use actual contact_id from DynamoDB
-                }};
-                
-                cells.forEach(cell => {{
-                    const field = cell.getAttribute('data-field');
-                    const value = cell.textContent.trim();
-                    contactData[field] = value;
-                }});
-                
-                console.log('Saving contact:', contactData);
-                
-                // Show saving state
-                const button = row.querySelector('button');
-                const originalText = button.textContent;
-                button.textContent = '⏳ Saving...';
-                button.disabled = true;
-                
-                // Send PUT request to update contact
-                const response = await fetch(`${{API_URL}}/contacts`, {{
-                    method: 'PUT',
-                    headers: {{'Content-Type': 'application/json'}},
-                    body: JSON.stringify(contactData)
-                }});
-                
-                const result = await response.json();
-                
-                if (result.success) {{
-                    button.textContent = '✅ Saved';
-                    row.style.background = '#d1fae5'; // Success green
-                    Toast.success('Contact updated successfully!', 3000);
-                    
-                    // Reset cell backgrounds
-                    cells.forEach(cell => {{
-                        cell.style.background = '';
-                    }});
-                    
-                    setTimeout(() => {{
-                        button.textContent = originalText;
-                        row.style.background = '';
-                    }}, 2000);
-                    
-                    console.log('Contact saved successfully');
-                }} else {{
-                    throw new Error(result.error || 'Save failed');
-                }}
-                
-            }} catch (error) {{
-                console.error('Error saving contact:', error);
-                alert('Error saving contact: ' + error.message);
-                
-                const row = document.querySelector(`tr[data-email="${{email}}"]`);
-                if (row) {{
-                    const button = row.querySelector('button');
-                    button.textContent = '❌ Error';
-                    setTimeout(() => {{
-                        button.textContent = '💾 Save';
-                    }}, 2000);
-                }}
-            }} finally {{
-                const row = document.querySelector(`tr[data-email="${{email}}"]`);
-                if (row) {{
-                    const button = row.querySelector('button');
-                    button.disabled = false;
-                }}
+                tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: var(--gray-500); padding: 40px;">No contacts found. Add some contacts to get started!</td></tr>';
             }}
         }}
         
@@ -2671,6 +1456,7 @@ def serve_web_ui(event):
             document.getElementById('editWeeklyRollup').value = contact.weekly_rollup || '';
             document.getElementById('editAlternateEmail').value = contact.alternate_email || '';
             document.getElementById('editRegion').value = contact.region || '';
+            document.getElementById('editGroup').value = contact.group || '';
             
             // Show edit form
             document.getElementById('editContactForm').classList.remove('hidden');
@@ -2700,7 +1486,8 @@ def serve_web_ui(event):
                 water_wastewater: document.getElementById('editWaterWastewater').value,
                 weekly_rollup: document.getElementById('editWeeklyRollup').value,
                 alternate_email: document.getElementById('editAlternateEmail').value,
-                region: document.getElementById('editRegion').value
+                region: document.getElementById('editRegion').value,
+                group: document.getElementById('editGroup').value
             }};
             
             try {{
@@ -2714,7 +1501,7 @@ def serve_web_ui(event):
                 if (result.success) {{
                     hideEditContact();
                     loadContacts(); // Refresh the contacts list
-                    // loadGroupsFromDB(); // Disabled - groups feature removed
+                    loadGroupsFromDB(); // Refresh groups in case group changed
                     alert('Contact updated successfully!');
                 }} else {{
                     alert('Error updating contact: ' + (result.error || 'Unknown error'));
@@ -2744,7 +1531,8 @@ def serve_web_ui(event):
                 water_wastewater: document.getElementById('newWaterWastewater').value,
                 weekly_rollup: document.getElementById('newWeeklyRollup').value,
                 alternate_email: document.getElementById('newAlternateEmail').value,
-                region: document.getElementById('newRegion').value
+                region: document.getElementById('newRegion').value,
+                group: document.getElementById('newGroup').value
             }};
             
             const response = await fetch(`${{API_URL}}/contacts`, {{
@@ -2757,7 +1545,7 @@ def serve_web_ui(event):
             if (result.success) {{
                 hideAddContact();
                 loadContacts();
-                // loadGroupsFromDB(); // Disabled - groups feature removed
+                loadGroupsFromDB(); // Refresh groups in case new group added
                 // Clear form
                 document.getElementById('newEmail').value = '';
                 document.getElementById('newFirstName').value = '';
@@ -2777,6 +1565,7 @@ def serve_web_ui(event):
                 document.getElementById('newWeeklyRollup').value = '';
                 document.getElementById('newAlternateEmail').value = '';
                 document.getElementById('newRegion').value = '';
+                document.getElementById('newGroup').value = '';
             }}
         }}
         
@@ -3049,7 +1838,7 @@ def serve_web_ui(event):
                 alert(message);
                 
             loadContacts();
-                // loadGroupsFromDB(); // Disabled - groups feature removed
+                loadGroupsFromDB(); // Refresh groups from uploaded contacts
                 
             }} catch (error) {{
                 console.error('CSV upload error:', error);
@@ -3122,367 +1911,102 @@ def serve_web_ui(event):
             console.log(`Downloaded ${{window.failedContacts.length}} failed contacts to CSV file`);
         }}
         
-        // Campaign Filter State
-        let currentCampaignFilterType = null;
-        let selectedCampaignFilterValues = {{}};  // {{filterType: [values]}}
-        let campaignFilteredContacts = null;  // null = no filter applied, [] = filter applied but no results, [...] = filtered contacts
-        
-        async function selectCampaignFilterType(filterType) {{
-            console.log('Campaign filter type selected:', filterType, 'Current type:', currentCampaignFilterType);
+        async function loadCampaignFilterValues() {{
+            const filterType = document.getElementById('campaignFilterType').value;
+            const filterValueContainer = document.getElementById('campaignFilterValueContainer');
+            const filterValueCheckboxes = document.getElementById('campaignFilterCheckboxes');
             
-            const countDisplay = document.getElementById('campaignContactCount');
-            const countNumber = document.getElementById('campaignContactCountNumber');
-            
-            // Allow toggling off by clicking the same button (including "All")
-            if (currentCampaignFilterType === filterType) {{
-                console.log('Toggling off current campaign filter type');
-                currentCampaignFilterType = null;
-                document.getElementById('campaignAvailableValuesArea').style.display = 'none';
-                countDisplay.style.display = 'none';
-                updateCampaignButtonStyles();
+            if (!filterType) {{
+                // No filter type selected - will use all contacts
+                filterValueContainer.style.display = 'none';
+                updateCampaignContactCount();
                 return;
             }}
             
-            currentCampaignFilterType = filterType;
-            console.log('New current campaign filter type:', currentCampaignFilterType);
-            updateCampaignButtonStyles();
-            
-            // If "All" is selected, get count from DynamoDB and display
-            if (filterType === '') {{
-                document.getElementById('campaignAvailableValuesArea').style.display = 'none';
-                
-                // Fetch all contacts count from DynamoDB
-                try {{
-                    console.log('Fetching all contacts count from DynamoDB...');
-                    const response = await fetch(`${{API_URL}}/contacts?limit=1`);
-                    if (!response.ok) {{
-                        throw new Error(`HTTP ${{response.status}}: ${{response.statusText}}`);
-                    }}
-                    const data = await response.json();
-                    
-                    // Use the scan to get actual count
-                    const countResponse = await fetch(`${{API_URL}}/contacts?limit=10000`);
-                    if (!countResponse.ok) {{
-                        throw new Error(`HTTP ${{countResponse.status}}: ${{countResponse.statusText}}`);
-                    }}
-                    const countData = await countResponse.json();
-                    const totalContacts = (countData.contacts || []).length;
-                    
-                    // Display the count
-                    countNumber.textContent = totalContacts;
-                    countDisplay.style.display = 'block';
-                    console.log(`Total contacts in DynamoDB: ${{totalContacts}}`);
-                }} catch (error) {{
-                    console.error('Error fetching contacts count:', error);
-                    countDisplay.style.display = 'none';
-                }}
+            // Handle Test Group as a special preset filter
+            if (filterType === 'test_group') {{
+                filterValueContainer.style.display = 'none';
+                updateCampaignContactCount();
                 return;
             }}
             
-            // Show loading state
-            const availableValuesList = document.getElementById('campaignAvailableValuesList');
-            const availableCount = document.getElementById('campaignAvailableCount');
-            availableValuesList.innerHTML = '<small style="color: #6b7280;">Loading values...</small>';
-            document.getElementById('campaignAvailableValuesArea').style.display = 'block';
-            
-            try {{
-                // Call the backend /contacts/distinct endpoint
-                console.log(`Fetching distinct values for campaign: ${{filterType}}`);
-                const response = await fetch(`${{API_URL}}/contacts/distinct?field=${{encodeURIComponent(filterType)}}`);
-                
-                if (!response.ok) {{
-                    throw new Error(`HTTP ${{response.status}}: ${{response.statusText}}`);
-                }}
-                
-                const data = await response.json();
-                console.log('Distinct values received for campaign:', data);
-                
-                const distinctValues = data.values || [];
-                
-                // Populate available values as clickable buttons
-                availableValuesList.innerHTML = '';
-                if (distinctValues.length === 0) {{
-                    availableValuesList.innerHTML = '<small style="color: #ef4444;">No values found for this field</small>';
-                    availableCount.textContent = '0 values available';
-                }} else {{
-                    distinctValues.forEach(value => {{
-                        const btn = document.createElement('button');
-                        btn.textContent = value;
-                        btn.onclick = () => addCampaignFilterValue(filterType, value);
-                        btn.style.cssText = 'padding: 6px 12px; background: #3b82f6; color: white; border: none; border-radius: 6px; font-size: 12px; cursor: pointer; transition: all 0.2s;';
-                        btn.onmouseover = () => {{ btn.style.background = '#2563eb'; }};
-                        btn.onmouseout = () => {{ btn.style.background = '#3b82f6'; }};
-                        availableValuesList.appendChild(btn);
-                    }});
-                    availableCount.textContent = `${{distinctValues.length}} value(s) available`;
-                }}
-            }} catch (error) {{
-                console.error('Error loading campaign distinct values:', error);
-                availableValuesList.innerHTML = `<small style="color: #ef4444;">Error: ${{error.message}}</small>`;
-                availableCount.textContent = '';
+            // Auto-load contacts if not already loaded
+            if (allContacts.length === 0) {{
+                console.log('Contacts not loaded yet, loading now...');
+                await loadContacts();
             }}
+            
+            // Get distinct values for selected field from loaded contacts
+            const distinctValues = [...new Set(
+                allContacts
+                    .map(c => c[filterType])
+                    .filter(v => v && v.trim() !== '')
+            )].sort();
+            
+            console.log(`Campaign filter: Found ${{distinctValues.length}} distinct values for ${{filterType}}`);
+            
+            // Populate filter value checkboxes
+            filterValueCheckboxes.innerHTML = '';
+            distinctValues.forEach((value, index) => {{
+                const checkboxDiv = document.createElement('div');
+                checkboxDiv.style.marginBottom = '5px';
+                checkboxDiv.innerHTML = `
+                    <label style="display: flex; align-items: center; padding: 8px; cursor: pointer; border-radius: 4px; transition: background 0.2s;" onmouseover="this.style.background='#e0e7ff'" onmouseout="this.style.background='transparent'">
+                        <input type="checkbox" class="campaignFilterCheckbox" value="${{value}}" onchange="updateCampaignContactCount()" style="margin-right: 10px; width: auto;">
+                        <span>${{value}}</span>
+                    </label>
+                `;
+                filterValueCheckboxes.appendChild(checkboxDiv);
+            }});
+            
+            filterValueContainer.style.display = 'block';
+            updateCampaignContactCount();
         }}
         
-        function addCampaignFilterValue(filterType, value) {{
-            if (!selectedCampaignFilterValues[filterType]) {{
-                selectedCampaignFilterValues[filterType] = [];
-            }}
+        function updateCampaignContactCount() {{
+            const filterType = document.getElementById('campaignFilterType').value;
+            const checkedBoxes = document.querySelectorAll('.campaignFilterCheckbox:checked');
+            const filterCount = document.getElementById('campaignFilterCount');
             
-            if (!selectedCampaignFilterValues[filterType].includes(value)) {{
-                selectedCampaignFilterValues[filterType].push(value);
-                console.log('Added campaign filter value:', filterType, value);
-                updateCampaignSelectedValuesTags();
-            }}
-        }}
-        
-        function removeCampaignFilterValue(filterType, value) {{
-            if (selectedCampaignFilterValues[filterType]) {{
-                selectedCampaignFilterValues[filterType] = selectedCampaignFilterValues[filterType].filter(v => v !== value);
-                if (selectedCampaignFilterValues[filterType].length === 0) {{
-                    delete selectedCampaignFilterValues[filterType];
-                }}
-                console.log('Removed campaign filter value:', filterType, value);
-                updateCampaignSelectedValuesTags();
-            }}
-        }}
-        
-        function updateCampaignSelectedValuesTags() {{
-            const tagsContainer = document.getElementById('campaignSelectedValuesTags');
-            tagsContainer.innerHTML = '';
+            let targetContacts = allContacts;
             
-            const hasFilters = Object.keys(selectedCampaignFilterValues).length > 0;
-            
-            if (!hasFilters) {{
-                tagsContainer.innerHTML = '<small style="color: #9ca3af; font-style: italic;">No filters selected - will send to all contacts</small>';
+            // Handle Test Group special filter
+            if (filterType === 'test_group') {{
+                targetContacts = allContacts.filter(contact => 
+                    contact.group && contact.group.toLowerCase() === 'test'
+                );
+                filterCount.textContent = `${{targetContacts.length}} contact(s) in Test Group will receive this campaign`;
+                filterCount.style.color = '#f59e0b';
+                filterCount.style.fontWeight = '600';
                 return;
             }}
             
-            // Display all selected filters as tags
-            for (const [filterType, values] of Object.entries(selectedCampaignFilterValues)) {{
-                values.forEach(value => {{
-                    const tag = document.createElement('div');
-                    tag.style.cssText = 'display: inline-flex; align-items: center; padding: 6px 10px; background: linear-gradient(135deg, #3b82f6, #2563eb); color: white; border-radius: 6px; font-size: 12px; font-weight: 600;';
-                    tag.innerHTML = `
-                        <span style="margin-right: 8px;">${{filterType}}: ${{value}}</span>
-                        <button onclick="removeCampaignFilterValue('${{filterType}}', '${{value}}')" style="background: rgba(255,255,255,0.3); border: none; border-radius: 50%; width: 18px; height: 18px; min-width: 18px; max-width: 18px; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 14px; line-height: 1; color: white; font-weight: bold; padding: 0; flex-shrink: 0;">×</button>
-                    `;
-                    tagsContainer.appendChild(tag);
-                }});
+            // Apply filter if selected
+            if (filterType && checkedBoxes.length > 0) {{
+                const selectedValues = Array.from(checkedBoxes).map(cb => cb.value);
+                targetContacts = allContacts.filter(contact => 
+                    contact[filterType] && selectedValues.includes(contact[filterType])
+                );
+                filterCount.textContent = `${{targetContacts.length}} contact(s) will receive this campaign (${{checkedBoxes.length}} filter(s) selected)`;
+                filterCount.style.color = '#6b7280';
+                filterCount.style.fontWeight = 'normal';
+            }} else {{
+                filterCount.textContent = `${{allContacts.length}} contact(s) will receive this campaign (All Contacts)`;
+                filterCount.style.color = '#6b7280';
+                filterCount.style.fontWeight = 'normal';
             }}
         }}
         
-        async function applyCampaignFilter() {{
-            console.log('Applying campaign filter...', selectedCampaignFilterValues);
-            
-            const countDisplay = document.getElementById('campaignContactCount');
-            const countNumber = document.getElementById('campaignContactCountNumber');
-            
-            // If no filters selected, reset to null (means fetch all contacts when sending)
-            if (Object.keys(selectedCampaignFilterValues).length === 0) {{
-                campaignFilteredContacts = null;  // null means no filter, will fetch all contacts
-                countDisplay.style.display = 'none';
-                console.log('No filters selected. Campaign will send to all contacts in database.');
-                return;
-            }}
-            
-            // Build filters array for API
-            const filters = Object.entries(selectedCampaignFilterValues)
-                .map(([field, values]) => ({{
-                    field: field,
-                    values: values
-                }}));
-            
-            console.log('Campaign filter request:', filters);
-            
-            try {{
-                // Call the backend /contacts/filter endpoint
-                const response = await fetch(`${{API_URL}}/contacts/filter`, {{
-                    method: 'POST',
-                    headers: {{
-                        'Content-Type': 'application/json'
-                    }},
-                    body: JSON.stringify({{ filters: filters }})
-                }});
-                
-                if (!response.ok) {{
-                    throw new Error(`HTTP ${{response.status}}: ${{response.statusText}}`);
-                }}
-                
-                const data = await response.json();
-                console.log('Campaign filtered contacts received:', data);
-                
-                campaignFilteredContacts = data.contacts || [];
-                
-                // Display the count
-                countNumber.textContent = campaignFilteredContacts.length;
-                countDisplay.style.display = 'block';
-                
-                if (campaignFilteredContacts.length === 0) {{
-                    console.warn('No contacts match the selected filters.');
-                }}
-            }} catch (error) {{
-                console.error('Error applying campaign filter:', error);
-                alert(`Error loading filtered contacts: ${{error.message}}`);
-            }}
+        function selectAllCampaignFilters() {{
+            const checkboxes = document.querySelectorAll('.campaignFilterCheckbox');
+            checkboxes.forEach(cb => cb.checked = true);
+            updateCampaignContactCount();
         }}
         
         function clearAllCampaignFilters() {{
-            selectedCampaignFilterValues = {{}};
-            currentCampaignFilterType = null;
-            campaignFilteredContacts = null;  // null means no filter applied
-            document.getElementById('campaignAvailableValuesArea').style.display = 'none';
-            document.getElementById('campaignContactCount').style.display = 'none';
-            updateCampaignSelectedValuesTags();
-            updateCampaignButtonStyles();
-        }}
-        
-        function updateCampaignButtonStyles() {{
-            const buttons = document.querySelectorAll('.campaign-filter-type-btn');
-            buttons.forEach(btn => {{
-                const filterValue = btn.getAttribute('data-filter');
-                if (filterValue === currentCampaignFilterType) {{
-                    btn.style.background = 'linear-gradient(135deg, #3b82f6, #2563eb)';
-                    btn.style.color = 'white';
-                    btn.style.borderColor = '#2563eb';
-                    btn.style.boxShadow = '0 2px 8px rgba(59, 130, 246, 0.3)';
-                }} else {{
-                    btn.style.background = 'white';
-                    btn.style.color = '#374151';
-                    btn.style.borderColor = '#e5e7eb';
-                    btn.style.boxShadow = 'none';
-                }}
-            }});
-        }}
-        
-        // ============================================
-        // TARGET CONTACTS MODAL
-        // ============================================
-        let targetContactsModalState = {{
-            currentPage: 1,
-            pageSize: 25,
-            totalContacts: [],
-            totalPages: 1
-        }};
-        
-        async function openTargetContactsModal() {{
-            const modal = document.getElementById('targetContactsModal');
-            
-            // Determine which contacts to show
-            let contacts = [];
-            
-            if (campaignFilteredContacts && Array.isArray(campaignFilteredContacts) && campaignFilteredContacts.length > 0) {{
-                // Use filtered contacts (already loaded)
-                contacts = campaignFilteredContacts;
-                console.log(`Using ${{contacts.length}} filtered contacts for modal`);
-            }} else if (Object.keys(selectedCampaignFilterValues || {{}}).length > 0) {{
-                // User selected filters but didn't apply them
-                Toast.warning('Please click "Apply Filter" first to see target contacts.');
-                return;
-            }} else {{
-                // No filters - load all contacts using pagination (handles 20k+ contacts)
-                Toast.info('Loading all contacts with pagination...', 2000);
-                try {{
-                    contacts = await fetchAllContactsPaginated();
-                    console.log(`Loaded ${{contacts.length}} contacts for modal using pagination`);
-                }} catch (error) {{
-                    Toast.error(`Failed to load contacts: ${{error.message}}`);
-                    return;
-                }}
-            }}
-            
-            if (contacts.length === 0) {{
-                Toast.warning('No target contacts found.');
-                return;
-            }}
-            
-            // Initialize modal state
-            targetContactsModalState.totalContacts = contacts;
-            targetContactsModalState.currentPage = 1;
-            targetContactsModalState.totalPages = Math.ceil(contacts.length / targetContactsModalState.pageSize);
-            
-            // Update total count
-            document.getElementById('modalTotalCount').textContent = contacts.length;
-            
-            // Load first page
-            displayTargetContactsPage();
-            
-            // Show modal
-            modal.style.display = 'flex';
-            document.body.style.overflow = 'hidden'; // Prevent background scrolling
-        }}
-        
-        function closeTargetContactsModal() {{
-            const modal = document.getElementById('targetContactsModal');
-            modal.style.display = 'none';
-            document.body.style.overflow = ''; // Restore scrolling
-        }}
-        
-        function loadTargetContactsPage(direction) {{
-            if (direction === 'next' && targetContactsModalState.currentPage < targetContactsModalState.totalPages) {{
-                targetContactsModalState.currentPage++;
-            }} else if (direction === 'prev' && targetContactsModalState.currentPage > 1) {{
-                targetContactsModalState.currentPage--;
-            }}
-            
-            displayTargetContactsPage();
-        }}
-        
-        function displayTargetContactsPage() {{
-            const {{ currentPage, pageSize, totalContacts, totalPages }} = targetContactsModalState;
-            
-            // Calculate start and end indices
-            const startIdx = (currentPage - 1) * pageSize;
-            const endIdx = Math.min(startIdx + pageSize, totalContacts.length);
-            const pageContacts = totalContacts.slice(startIdx, endIdx);
-            
-            // Populate table
-            const tbody = document.getElementById('targetContactsTableBody');
-            tbody.innerHTML = '';
-            
-            if (pageContacts.length === 0) {{
-                tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; padding: 40px; color: #6b7280;">No contacts to display</td></tr>';
-                return;
-            }}
-            
-            pageContacts.forEach((contact, index) => {{
-                const globalIndex = startIdx + index + 1;
-                const row = document.createElement('tr');
-                row.innerHTML = `
-                    <td style="font-weight: 600; color: #6b7280;">${{globalIndex}}</td>
-                    <td>${{contact.first_name || contact.FirstName || '-'}}</td>
-                    <td>${{contact.last_name || contact.LastName || '-'}}</td>
-                    <td style="color: #3b82f6; font-weight: 500;">${{contact.email || '-'}}</td>
-                    <td>${{contact.agency_name || contact.AgencyName || '-'}}</td>
-                    <td>${{contact.state || contact.State || '-'}}</td>
-                    <td>${{contact.entity_type || contact.EntityType || '-'}}</td>
-                `;
-                tbody.appendChild(row);
-            }});
-            
-            // Update pagination info
-            document.getElementById('modalCurrentPage').textContent = currentPage;
-            document.getElementById('modalTotalPages').textContent = totalPages;
-            document.getElementById('modalShowingCount').textContent = `${{startIdx + 1}}-${{endIdx}}`;
-            
-            // Update button states
-            const prevBtn = document.getElementById('modalPrevBtn');
-            const nextBtn = document.getElementById('modalNextBtn');
-            
-            prevBtn.disabled = currentPage === 1;
-            prevBtn.style.opacity = currentPage === 1 ? '0.5' : '1';
-            prevBtn.style.cursor = currentPage === 1 ? 'not-allowed' : 'pointer';
-            
-            nextBtn.disabled = currentPage === totalPages;
-            nextBtn.style.opacity = currentPage === totalPages ? '0.5' : '1';
-            nextBtn.style.cursor = currentPage === totalPages ? 'not-allowed' : 'pointer';
-        }}
-        
-        // Close modal when clicking outside of it
-        window.onclick = function(event) {{
-            const modal = document.getElementById('targetContactsModal');
-            if (event.target === modal) {{
-                closeTargetContactsModal();
-            }}
+            const checkboxes = document.querySelectorAll('.campaignFilterCheckbox');
+            checkboxes.forEach(cb => cb.checked = false);
+            updateCampaignContactCount();
         }}
         
         // Attachment handling
@@ -3616,63 +2140,15 @@ def serve_web_ui(event):
             displayAttachments();
         }}
         
-        // Fetch all contacts using pagination to handle large datasets (20k+ contacts)
-        async function fetchAllContactsPaginated() {{
-            let allContacts = [];
-            let lastKey = null;
-            let pageCount = 0;
-            const pageSize = 1000;  // Fetch 1000 contacts per page
-            
-            console.log('Starting paginated contact fetch...');
-            
-            do {{
-                pageCount++;
-                const urlParams = new URLSearchParams();
-                urlParams.append('limit', pageSize);
-                
-                if (lastKey) {{
-                    urlParams.append('lastKey', JSON.stringify(lastKey));
-                }}
-                
-                const url = `${{API_URL}}/contacts?${{urlParams.toString()}}`;
-                console.log(`Fetching page ${{pageCount}} (batch size: ${{pageSize}})...`);
-                
-                const response = await fetch(url);
-                
-                if (!response.ok) {{
-                    throw new Error(`HTTP ${{response.status}}: ${{response.statusText}}`);
-                }}
-                
-                const data = await response.json();
-                const contacts = data.contacts || [];
-                
-                allContacts = allContacts.concat(contacts);
-                lastKey = data.lastEvaluatedKey || null;
-                
-                console.log(`Page ${{pageCount}}: Fetched ${{contacts.length}} contacts. Total so far: ${{allContacts.length}}`);
-                
-                // Show progress to user
-                if (pageCount % 5 === 0 || !lastKey) {{
-                    Toast.info(`Loading contacts... ${{allContacts.length}} loaded`, 1000);
-                }}
-                
-            }} while (lastKey);  // Continue until no more pages
-            
-            console.log(`✅ Pagination complete: Loaded ${{allContacts.length}} total contacts in ${{pageCount}} pages`);
-            Toast.success(`Loaded ${{allContacts.length}} contacts successfully!`, 2000);
-            
-            return allContacts;
-        }}
-        
-        async function sendCampaign(event) {{
+        async function sendCampaign() {{
             // Check form availability first
             if (!checkFormAvailability()) {{
                 alert('Form is currently unavailable. Please refresh the page and try again.');
                 return;
             }}
             
-            const button = event?.target || document.querySelector('.btn-success');
-            const originalText = button?.textContent || 'Send Campaign';
+            const button = event.target;
+            const originalText = button.textContent;
             
             try {{
                 // Show loading state
@@ -3680,117 +2156,53 @@ def serve_web_ui(event):
                 button.classList.add('loading');
                 button.disabled = true;
                 
-            // Determine target contacts based on filter
-            let targetContacts = [];
+            // Get target contacts based on selected filter
+            const campaignFilterType = document.getElementById('campaignFilterType').value;
+            const campaignCheckedBoxes = document.querySelectorAll('.campaignFilterCheckbox:checked');
+            
+            let targetContacts = allContacts;
             let filterDescription = 'All Contacts';
             
-            console.log('Campaign filter debug:', {{
-                campaignFilteredContacts: campaignFilteredContacts === null ? 'null (no filter)' : 
-                                         Array.isArray(campaignFilteredContacts) ? `array with ${{campaignFilteredContacts.length}} items` : 
-                                         'invalid',
-                selectedCampaignFilterValuesKeys: Object.keys(selectedCampaignFilterValues || {{}}).length,
-                selectedCampaignFilterValues: selectedCampaignFilterValues
-            }});
-            
-            // THREE STATES: null = no filter, [] = filter with no results, [...] = filtered contacts
-            if (campaignFilteredContacts === null) {{
-                // No filters applied - need to load all contacts from DynamoDB with pagination
-                console.log('No filters applied, fetching all contacts from database with pagination...');
-                try {{
-                    targetContacts = await fetchAllContactsPaginated();
-                    filterDescription = 'All Contacts';
-                    console.log(`Loaded ${{targetContacts.length}} contacts from database using pagination`);
-                }} catch (loadError) {{
-                    console.error('Failed to load contacts:', loadError);
-                    throw new Error(`Failed to load contacts: ${{loadError.message}}. Please ensure your API is configured correctly.`);
-                }}
-            }} else if (Array.isArray(campaignFilteredContacts) && campaignFilteredContacts.length > 0) {{
-                // User has applied a filter and has results
-                targetContacts = campaignFilteredContacts;
-                const filterTags = Object.entries(selectedCampaignFilterValues || {{}})
-                    .map(([field, values]) => `${{field}}: ${{values.join(', ')}}`)
-                    .join('; ');
-                filterDescription = filterTags || 'Filtered Contacts';
-                console.log(`Using ${{targetContacts.length}} filtered contacts: ${{filterDescription}}`);
-            }} else if (Array.isArray(campaignFilteredContacts) && campaignFilteredContacts.length === 0) {{
-                // Filter was applied but returned no results
-                throw new Error('Your filter returned 0 contacts. Please adjust your filter criteria or clear filters to send to all contacts.');
-            }} else if (Object.keys(selectedCampaignFilterValues || {{}}).length > 0) {{
-                // User has selected filter values but hasn't clicked "Apply Filter"
-                console.log('Filters selected but not applied. Attempting to apply filter automatically...');
-                
-                try {{
-                    await applyCampaignFilter();
-                    
-                    // Check the result after applying
-                    if (campaignFilteredContacts && Array.isArray(campaignFilteredContacts) && campaignFilteredContacts.length > 0) {{
-                        targetContacts = campaignFilteredContacts;
-                        const filterTags = Object.entries(selectedCampaignFilterValues)
-                            .map(([field, values]) => `${{field}}: ${{values.join(', ')}}`)
-                            .join('; ');
-                        filterDescription = filterTags;
-                        console.log(`Auto-applied filter: ${{targetContacts.length}} contacts found`);
-                    }} else {{
-                        throw new Error('No contacts match the selected filter criteria. Please adjust your filter or clear it to send to all contacts.');
-                    }}
-                }} catch (filterError) {{
-                    console.error('Auto-apply filter failed:', filterError);
-                    throw new Error('Please click "Apply Filter" button to see which contacts match your criteria, or clear the filter to send to all contacts.');
-                }}
-            }} else {{
-                // Fallback: shouldn't get here, but fetch all contacts as safety
-                console.warn('Unexpected state - falling back to fetch all contacts with pagination');
-                try {{
-                    targetContacts = await fetchAllContactsPaginated();
-                    filterDescription = 'All Contacts';
-                    console.log(`Fallback: Loaded ${{targetContacts.length}} contacts from database`);
-                }} catch (loadError) {{
-                    console.error('Failed to load contacts:', loadError);
-                    throw new Error(`Failed to load contacts: ${{loadError.message}}`);
-                }}
+            // Auto-load contacts if not already loaded
+            if (allContacts.length === 0) {{
+                throw new Error('Please load contacts first by going to the Contacts tab.');
             }}
             
-            if (!targetContacts || targetContacts.length === 0) {{
-                throw new Error('No contacts found. Please add contacts or adjust your filter.');
+            // Handle Test Group special filter
+            if (campaignFilterType === 'test_group') {{
+                targetContacts = allContacts.filter(contact => 
+                    contact.group && contact.group.toLowerCase() === 'test'
+                );
+                filterDescription = 'Test Group (group = Test)';
+            }}
+            // Apply filter if checkboxes are selected
+            else if (campaignFilterType && campaignCheckedBoxes.length > 0) {{
+                const selectedValues = Array.from(campaignCheckedBoxes).map(cb => cb.value);
+                targetContacts = allContacts.filter(contact => 
+                    contact[campaignFilterType] && selectedValues.includes(contact[campaignFilterType])
+                );
+                filterDescription = `${{campaignFilterType}}: ${{selectedValues.join(', ')}}`;
             }}
             
-            // Additional validation - check if emails are valid
-            const validEmails = targetContacts.map(c => c?.email).filter(email => email && email.includes('@'));
-            if (validEmails.length === 0) {{
-                throw new Error('No valid email addresses found in the selected contacts. Please check your contact data.');
+            if (targetContacts.length === 0) {{
+                throw new Error('No contacts match the selected filters. Please adjust your filter or select "All Contacts".');
             }}
-            
-            console.log(`Valid emails found: ${{validEmails.length}} out of ${{targetContacts.length}} contacts`);
             
             console.log(`Campaign will be sent to ${{targetContacts.length}} contacts (${{filterDescription}})`);
-            console.log('Sample target contacts:', targetContacts.slice(0, 3));
             
             // Get content from Quill editor
             const emailBody = quillEditor.root.innerHTML;
-            
-            // Get user name from form
-            const userName = document.getElementById('userName').value.trim() || 'Web User';
-            
-            // Extract and validate email addresses
-            const targetEmails = targetContacts.map(c => c?.email).filter(email => email && email.includes('@'));
-            console.log(`Extracted ${{targetEmails.length}} valid emails from ${{targetContacts.length}} contacts`);
-            console.log('Sample emails:', targetEmails.slice(0, 5));
-            
-            if (targetEmails.length === 0) {{
-                throw new Error('No valid email addresses found in contacts. Please check that your contacts have valid email addresses.');
-            }}
             
             const campaign = {{
                 campaign_name: document.getElementById('campaignName').value,
                 subject: document.getElementById('subject').value,
                 body: emailBody,
-                launched_by: userName,  // Send user identity to backend
-                filter_type: Object.keys(selectedCampaignFilterValues).length > 0 ? 'custom' : null,
-                filter_values: Object.keys(selectedCampaignFilterValues).length > 0 
-                    ? JSON.stringify(selectedCampaignFilterValues)
+                filter_type: campaignFilterType || null,
+                filter_values: campaignFilterType && campaignCheckedBoxes.length > 0 
+                    ? Array.from(campaignCheckedBoxes).map(cb => cb.value)
                     : null,
                 filter_description: filterDescription,
-                target_contacts: targetEmails,  // Send email list to backend
+                target_contacts: targetContacts.map(c => c.email),  // Send email list to backend
                 attachments: campaignAttachments  // Include attachments
             }};
                 
@@ -3819,7 +2231,6 @@ def serve_web_ui(event):
                 }}
                 
                 // Create a beautiful result display
-                Toast.success('Campaign queued successfully! Emails are being sent.', 6000);
                 resultDiv.innerHTML = `
                     <h3>Campaign Queued Successfully!</h3>
                     <div style="background: var(--info-color); color: white; padding: 20px; border-radius: 12px; margin: 20px 0;">
@@ -3861,7 +2272,6 @@ def serve_web_ui(event):
                 
             }} catch (error) {{
                 const resultDiv = document.getElementById('campaignResult');
-                Toast.error(`Campaign failed: ${{error.message}}`);
                 resultDiv.innerHTML = `
                     <h3 style="color: var(--danger-color);">Campaign Failed</h3>
                     <p style="color: var(--gray-600);">${{error.message}}</p>
@@ -3882,6 +2292,7 @@ def serve_web_ui(event):
         
         async function loadConfig() {{
             try {{
+                // alert('Loading config from DynamoDB...');
                 console.log('Loading config from:', `${{API_URL}}/config`);
                 const response = await fetch(`${{API_URL}}/config`);
                 console.log('Config response status:', response.status);
@@ -3894,22 +2305,24 @@ def serve_web_ui(event):
                     
                     if (config && config.aws_region) {{
                         document.getElementById('awsRegion').value = config.aws_region;
-                        console.log('✅ AWS Region loaded from DynamoDB:', config.aws_region);
+                        console.log('Set AWS Region to:', config.aws_region);
                     }}
                     
                     if (config && config.from_email) {{
                         document.getElementById('fromEmail').value = config.from_email;
-                        console.log('✅ From Email loaded from DynamoDB:', config.from_email);
+                        console.log('Set From Email to:', config.from_email);
+                        // alert('From Email loaded: ' + config.from_email);
                     }} else {{
-                        console.log('⚠️ No from_email found in config - using defaults');
+                        console.log('No from_email found in config');
+                        // alert('No From Email found in configuration');
                     }}
                     
-                    // emails_per_minute field removed
-                }} else if (response.status === 404) {{
-                    console.log('ℹ️ No email configuration found in DynamoDB - using defaults');
-                    console.log('You can save configuration in the Email Config tab');
+                    if (config && config.emails_per_minute) {{
+                        document.getElementById('emailsPerMinute').value = config.emails_per_minute;
+                        console.log('Set Emails per minute to:', config.emails_per_minute);
+                    }}
                 }} else {{
-                    console.log('⚠️ Config response not OK:', response.status);
+                    console.log('Config response not OK:', response.status);
                     // alert('Config API error: ' + response.status);
                 }}
             }} catch (e) {{
@@ -3917,251 +2330,10 @@ def serve_web_ui(event):
             }}
         }}
         
-        // User identity management (browser localStorage)
-        function saveUserName() {{
-            const userName = document.getElementById('userName').value.trim();
-            if (userName) {{
-                localStorage.setItem('emailCampaignUserName', userName);
-                console.log('User name saved:', userName);
-            }}
-        }}
-        
-        function loadUserName() {{
-            const savedName = localStorage.getItem('emailCampaignUserName');
-            if (savedName) {{
-                document.getElementById('userName').value = savedName;
-                console.log('User name loaded from browser:', savedName);
-            }}
-        }}
-        
-        // Contact filter state
-        let currentFilterType = null;  // null = no filter selected, '' = "All" selected, other = specific filter
-        let selectedFilterValues = {{}};  // {{filterType: [values]}}
-        
-        // Helper function to get field value case-insensitively
-        function getFieldValue(contact, fieldName) {{
-            // Try exact match first
-            if (contact[fieldName] !== undefined) {{
-                return contact[fieldName];
-            }}
-            
-            // Try case-insensitive search
-            const lowerFieldName = fieldName.toLowerCase();
-            for (const key in contact) {{
-                if (key.toLowerCase() === lowerFieldName) {{
-                    return contact[key];
-                }}
-            }}
-            
-            return null;
-        }}
-        
-        async function selectFilterType(filterType) {{
-            console.log('Filter type selected:', filterType, 'Current type:', currentFilterType);
-            
-            // Allow toggling off by clicking the same button (including "All")
-            if (currentFilterType === filterType) {{
-                console.log('Toggling off current filter type');
-                currentFilterType = null;
-                document.getElementById('availableValuesArea').style.display = 'none';
-                updateButtonStyles(null);  // Reset all buttons to unselected state
-                return;
-            }}
-            
-            currentFilterType = filterType;
-            updateButtonStyles(filterType);
-            
-            if (!filterType || filterType === '') {{
-                // "All" selected - hide available values area
-                document.getElementById('availableValuesArea').style.display = 'none';
-                return;
-            }}
-            
-            // Show loading message
-            const availableValuesList = document.getElementById('availableValuesList');
-            availableValuesList.innerHTML = '<div style="padding: 20px; text-align: center; color: #6b7280;"><span style="font-size: 14px;">⏳ Loading values from DynamoDB...</span></div>';
-            document.getElementById('availableCount').textContent = 'Querying database...';
-            document.getElementById('availableValuesArea').style.display = 'block';
-            
-            try {{
-                console.log(`Querying DynamoDB for distinct values of field: ${{filterType}}`);
-                
-                // Call the backend API to get distinct values from DynamoDB
-                const response = await fetch(`${{API_URL}}/contacts/distinct?field=${{encodeURIComponent(filterType)}}`);
-                
-                if (!response.ok) {{
-                    throw new Error(`HTTP ${{response.status}}: ${{response.statusText}}`);
-                }}
-                
-                const result = await response.json();
-                const distinctValues = result.values || [];
-                
-                console.log(`Received ${{distinctValues.length}} distinct values for ${{filterType}} from DynamoDB`);
-                
-                if (distinctValues.length === 0) {{
-                    availableValuesList.innerHTML = '<div style="padding: 20px; text-align: center; color: #9ca3af;"><span style="font-size: 13px;">No values found for this field</span></div>';
-                    document.getElementById('availableCount').textContent = 'No values available';
-                    return;
-                }}
-                
-                // Display available values as clickable buttons
-                availableValuesList.innerHTML = '';
-                
-                distinctValues.forEach(value => {{
-                    const btn = document.createElement('button');
-                    btn.className = 'available-value-btn';
-                    btn.textContent = value;
-                    btn.onclick = () => addFilterValue(filterType, value);
-                    btn.style.cssText = 'padding: 6px 12px; background: white; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 12px; cursor: pointer; transition: all 0.2s; color: #374151;';
-                    btn.onmouseover = () => {{ btn.style.background = '#eff6ff'; btn.style.borderColor = '#6366f1'; }};
-                    btn.onmouseout = () => {{ btn.style.background = 'white'; btn.style.borderColor = '#cbd5e1'; }};
-                    availableValuesList.appendChild(btn);
-                }});
-                
-                document.getElementById('availableCount').textContent = `${{distinctValues.length}} values available`;
-                
-            }} catch (error) {{
-                console.error('Error loading distinct values:', error);
-                availableValuesList.innerHTML = `<div style="padding: 20px; text-align: center; color: #ef4444;"><span style="font-size: 13px;">❌ Error loading values: ${{error.message}}</span></div>`;
-                document.getElementById('availableCount').textContent = 'Error loading values';
-            }}
-        }}
-        
-        function updateButtonStyles(filterType) {{
-            // Update button styles based on selected filter type
-            document.querySelectorAll('.filter-type-btn').forEach(btn => {{
-                const btnFilter = btn.getAttribute('data-filter');
-                
-                if (filterType === null) {{
-                    // Nothing selected - all buttons unselected
-                    btn.style.background = 'white';
-                    btn.style.borderColor = '#e5e7eb';
-                    btn.style.color = '#374151';
-                }} else if (btnFilter === filterType && filterType !== '') {{
-                    // Selected filter type (not "All")
-                    btn.style.background = '#6366f1';
-                    btn.style.borderColor = '#6366f1';
-                    btn.style.color = 'white';
-                }} else if (filterType === '' && btnFilter === '') {{
-                    // "All" button selected
-                    btn.style.background = '#10b981';
-                    btn.style.borderColor = '#10b981';
-                    btn.style.color = 'white';
-                }} else {{
-                    // Unselected buttons
-                    btn.style.background = 'white';
-                    btn.style.borderColor = '#e5e7eb';
-                    btn.style.color = '#374151';
-                }}
-            }});
-        }}
-        
-        function addFilterValue(filterType, value) {{
-            console.log('Adding filter value:', filterType, value);
-            
-            // Initialize array if needed
-            if (!selectedFilterValues[filterType]) {{
-                selectedFilterValues[filterType] = [];
-            }}
-            
-            // Don't add duplicates
-            if (selectedFilterValues[filterType].includes(value)) {{
-                console.log('Value already selected');
-                return;
-            }}
-            
-            selectedFilterValues[filterType].push(value);
-            updateSelectedValuesTags();
-        }}
-        
-        function removeFilterValue(filterType, value) {{
-            console.log('Removing filter value:', filterType, value);
-            
-            if (selectedFilterValues[filterType]) {{
-                selectedFilterValues[filterType] = selectedFilterValues[filterType].filter(v => v !== value);
-                
-                // Remove filter type if no values left
-                if (selectedFilterValues[filterType].length === 0) {{
-                    delete selectedFilterValues[filterType];
-                }}
-            }}
-            
-            updateSelectedValuesTags();
-        }}
-        
-        function updateSelectedValuesTags() {{
-            const tagsContainer = document.getElementById('selectedValuesTags');
-            tagsContainer.innerHTML = '';
-            
-            let hasValues = false;
-            
-            // Display all selected values as tags
-            for (const [filterType, values] of Object.entries(selectedFilterValues)) {{
-                if (values && values.length > 0) {{
-                    hasValues = true;
-                    
-                    // Get filter type label
-                    const filterLabels = {{
-                        'entity_type': 'Entity Type',
-                        'state': 'State',
-                        'agency_name': 'Agency',
-                        'sector': 'Sector',
-                        'subsection': 'Sub-section',
-                        'ms_isac_member': 'MS-ISAC Member',
-                        'soc_call': 'SOC Call',
-                        'fusion_center': 'Fusion Center',
-                        'k12': 'K-12',
-                        'water_wastewater': 'Water/Wastewater',
-                        'weekly_rollup': 'Weekly Rollup',
-                        'region': 'Region'
-                    }};
-                    
-                    const label = filterLabels[filterType] || filterType;
-                    
-                    values.forEach(value => {{
-                        const tag = document.createElement('div');
-                        tag.style.cssText = 'display: inline-flex; align-items: center; gap: 6px; padding: 6px 10px; background: #6366f1; color: white; border-radius: 6px; font-size: 13px; font-weight: 500;';
-                        tag.innerHTML = `
-                            <span style="font-size: 11px; opacity: 0.9;">${{label}}:</span>
-                            <span>${{value}}</span>
-                            <button onclick="removeFilterValue('${{filterType}}', '${{value.replace(/'/g, "\\\\'")}}');" style="background: none; border: none; color: white; cursor: pointer; padding: 0 2px; font-size: 16px; line-height: 1; opacity: 0.8;" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.8'">
-                                ×
-                            </button>
-                        `;
-                        tagsContainer.appendChild(tag);
-                    }});
-                }}
-            }}
-            
-            if (!hasValues) {{
-                tagsContainer.innerHTML = '<small style="color: #9ca3af; font-style: italic;">No filters selected - showing all contacts</small>';
-            }}
-        }}
-        
-        function clearAllFilters() {{
-            console.log('Clearing all filters');
-            selectedFilterValues = {{}};
-            currentFilterType = null;
-            
-            // Reset all buttons to unselected state
-            updateButtonStyles(null);
-            
-            // Hide available values
-            document.getElementById('availableValuesArea').style.display = 'none';
-            
-            // Clear tags
-            updateSelectedValuesTags();
-            
-            // Show all contacts
-            displayContacts(allContacts);
-        }}
-        
         window.onload = () => {{
             // Initialize UI and load configuration
             loadConfig();
-            // loadGroupsFromDB();  // Disabled - groups feature removed
-            loadUserName();  // Load saved user name from browser
-            
+            loadGroupsFromDB();  // Load groups on page load
             console.log('Web UI loaded successfully');
         }};
     </script>
@@ -4184,6 +2356,7 @@ def save_email_config(body, headers):
                 'config_id': 'default',
             'email_service': str(body.get('email_service', 'ses')),
             'from_email': str(body.get('from_email', '')),
+            'emails_per_minute': int(body.get('emails_per_minute', 60)),
                 'updated_at': datetime.now().isoformat()
             }
         
@@ -4206,10 +2379,11 @@ def save_email_config(body, headers):
     except email_config_table.meta.client.exceptions.ConditionalCheckFailedException:
         # Item already exists, update it instead
         try:
-            update_expression = "SET email_service = :service, from_email = :email, updated_at = :updated"
+            update_expression = "SET email_service = :service, from_email = :email, emails_per_minute = :rate, updated_at = :updated"
             expression_values = {
                 ':service': str(body.get('email_service', 'ses')),
                 ':email': str(body.get('from_email', '')),
+                ':rate': int(body.get('emails_per_minute', 60)),
                 ':updated': datetime.now().isoformat()
             }
             
@@ -4271,315 +2445,20 @@ def get_email_config(headers):
         print(f"Config retrieval error: {str(e)}")
         return {'statusCode': 500, 'headers': headers, 'body': json.dumps({'error': str(e)})}
 
-def get_contacts(headers, event=None):
-    """Get contacts with pagination support"""
-    try:
-        # Get pagination parameters from query string
-        query_params = None
-        if event:
-            query_params = event.get('queryStringParameters')
-        
-        # Handle None query params
-        if query_params is None:
-            query_params = {}
-            
-        limit = int(query_params.get('limit', 25)) if query_params.get('limit') else 25
-        last_key_str = query_params.get('lastKey') if query_params.get('lastKey') else None
-        
-        # Build scan parameters
-        scan_params = {'Limit': limit}
-        
-        # Add ExclusiveStartKey if provided
-        if last_key_str:
-            try:
-                import json as json_lib
-                last_key = json_lib.loads(last_key_str)
-                scan_params['ExclusiveStartKey'] = last_key
-            except:
-                pass  # Invalid lastKey, ignore
-        
-        # Scan contacts table with pagination
-        response = contacts_table.scan(**scan_params)
-        
-        contacts = []
-        for item in response.get('Items', []):
-            contact = {}
-            for key, value in item.items():
-                if isinstance(value, Decimal):
-                    contact[key] = int(value)
-                else:
-                    contact[key] = value
-            contacts.append(contact)
-        
-        # Build response with pagination info
-        result = {
-            'contacts': contacts,
-            'count': len(contacts)
-        }
-        
-        # Include lastEvaluatedKey if there are more items
-        if 'LastEvaluatedKey' in response:
-            # Convert Decimal types in lastEvaluatedKey
-            last_key = {}
-            for key, value in response['LastEvaluatedKey'].items():
-                if isinstance(value, Decimal):
-                    last_key[key] = int(value) if value % 1 == 0 else float(value)
-                else:
-                    last_key[key] = value
-            result['lastEvaluatedKey'] = last_key
-        
-        return {'statusCode': 200, 'headers': headers, 'body': json.dumps(result)}
+def get_contacts(headers):
+    """Get all contacts"""
+    response = contacts_table.scan()
+    contacts = []
+    for item in response['Items']:
+        contact = {}
+        for key, value in item.items():
+            if isinstance(value, Decimal):
+                contact[key] = int(value)
+            else:
+                contact[key] = value
+        contacts.append(contact)
     
-    except Exception as e:
-        print(f"Error in get_contacts: {str(e)}")
-        import traceback
-        traceback.print_exc()
-        return {'statusCode': 500, 'headers': headers, 'body': json.dumps({'error': str(e)})}
-
-def get_distinct_values(headers, event):
-    """Get distinct values for a specific field from DynamoDB"""
-    try:
-        # Get field name from query parameters
-        query_params = event.get('queryStringParameters') or {}
-        field_name_requested = query_params.get('field')
-        
-        if not field_name_requested:
-            return {'statusCode': 400, 'headers': headers, 'body': json.dumps({'error': 'field parameter is required'})}
-        
-        print(f"Getting distinct values for field: {field_name_requested}")
-        
-        # Map frontend field names to actual DynamoDB field names
-        # Try multiple variations for case-insensitive matching
-        field_variations = [
-            field_name_requested,  # Try as-is first (state)
-            field_name_requested.capitalize(),  # Try capitalized (State)
-            field_name_requested.upper(),  # Try uppercase (STATE)
-            field_name_requested.lower(),  # Try lowercase (state)
-            field_name_requested.title(),  # Try title case (State)
-            field_name_requested.replace('_', ''),  # Try without underscore (statename)
-            field_name_requested.replace('_', '').capitalize(),  # Try without underscore capitalized (Statename)
-        ]
-        
-        # Add common field name variations
-        common_mappings = {
-            'state': ['State', 'state', 'STATE', 'state_name', 'State_Name', 'stateName'],
-            'region': ['Region', 'region', 'REGION', 'region_name', 'Region_Name', 'regionName'],
-            'agency_name': ['Agency_Name', 'agency_name', 'AgencyName', 'agencyName', 'Agency', 'agency'],
-            'entity_type': ['Entity_Type', 'entity_type', 'EntityType', 'entityType', 'Entity', 'entity'],
-        }
-        
-        if field_name_requested in common_mappings:
-            field_variations.extend(common_mappings[field_name_requested])
-        
-        # Remove duplicates while preserving order
-        seen = set()
-        field_variations = [x for x in field_variations if not (x in seen or seen.add(x))]
-        
-        # Scan the entire table to get all values for the field
-        distinct_values = set()
-        last_evaluated_key = None
-        scan_count = 0
-        field_name = None
-        
-        # Try each field variation until we find one that works
-        for attempted_field in field_variations:
-            try:
-                # Try a single scan with this field name
-                # Use ExpressionAttributeNames to handle reserved words like "state", "region", "name", etc.
-                test_scan = contacts_table.scan(
-                    ProjectionExpression='#field',
-                    ExpressionAttributeNames={'#field': attempted_field},
-                    Select='SPECIFIC_ATTRIBUTES',
-                    Limit=1
-                )
-                # If we get here, the field exists!
-                field_name = attempted_field
-                print(f"✓ Found field in DynamoDB as: {field_name}")
-                break
-            except Exception as e:
-                continue
-        
-        if not field_name:
-            print(f"❌ Field '{field_name_requested}' not found in any variation")
-            print(f"Tried variations: {', '.join(field_variations[:10])}")  # Show first 10
-            
-            # Get a sample item to show available fields
-            sample_scan = contacts_table.scan(Limit=1)
-            available_fields = []
-            if sample_scan.get('Items'):
-                available_fields = list(sample_scan['Items'][0].keys())
-            
-            print(f"Available fields in table: {', '.join(sorted(available_fields[:20]))}")
-            
-            return {'statusCode': 200, 'headers': headers, 'body': json.dumps({
-                'field': field_name_requested,
-                'values': [],
-                'count': 0,
-                'error': f'Field not found. Tried: {", ".join(field_variations[:5])}... Available fields: {", ".join(sorted(available_fields[:10]))}'
-            })}
-        
-        # Now scan with the correct field name
-        while True:
-            scan_params = {
-                'ProjectionExpression': '#field',
-                'ExpressionAttributeNames': {'#field': field_name},
-                'Select': 'SPECIFIC_ATTRIBUTES'
-            }
-            
-            if last_evaluated_key:
-                scan_params['ExclusiveStartKey'] = last_evaluated_key
-            
-            try:
-                response = contacts_table.scan(**scan_params)
-            except Exception as e:
-                # Field might not exist in schema, return empty
-                print(f"Error scanning for field {field_name}: {str(e)}")
-                return {'statusCode': 200, 'headers': headers, 'body': json.dumps({'values': [], 'count': 0})}
-            
-            # Extract values from items
-            for item in response.get('Items', []):
-                if field_name in item:
-                    value = item[field_name]
-                    # Convert Decimal to int/float if needed
-                    if isinstance(value, Decimal):
-                        value = int(value) if value % 1 == 0 else float(value)
-                    # Only add non-empty values
-                    if value is not None and str(value).strip() != '':
-                        distinct_values.add(str(value))
-            
-            scan_count += 1
-            print(f"Scan iteration {scan_count}: Found {len(response.get('Items', []))} items, {len(distinct_values)} distinct values so far")
-            
-            # Check if there are more items to scan
-            last_evaluated_key = response.get('LastEvaluatedKey')
-            if not last_evaluated_key:
-                break
-        
-        # Convert set to sorted list
-        values_list = sorted(list(distinct_values))
-        
-        print(f"Found {len(values_list)} distinct values for {field_name}")
-        
-        return {
-            'statusCode': 200,
-            'headers': headers,
-            'body': json.dumps({
-                'field': field_name,
-                'values': values_list,
-                'count': len(values_list)
-            })
-        }
-    
-    except Exception as e:
-        print(f"Error in get_distinct_values: {str(e)}")
-        import traceback
-        traceback.print_exc()
-        return {'statusCode': 500, 'headers': headers, 'body': json.dumps({'error': str(e)})}
-
-def filter_contacts(body, headers):
-    """Filter contacts from DynamoDB based on multiple field filters"""
-    try:
-        filters = body.get('filters', [])
-        
-        if not filters:
-            # No filters provided, return all contacts
-            return get_contacts(headers, None)
-        
-        print(f"Filtering contacts with {len(filters)} filter(s)")
-        
-        # Build filter expression
-        filter_expressions = []
-        expression_attribute_names = {}
-        expression_attribute_values = {}
-        name_counter = 0
-        value_counter = 0
-        
-        for filter_item in filters:
-            field = filter_item.get('field')
-            values = filter_item.get('values', [])
-            
-            if not field or not values:
-                continue
-            
-            print(f"Filter: {field} IN {values}")
-            
-            # Create placeholder for field name (to handle reserved words)
-            field_placeholder = f'#field{name_counter}'
-            expression_attribute_names[field_placeholder] = field
-            name_counter += 1
-            
-            # Create OR conditions for values in the same field
-            value_conditions = []
-            for value in values:
-                value_placeholder = f':val{value_counter}'
-                expression_attribute_values[value_placeholder] = value
-                value_conditions.append(f'{field_placeholder} = {value_placeholder}')
-                value_counter += 1
-            
-            # Join OR conditions for this field
-            if value_conditions:
-                filter_expressions.append(f'({" OR ".join(value_conditions)})')
-        
-        if not filter_expressions:
-            # No valid filters, return all contacts
-            return get_contacts(headers, None)
-        
-        # Join all filter expressions with AND
-        filter_expression = ' AND '.join(filter_expressions)
-        
-        print(f"Filter Expression: {filter_expression}")
-        print(f"Expression Attribute Names: {expression_attribute_names}")
-        
-        # Scan DynamoDB with filter
-        filtered_contacts = []
-        last_evaluated_key = None
-        scan_count = 0
-        
-        while True:
-            scan_params = {
-                'FilterExpression': filter_expression,
-                'ExpressionAttributeNames': expression_attribute_names,
-                'ExpressionAttributeValues': expression_attribute_values
-            }
-            
-            if last_evaluated_key:
-                scan_params['ExclusiveStartKey'] = last_evaluated_key
-            
-            response = contacts_table.scan(**scan_params)
-            
-            # Convert Decimal types to int/float
-            for item in response.get('Items', []):
-                contact = {}
-                for key, value in item.items():
-                    if isinstance(value, Decimal):
-                        contact[key] = int(value) if value % 1 == 0 else float(value)
-                    else:
-                        contact[key] = value
-                filtered_contacts.append(contact)
-            
-            scan_count += 1
-            print(f"Scan iteration {scan_count}: Found {len(response.get('Items', []))} items, {len(filtered_contacts)} total so far")
-            
-            last_evaluated_key = response.get('LastEvaluatedKey')
-            if not last_evaluated_key:
-                break
-        
-        print(f"Filter complete: {len(filtered_contacts)} contacts match filters")
-        
-        return {
-            'statusCode': 200,
-            'headers': headers,
-            'body': json.dumps({
-                'contacts': filtered_contacts,
-                'count': len(filtered_contacts)
-            })
-        }
-    
-    except Exception as e:
-        print(f"Error in filter_contacts: {str(e)}")
-        import traceback
-        traceback.print_exc()
-        return {'statusCode': 500, 'headers': headers, 'body': json.dumps({'error': str(e)})}
+    return {'statusCode': 200, 'headers': headers, 'body': json.dumps({'contacts': contacts})}
 
 def search_contacts(body, headers):
     """Search contacts by name in DynamoDB"""
@@ -4612,7 +2491,7 @@ def search_contacts(body, headers):
                 clean_contact = {}
                 for key, value in contact.items():
                     if isinstance(value, Decimal):
-                        clean_contact[key] = int(value) if value % 1 == 0 else float(value)
+                        clean_contact[key] = int(value)
                     else:
                         clean_contact[key] = value
                 matched_contacts.append(clean_contact)
@@ -4629,9 +2508,7 @@ def search_contacts(body, headers):
             })
         }
     except Exception as e:
-        print(f"Error in search_contacts: {str(e)}")
-        import traceback
-        traceback.print_exc()
+        print(f"Search error: {str(e)}")
         return {
             'statusCode': 500,
             'headers': headers,
@@ -4771,10 +2648,8 @@ def upload_attachment(body, headers):
 def add_contact(body, headers):
     """Add new contact with all CISA-specific fields"""
     try:
-        import uuid
         contacts_table.put_item(
             Item={
-                'contact_id': str(uuid.uuid4()),  # Generate unique contact_id
                 'email': body['email'],
                 'first_name': body.get('first_name', ''),
                 'last_name': body.get('last_name', ''),
@@ -4875,15 +2750,11 @@ def batch_add_contacts(body, headers):
 def update_contact(body, headers):
     """Update contact with all CISA fields"""
     try:
-        contact_id = body.get('contact_id')
-        email = body.get('email')
-        
-        if not contact_id:
-            return {'statusCode': 400, 'headers': headers, 'body': json.dumps({'error': 'contact_id is required'})}
+        email = body['email']
         
         # Define all possible contact fields
         contact_fields = [
-            'email', 'first_name', 'last_name', 'title', 'entity_type', 'state', 
+            'first_name', 'last_name', 'title', 'entity_type', 'state', 
             'agency_name', 'sector', 'subsection', 'phone', 'ms_isac_member',
             'soc_call', 'fusion_center', 'k12', 'water_wastewater', 
             'weekly_rollup', 'alternate_email', 'region', 'group'
@@ -4895,7 +2766,7 @@ def update_contact(body, headers):
         update_parts = []
         
         for field in contact_fields:
-            if field in body and field != 'contact_id':
+            if field in body:
                 # Use ExpressionAttributeNames to avoid reserved keyword issues
                 field_placeholder = f"#{field}"
                 value_placeholder = f":{field}"
@@ -4909,13 +2780,13 @@ def update_contact(body, headers):
         update_expr += ", ".join(update_parts)
         
         contacts_table.update_item(
-            Key={'contact_id': contact_id},
+            Key={'email': email},
             UpdateExpression=update_expr,
             ExpressionAttributeNames=expr_names,
             ExpressionAttributeValues=expr_values
         )
         
-        print(f"Updated contact {contact_id} (email: {email}) with fields: {list(body.keys())}")
+        print(f"Updated contact {email} with fields: {list(body.keys())}")
         return {'statusCode': 200, 'headers': headers, 'body': json.dumps({'success': True})}
     except Exception as e:
         print(f"Error updating contact: {str(e)}")
@@ -4924,25 +2795,13 @@ def update_contact(body, headers):
 def delete_contact(event, headers):
     """Delete contact"""
     try:
-        # Get contact_id from query parameters
-        query_params = event.get('queryStringParameters') or {}
-        contact_id = query_params.get('contact_id')
-        
-        print(f"Delete request - contact_id: {contact_id}")
-        
-        if not contact_id:
-            return {'statusCode': 400, 'headers': headers, 'body': json.dumps({'error': 'contact_id is required'})}
-        
-        contacts_table.delete_item(Key={'contact_id': contact_id})
-        print(f"Successfully deleted contact: {contact_id}")
+        email = event['queryStringParameters']['email']
+        contacts_table.delete_item(Key={'email': email})
         return {'statusCode': 200, 'headers': headers, 'body': json.dumps({'success': True})}
     except Exception as e:
-        print(f"Error deleting contact: {str(e)}")
-        import traceback
-        traceback.print_exc()
         return {'statusCode': 500, 'headers': headers, 'body': json.dumps({'error': str(e)})}
 
-def send_campaign(body, headers, event=None):
+def send_campaign(body, headers):
     """Send email campaign by saving to DynamoDB and queuing contacts to SQS"""
     try:
         # Get email configuration
@@ -4956,45 +2815,28 @@ def send_campaign(body, headers, event=None):
         target_contact_emails = body.get('target_contacts', [])
         filter_description = body.get('filter_description', 'All Contacts')
         
-        print(f"Received campaign request with {len(target_contact_emails)} email addresses")
-        print(f"Sample emails: {target_contact_emails[:5]}")
-        
         if not target_contact_emails:
-            return {'statusCode': 400, 'headers': headers, 'body': json.dumps({'error': 'No target email addresses specified. Please select recipients in the Campaign tab.'})}
+            return {'statusCode': 400, 'headers': headers, 'body': json.dumps({'error': 'No target contacts specified'})}
         
-        # Create contact objects directly from email addresses (independent of Contacts table)
-        # This allows campaigns to work without requiring emails to exist in the Contacts table
+        # Retrieve full contact records for the target emails
         contacts = []
         for email in target_contact_emails:
-            if email and '@' in email:  # Basic email validation
-                contacts.append({
-                    'email': email,
-                    'first_name': '',
-                    'last_name': '',
-                    'company': ''
-                })
-            else:
-                print(f"Invalid email format, skipping: {email}")
+            try:
+                contact_response = contacts_table.get_item(Key={'email': email})
+                if 'Item' in contact_response:
+                    contacts.append(contact_response['Item'])
+            except Exception as e:
+                print(f"Error retrieving contact {email}: {str(e)}")
         
-        print(f"Campaign targeting {len(contacts)} valid email addresses ({filter_description})")
+        print(f"Campaign targeting {len(contacts)} contacts ({filter_description})")
         
         if not contacts:
-            error_msg = f'No valid email addresses found. Received {len(target_contact_emails)} entries but none are valid emails. Please check email format (must contain @).'
-            return {'statusCode': 400, 'headers': headers, 'body': json.dumps({'error': error_msg})}
+            return {'statusCode': 400, 'headers': headers, 'body': json.dumps({'error': 'No valid contacts found'})}
         
         campaign_id = f"campaign_{int(datetime.now().timestamp())}"
         
         # Get attachments
         attachments = body.get('attachments', [])
-        
-        # Get user info from request context or body
-        launched_by = body.get('launched_by', 'Web User')
-        if 'requestContext' in event:
-            # Try to get user from API Gateway context
-            identity = event['requestContext'].get('identity', {})
-            source_ip = identity.get('sourceIp', 'Unknown')
-            user_agent = identity.get('userAgent', 'Unknown')
-            launched_by = f"{launched_by} (IP: {source_ip})"
         
         # Save complete campaign data to DynamoDB
         print(f"Saving campaign {campaign_id} to DynamoDB with {len(attachments)} attachments")
@@ -5004,18 +2846,23 @@ def send_campaign(body, headers, event=None):
                 'subject': body.get('subject', ''),
                 'body': body.get('body', ''),
                 'from_email': config.get('from_email', ''),
+                'email_service': config.get('email_service', 'ses'),
+                'aws_region': config.get('aws_region', 'us-gov-west-1'),
+                'aws_secret_name': config.get('aws_secret_name', ''),
+                'smtp_server': config.get('smtp_server', ''),
+                'smtp_port': int(config.get('smtp_port', 25)) if config.get('smtp_port') else 25,
                 'status': 'queued',
                 'total_contacts': len(contacts),
                 'queued_count': 0,
                 'sent_count': 0,
                 'failed_count': 0,
             'created_at': datetime.now().isoformat(),
-            'sent_at': None,  # Will be updated when emails are actually sent
-            'launched_by': launched_by
+            'filter_description': filter_description
         }
         
-        # Add filter values if present (keep for tracking which contacts were targeted)
-        if body.get('filter_values'):
+        # Add filter information if present
+        if body.get('filter_type'):
+            campaign_item['filter_type'] = body.get('filter_type')
             campaign_item['filter_values'] = body.get('filter_values', [])
         
         # Add attachments if present
@@ -5228,6 +3075,5 @@ def personalize_content(content, contact):
     # Legacy support
     content = content.replace('{{company}}', contact.get('agency_name', ''))
     
-    return content
     return content
     return content
