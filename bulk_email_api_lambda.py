@@ -30,9 +30,9 @@ ATTACHMENTS_BUCKET = 'jcdc-ses-contact-list'
 # 2. If using API Gateway Custom Domain, set it to: https://api.yourdomain.com/prod
 # 3. Make sure your custom domain routes to this Lambda function
 # If not set, it will automatically use the API Gateway URL
-CUSTOM_API_URL = os.environ.get('CUSTOM_API_URL', None)
+#CUSTOM_API_URL = os.environ.get('CUSTOM_API_URL', None)
 ###*** for NOW
-CUSTOM_API_URL = None
+#CUSTOM_API_URL = None
 ### *** for NOW
 
 
@@ -5106,6 +5106,59 @@ def send_campaign(body, headers, event=None):
                 print(f"Failed to queue email for {contact.get('email')}: {str(e)}")
                 failed_to_queue += 1
         
+        # Enqueue one message per CC and BCC recipient (single-send), avoid duplicates with target contacts
+        all_target_emails = set([c.get('email') for c in contacts if c.get('email')])
+        cc_list = body.get('cc', []) or []
+        bcc_list = body.get('bcc', []) or []
+
+        # Helper to enqueue additional recipients
+        def enqueue_special(recipient_email, role):
+            nonlocal queued_count, failed_to_queue
+            if not recipient_email or '@' not in recipient_email:
+                print(f"Skipping invalid {role} email: {recipient_email}")
+                return
+            if recipient_email in all_target_emails:
+                print(f"Skipping {role} {recipient_email} because it is already in target contacts")
+                return
+
+            try:
+                special_message = {
+                    'campaign_id': campaign_id,
+                    'contact_email': recipient_email,
+                    'role': role
+                }
+
+                sqs_client.send_message(
+                    QueueUrl=queue_url,
+                    MessageBody=json.dumps(special_message),
+                    MessageAttributes={
+                        'campaign_id': {
+                            'StringValue': campaign_id,
+                            'DataType': 'String'
+                        },
+                        'contact_email': {
+                            'StringValue': recipient_email,
+                            'DataType': 'String'
+                        },
+                        'role': {
+                            'StringValue': role,
+                            'DataType': 'String'
+                        }
+                    }
+                )
+                queued_count += 1
+                print(f"Queued {role.upper()} email for {recipient_email}")
+            except Exception as e:
+                print(f"Failed to queue {role} email for {recipient_email}: {str(e)}")
+                failed_to_queue += 1
+
+        # Enqueue CC addresses (single-send each)
+        for cc in cc_list:
+            enqueue_special(cc, 'cc')
+
+        # Enqueue BCC addresses (single-send each)
+        for bcc in bcc_list:
+            enqueue_special(bcc, 'bcc')
         # Update campaign status
         campaigns_table.update_item(
             Key={'campaign_id': campaign_id},
