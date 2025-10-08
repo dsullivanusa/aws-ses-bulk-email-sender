@@ -3796,6 +3796,16 @@ def serve_web_ui(event):
             const tempDiv = document.createElement('div');
             tempDiv.innerHTML = emailBody;
             
+            // Remove Quill's clipboard container element (often contains unwanted HTML at bottom)
+            const clipboardElements = tempDiv.querySelectorAll('.ql-clipboard, [id*="ql-clipboard"], [class*="ql-clipboard"]');
+            clipboardElements.forEach(el => el.remove());
+            console.log(`Removed ${{clipboardElements.length}} Quill clipboard containers`);
+            
+            // Remove any hidden or display:none elements that Quill might add
+            const hiddenElements = tempDiv.querySelectorAll('[style*="display: none"], [style*="display:none"]');
+            hiddenElements.forEach(el => el.remove());
+            console.log(`Removed ${{hiddenElements.length}} hidden elements`);
+            
             // Remove all Quill-specific attributes and classes
             const allElements = tempDiv.querySelectorAll('*');
             allElements.forEach(element => {{
@@ -3811,6 +3821,10 @@ def serve_web_ui(event):
                 element.removeAttribute('contenteditable');
                 // Remove spellcheck attributes
                 element.removeAttribute('spellcheck');
+                // Remove autocorrect attributes
+                element.removeAttribute('autocorrect');
+                // Remove autocapitalize attributes
+                element.removeAttribute('autocapitalize');
             }});
             
             // Get cleaned HTML
