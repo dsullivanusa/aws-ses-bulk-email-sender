@@ -3720,10 +3720,22 @@ def serve_web_ui(event):
                 selectedCampaignFilterValues: selectedCampaignFilterValues
             }});
             
+            // Check for CC/BCC early to allow CC/BCC-only campaigns
+            const ccValue = document.getElementById('campaignCc')?.value || '';
+            const bccValue = document.getElementById('campaignBcc')?.value || '';
+            const hasCcOrBcc = ccValue.trim().length > 0 || bccValue.trim().length > 0;
+            
             // THREE STATES: null = no filter, [] = filter with no results, [...] = filtered contacts
             if (campaignFilteredContacts === null) {{
-                // No filters applied - user must explicitly select targets
-                throw new Error('⚠️ Cannot send campaign: No targets selected.\\n\\nNo emails will be sent because you have not selected any targets.\\n\\nPlease select targets by:\\n• Clicking "All" to send to all contacts, OR\\n• Applying a filter to select specific contacts\\n\\nThen click "Apply Filter" before sending.');
+                // No filters applied - check if CC/BCC exist
+                if (!hasCcOrBcc) {{
+                    // No contacts selected and no CC/BCC
+                    throw new Error('⚠️ Cannot send campaign: No targets selected.\\n\\nNo emails will be sent because you have not selected any targets.\\n\\nPlease select targets by:\\n• Clicking "All" to send to all contacts, OR\\n• Applying a filter to select specific contacts, OR\\n• Adding email addresses to CC/BCC fields\\n\\nThen click "Apply Filter" (if using contacts) before sending.');
+                }}
+                // CC/BCC exist, allow campaign with empty contact list
+                targetContacts = [];
+                filterDescription = 'CC/BCC Recipients Only';
+                console.log('Sending to CC/BCC recipients only (no contacts from database)');
             }} else if (Array.isArray(campaignFilteredContacts) && campaignFilteredContacts.length > 0) {{
                 // User has applied a filter and has results
                 targetContacts = campaignFilteredContacts;
@@ -3733,8 +3745,15 @@ def serve_web_ui(event):
                 filterDescription = filterTags || 'Filtered Contacts';
                 console.log(`Using ${{targetContacts.length}} filtered contacts: ${{filterDescription}}`);
             }} else if (Array.isArray(campaignFilteredContacts) && campaignFilteredContacts.length === 0) {{
-                // Filter was applied but returned no results
-                throw new Error('⚠️ Cannot send campaign: Your filter returned 0 contacts.\\n\\nNo emails will be sent because no targets are selected.\\n\\nPlease adjust your filter criteria or clear filters to send to all contacts.');
+                // Filter was applied but returned no results - check if CC/BCC exist
+                if (!hasCcOrBcc) {{
+                    // No contacts from filter and no CC/BCC
+                    throw new Error('⚠️ Cannot send campaign: Your filter returned 0 contacts.\\n\\nNo emails will be sent because no targets are selected.\\n\\nPlease adjust your filter criteria, clear filters to send to all contacts, or add email addresses to CC/BCC fields.');
+                }}
+                // CC/BCC exist, allow campaign even with 0 filtered contacts
+                targetContacts = [];
+                filterDescription = 'CC/BCC Recipients Only (Filter returned 0 contacts)';
+                console.log('Filter returned 0 contacts, but sending to CC/BCC recipients');
             }} else if (Object.keys(selectedCampaignFilterValues || {{}}).length > 0) {{
                 // User has selected filter values but hasn't clicked "Apply Filter"
                 console.log('Filters selected but not applied. Attempting to apply filter automatically...');
@@ -3770,31 +3789,61 @@ def serve_web_ui(event):
                 }}
             }}
             
-            if (!targetContacts || targetContacts.length === 0) {{
-                throw new Error('⚠️ Cannot send campaign: No target contacts selected.\\n\\nPlease either:\\n• Add contacts to your database, OR\\n• Adjust your filter to include contacts, OR\\n• Clear filters to send to all contacts');
+            // Note: Validation for targetContacts is done later after CC/BCC are parsed
+            // to allow CC/BCC-only campaigns
+            console.log(`Target contacts from filter: ${{targetContacts.length}} (${{filterDescription}})`);
+            if (targetContacts.length > 0) {{
+                console.log('Sample target contacts:', targetContacts.slice(0, 3));
             }}
             
-            // Additional validation - check if emails are valid
-            const validEmails = targetContacts.map(c => c?.email).filter(email => email && email.includes('@'));
-            if (validEmails.length === 0) {{
-                throw new Error('No valid email addresses found in the selected contacts. Please check your contact data.');
-            }}
-            
-            console.log(`Valid emails found: ${{validEmails.length}} out of ${{targetContacts.length}} contacts`);
-            
-            console.log(`Campaign will be sent to ${{targetContacts.length}} contacts (${{filterDescription}})`);
-            console.log('Sample target contacts:', targetContacts.slice(0, 3));
-            
-            // Get content from Quill editor and clean it
+            // Get content from Quill editor and clean it thoroughly
             let emailBody = quillEditor.root.innerHTML;
             
-            // Remove Quill's empty paragraph placeholders and formatting artifacts
+            // Create a temporary div to parse and clean the HTML
+            const tempDiv = document.createElement('div');
+            tempDiv.innerHTML = emailBody;
+            
+            // Remove Quill's clipboard container element (often contains unwanted HTML at bottom)
+            const clipboardElements = tempDiv.querySelectorAll('.ql-clipboard, [id*="ql-clipboard"], [class*="ql-clipboard"]');
+            clipboardElements.forEach(el => el.remove());
+            console.log(`Removed ${{clipboardElements.length}} Quill clipboard containers`);
+            
+            // Remove any hidden or display:none elements that Quill might add
+            const hiddenElements = tempDiv.querySelectorAll('[style*="display: none"], [style*="display:none"]');
+            hiddenElements.forEach(el => el.remove());
+            console.log(`Removed ${{hiddenElements.length}} hidden elements`);
+            
+            // Remove all Quill-specific attributes and classes
+            const allElements = tempDiv.querySelectorAll('*');
+            allElements.forEach(element => {{
+                // Remove all class attributes
+                element.removeAttribute('class');
+                // Remove all data-* attributes
+                Array.from(element.attributes).forEach(attr => {{
+                    if (attr.name.startsWith('data-')) {{
+                        element.removeAttribute(attr.name);
+                    }}
+                }});
+                // Remove contenteditable attributes
+                element.removeAttribute('contenteditable');
+                // Remove spellcheck attributes
+                element.removeAttribute('spellcheck');
+                // Remove autocorrect attributes
+                element.removeAttribute('autocorrect');
+                // Remove autocapitalize attributes
+                element.removeAttribute('autocapitalize');
+            }});
+            
+            // Get cleaned HTML
+            emailBody = tempDiv.innerHTML;
+            
+            // Additional regex cleanup for any remaining artifacts
             emailBody = emailBody
                 .replace(/<p><br><\\/p>/g, '<p></p>')  // Remove empty line breaks
-                .replace(/<p class="ql-align-[^"]*">/g, '<p>')  // Remove alignment classes
-                .replace(/<p class="ql-indent-[^"]*">/g, '<p>')  // Remove indent classes
-                .replace(/class="[^"]*"/g, '')  // Remove all class attributes
-                .replace(/data-[^=]*="[^"]*"/g, '')  // Remove all data attributes
+                .replace(/<p>\\s*<\\/p>/g, '')  // Remove completely empty paragraphs
+                .replace(/\\s+class=""/g, '')  // Remove empty class attributes
+                .replace(/\\s+data-[^=]*="[^"]*"/g, '')  // Remove any remaining data attributes
+                .replace(/<p>\\s*<br>\\s*<\\/p>/g, '<p></p>')  // Remove paragraphs with only br
                 .trim();
             
             // Get user name from form
@@ -3822,7 +3871,45 @@ def serve_web_ui(event):
                 throw new Error('No valid email addresses found. Please check that your contacts have valid email addresses or add CC/BCC recipients.');
             }}
             
+<<<<<<< HEAD
                 const campaign = {{
+=======
+            // CONFIRMATION POPUP - Show total recipient count and ask for confirmation
+            const confirmationMessage = `
+📧 Campaign Confirmation
+
+You are about to send this campaign to:
+
+📊 Total Recipients: ${{allTargetEmails.length}}
+
+Breakdown:
+• Contacts from database: ${{targetEmails.length}}
+• CC recipients: ${{ccList.length}}
+• BCC recipients: ${{bccList.length}}
+
+Filter: ${{filterDescription}}
+
+⚠️ Are you sure you want to send this campaign?
+
+Click OK to proceed or Cancel to abort.
+            `.trim();
+            
+            // Show confirmation dialog and wait for user response
+            const userConfirmed = confirm(confirmationMessage);
+            
+            if (!userConfirmed) {{
+                // User clicked Cancel
+                button.textContent = originalText;
+                button.classList.remove('loading');
+                button.disabled = false;
+                console.log('Campaign send cancelled by user');
+                return; // Exit without sending
+            }}
+            
+            console.log('User confirmed campaign send');
+            
+            const campaign = {{
+>>>>>>> 90c3caebfc9266f5a349bfce97198af0f3f14502
                 campaign_name: document.getElementById('campaignName').value,
                 subject: document.getElementById('subject').value,
                 body: emailBody,
