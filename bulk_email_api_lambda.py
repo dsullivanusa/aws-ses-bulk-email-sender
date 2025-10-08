@@ -3834,6 +3834,46 @@ def serve_web_ui(event):
                 element.removeAttribute('autocapitalize');
             }});
             
+                // Remove only the trailing Quill-added image (commonly a data: or blob: image placed at the end)
+                const imgElements = tempDiv.querySelectorAll('img');
+                if (imgElements.length > 0) {{
+                    // Find the last non-empty node inside tempDiv
+                    let last = tempDiv.lastChild;
+                    while (last && last.nodeType === Node.TEXT_NODE && last.textContent.trim() === '') {{
+                        last = last.previousSibling;
+                    }}
+
+                    let removed = 0;
+                    if (last) {{
+                        if (last.nodeType === Node.ELEMENT_NODE && last.tagName.toLowerCase() === 'img') {{
+                            const src = last.getAttribute('src') || '';
+                            if (src.startsWith('data:') || src.startsWith('blob:')) {{
+                                last.remove();
+                                removed++;
+                            }}
+                        }} else if (last.nodeType === Node.ELEMENT_NODE) {{
+                            // If the last element contains only an <img> (and optional whitespace), remove that img if it's a data/blob URI
+                            const meaningfulChildren = Array.from(last.childNodes).filter(n => !(n.nodeType === Node.TEXT_NODE && n.textContent.trim() === ''));
+                            if (meaningfulChildren.length === 1 && meaningfulChildren[0].nodeType === Node.ELEMENT_NODE && meaningfulChildren[0].tagName.toLowerCase() === 'img') {{
+                                const img = meaningfulChildren[0];
+                                const src = img.getAttribute('src') || '';
+                                if (src.startsWith('data:') || src.startsWith('blob:')) {{
+                                    img.remove();
+                                    // remove parent if now empty
+                                    if (last.innerHTML.trim() === '') last.remove();
+                                    removed++;
+                                }}
+                            }}
+                        }}
+                    }}
+
+                    if (removed > 0) {{
+                        console.log(`Removed ${{removed}} trailing Quill image(s)`);
+                    }} else {{
+                        console.log('No trailing Quill images matched removal criteria');
+                    }}
+                }}
+
             // Get cleaned HTML
             emailBody = tempDiv.innerHTML;
             
