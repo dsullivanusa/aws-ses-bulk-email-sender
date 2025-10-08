@@ -668,6 +668,7 @@ def send_ses_email(campaign, contact, from_email, subject, body, msg_idx=0, cc_l
         from email.mime.multipart import MIMEMultipart
         from email.mime.text import MIMEText
         from email.mime.base import MIMEBase
+        from email.mime.image import MIMEImage
         from email import encoders
         
         aws_region = campaign.get('aws_region', 'us-gov-west-1')
@@ -746,9 +747,9 @@ def send_ses_email(campaign, contact, from_email, subject, body, msg_idx=0, cc_l
             
             return True
         
-        # Build MIME message with attachments
+        # Build MIME message with attachments: use multipart/mixed with multipart/related for HTML+inline images
         logger.info(f"[Message {msg_idx}] Building MIME message with {len(attachments)} attachment(s)")
-        msg = MIMEMultipart()
+        msg = MIMEMultipart('mixed')
         msg['From'] = from_email
         msg['To'] = contact['email']
         msg['Subject'] = subject
@@ -756,50 +757,69 @@ def send_ses_email(campaign, contact, from_email, subject, body, msg_idx=0, cc_l
         # Add Cc header for recipients (BCC must not appear in headers)
         if cc_list:
             msg['Cc'] = ', '.join(cc_list)
-        
-        # Attach HTML body
-        msg.attach(MIMEText(body, 'html'))
-        
-        # Download and attach files from S3
+
+        # multipart/related container for HTML body and inline images
+        related = MIMEMultipart('related')
+
+        # HTML part (attach first to related)
+        html_part = MIMEText(body, 'html')
+        related.attach(html_part)
+
+        inline_cids = []
+        other_parts = []
+
+        # Download and classify attachments from S3
         for idx, attachment in enumerate(attachments, 1):
             s3_key = attachment.get('s3_key')
             filename = attachment.get('filename')
-            
+
             if not s3_key or not filename:
                 logger.warning(f"[Message {msg_idx}] Attachment {idx}: Missing s3_key or filename, skipping")
                 continue
-            
+
             try:
                 logger.info(f"[Message {msg_idx}] Downloading attachment {idx}/{len(attachments)}: {filename} from S3")
                 logger.debug(f"[Message {msg_idx}] S3 bucket: {ATTACHMENTS_BUCKET}, key: {s3_key}")
-                
-                # Download from S3
+
                 s3_response = s3_client.get_object(Bucket=ATTACHMENTS_BUCKET, Key=s3_key)
                 file_data = s3_response['Body'].read()
-                
                 logger.info(f"[Message {msg_idx}] Downloaded {len(file_data)} bytes for {filename}")
-                
-                # Determine MIME type
+
                 content_type = attachment.get('type', 'application/octet-stream')
                 maintype, subtype = content_type.split('/', 1) if '/' in content_type else ('application', 'octet-stream')
-                
-                # Create MIME attachment
-                part = MIMEBase(maintype, subtype)
-                part.set_payload(file_data)
-                encoders.encode_base64(part)
-                part.add_header('Content-Disposition', f'attachment; filename="{filename}"')
-                
-                msg.attach(part)
-                logger.info(f"[Message {msg_idx}] Attached {filename} to email")
-                
+
+                if maintype.lower() == 'image':
+                    # Attach inline image with CID
+                    cid = f"{filename.replace(' ', '_')}-{idx}-{int(time.time())}@inline"
+                    try:
+                        img_part = MIMEImage(file_data, _subtype=subtype)
+                    except Exception:
+                        img_part = MIMEImage(file_data)
+                    img_part.add_header('Content-ID', f'<{cid}>')
+                    img_part.add_header('Content-Disposition', 'inline', filename=filename)
+                    related.attach(img_part)
+                    inline_cids.append({'cid': cid, 'filename': filename, 's3_key': s3_key})
+                    logger.info(f"[Message {msg_idx}] Attached image {filename} as inline CID <{cid}>")
+                else:
+                    part = MIMEBase(maintype, subtype)
+                    part.set_payload(file_data)
+                    encoders.encode_base64(part)
+                    part.add_header('Content-Disposition', f'attachment; filename="{filename}"')
+                    other_parts.append(part)
+                    logger.info(f"[Message {msg_idx}] Prepared non-image attachment {filename}")
+
             except Exception as attachment_error:
-                logger.error(f"[Message {msg_idx}] Error attaching {filename}: {str(attachment_error)}")
+                logger.error(f"[Message {msg_idx}] Error downloading/processing attachment {filename}: {str(attachment_error)}")
                 # Continue with other attachments even if one fails
         
-        # Send via send_raw_email (supports attachments)
+        # Attach related (HTML + inline images) to root, then any other attachments
+        msg.attach(related)
+        for p in other_parts:
+            msg.attach(p)
+
         logger.info(f"[Message {msg_idx}] Calling SES send_raw_email API with {len(attachments)} attachment(s)")
         logger.info(f"[Message {msg_idx}] Sending to: {contact['email']}, From: {from_email}")
-        
+
         # Build Destinations list for envelope recipients (To + Cc + Bcc)
         destinations = [contact['email']]
         if cc_list:
@@ -807,12 +827,34 @@ def send_ses_email(campaign, contact, from_email, subject, body, msg_idx=0, cc_l
         if bcc_list:
             destinations.extend(bcc_list)
 
+        # Attempt to rewrite HTML body references to S3 keys or filenames to cid: references
+        try:
+            new_body = body
+            for entry in inline_cids:
+                cid = entry['cid']
+                filename = entry['filename']
+                s3_key = entry.get('s3_key','')
+                s3_url1 = f'https://{ATTACHMENTS_BUCKET}.s3.amazonaws.com/{s3_key}'
+                s3_url2 = f'https://s3.amazonaws.com/{ATTACHMENTS_BUCKET}/{s3_key}'
+                new_body = new_body.replace(s3_url1, f'cid:{cid}')
+                new_body = new_body.replace(s3_url2, f'cid:{cid}')
+                new_body = new_body.replace(s3_key, f'cid:{cid}')
+                new_body = new_body.replace(filename, f'cid:{cid}')
+
+            if new_body != body:
+                # Replace the related html part payload
+                try:
+                    related._payload[0] = MIMEText(new_body, 'html')
+                except Exception:
+                    logger.warning(f"[Message {msg_idx}] Could not replace related payload directly")
+        except Exception as rewrite_err:
+            logger.warning(f"[Message {msg_idx}] Failed to rewrite body image references to cid: {str(rewrite_err)}")
+
         # Diagnostic: if this is the campaign the user reported, log a trimmed version of the raw MIME
         try:
             campaign_id = campaign.get('campaign_id') if isinstance(campaign, dict) else None
             if campaign_id == 'campaign_1759948233':
                 raw = msg.as_string()
-                # Log first 12k characters to CloudWatch (avoid enormous logs) and note total length
                 logger.info(f"[Message {msg_idx}] DEBUG RAW MIME (len={len(raw)}). Head preview:\n{raw[:12000]}")
         except Exception as dbg_err:
             logger.warning(f"[Message {msg_idx}] Failed to produce debug raw MIME: {str(dbg_err)}")
