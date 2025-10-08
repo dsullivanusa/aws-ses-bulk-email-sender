@@ -367,27 +367,20 @@ def lambda_handler(event, context):
                 logger.info(f"[Message {idx}] Subject: {personalized_subject}")
                 logger.debug(f"[Message {idx}] Body length: {len(personalized_body)} characters")
                 
-                # Check message role: normal per-contact sends vs single-send for cc/bcc
-                role = message.get('role')  # None, 'cc', or 'bcc'
+                # Check message role: normal per-contact sends vs single-send for cc/bcc/to
+                role = message.get('role')  # None, 'cc', 'bcc', or 'to'
 
-                if role in ('cc', 'bcc'):
-                    # For single-send CC/BCC messages, do not include campaign-level CC/BCC in the envelope
+                if role in ('cc', 'bcc', 'to'):
+                    # For single-send CC/BCC/To messages, do not include campaign-level CC/BCC in the envelope
                     cc_list = []
                     bcc_list = []
                     logger.info(f"[Message {idx}] Special role message detected: {role} (single-send to {contact_email})")
                 else:
-                    # Determine CC/BCC for this message: prefer SQS message-level values, fallback to campaign-level
-                    cc_list = message.get('cc') if message.get('cc') is not None else campaign.get('cc', [])
-                    bcc_list = message.get('bcc') if message.get('bcc') is not None else campaign.get('bcc', [])
-
-                    # Normalize lists (ensure lists of strings)
-                    if isinstance(cc_list, str):
-                        cc_list = [e.strip() for e in cc_list.split(',') if e.strip()]
-                    if isinstance(bcc_list, str):
-                        bcc_list = [e.strip() for e in bcc_list.split(',') if e.strip()]
-
-                    logger.info(f"[Message {idx}] CC resolved: {cc_list}")
-                    logger.info(f"[Message {idx}] BCC resolved: {bcc_list}")
+                    # Regular contact messages should NOT include campaign-level CC/BCC
+                    # because those recipients are already getting dedicated single-send messages
+                    cc_list = []
+                    bcc_list = []
+                    logger.info(f"[Message {idx}] Regular contact message (CC/BCC recipients get separate messages)")
 
                 # Apply adaptive rate control delay before sending
                 attachments = campaign.get('attachments', [])
