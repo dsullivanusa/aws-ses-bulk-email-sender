@@ -30,10 +30,7 @@ ATTACHMENTS_BUCKET = 'jcdc-ses-contact-list'
 # 2. If using API Gateway Custom Domain, set it to: https://api.yourdomain.com/prod
 # 3. Make sure your custom domain routes to this Lambda function
 # If not set, it will automatically use the API Gateway URL
-#CUSTOM_API_URL = os.environ.get('CUSTOM_API_URL', None)
-###*** for NOW
-#CUSTOM_API_URL = None
-### *** for NOW
+CUSTOM_API_URL = os.environ.get('CUSTOM_API_URL', None)
 
 
 # Cognito configuration (optional authentication)
@@ -3718,16 +3715,8 @@ def serve_web_ui(event):
             
             // THREE STATES: null = no filter, [] = filter with no results, [...] = filtered contacts
             if (campaignFilteredContacts === null) {{
-                // No filters applied - need to load all contacts from DynamoDB with pagination
-                console.log('No filters applied, fetching all contacts from database with pagination...');
-                try {{
-                    targetContacts = await fetchAllContactsPaginated();
-                    filterDescription = 'All Contacts';
-                    console.log(`Loaded ${{targetContacts.length}} contacts from database using pagination`);
-                }} catch (loadError) {{
-                    console.error('Failed to load contacts:', loadError);
-                    throw new Error(`Failed to load contacts: ${{loadError.message}}. Please ensure your API is configured correctly.`);
-                }}
+                // No filters applied - user must explicitly select targets
+                throw new Error('⚠️ Cannot send campaign: No targets selected.\\n\\nNo emails will be sent because you have not selected any targets.\\n\\nPlease select targets by:\\n• Clicking "All" to send to all contacts, OR\\n• Applying a filter to select specific contacts\\n\\nThen click "Apply Filter" before sending.');
             }} else if (Array.isArray(campaignFilteredContacts) && campaignFilteredContacts.length > 0) {{
                 // User has applied a filter and has results
                 targetContacts = campaignFilteredContacts;
@@ -3738,7 +3727,7 @@ def serve_web_ui(event):
                 console.log(`Using ${{targetContacts.length}} filtered contacts: ${{filterDescription}}`);
             }} else if (Array.isArray(campaignFilteredContacts) && campaignFilteredContacts.length === 0) {{
                 // Filter was applied but returned no results
-                throw new Error('Your filter returned 0 contacts. Please adjust your filter criteria or clear filters to send to all contacts.');
+                throw new Error('⚠️ Cannot send campaign: Your filter returned 0 contacts.\\n\\nNo emails will be sent because no targets are selected.\\n\\nPlease adjust your filter criteria or clear filters to send to all contacts.');
             }} else if (Object.keys(selectedCampaignFilterValues || {{}}).length > 0) {{
                 // User has selected filter values but hasn't clicked "Apply Filter"
                 console.log('Filters selected but not applied. Attempting to apply filter automatically...');
@@ -3755,7 +3744,7 @@ def serve_web_ui(event):
                         filterDescription = filterTags;
                         console.log(`Auto-applied filter: ${{targetContacts.length}} contacts found`);
                     }} else {{
-                        throw new Error('No contacts match the selected filter criteria. Please adjust your filter or clear it to send to all contacts.');
+                        throw new Error('⚠️ Cannot send campaign: No contacts match the selected filter criteria.\\n\\nNo emails will be sent because no targets are selected.\\n\\nPlease adjust your filter or clear it to send to all contacts.');
                     }}
                 }} catch (filterError) {{
                     console.error('Auto-apply filter failed:', filterError);
@@ -3775,7 +3764,7 @@ def serve_web_ui(event):
             }}
             
             if (!targetContacts || targetContacts.length === 0) {{
-                throw new Error('No contacts found. Please add contacts or adjust your filter.');
+                throw new Error('⚠️ Cannot send campaign: No target contacts selected.\\n\\nPlease either:\\n• Add contacts to your database, OR\\n• Adjust your filter to include contacts, OR\\n• Clear filters to send to all contacts');
             }}
             
             // Additional validation - check if emails are valid
@@ -3789,8 +3778,17 @@ def serve_web_ui(event):
             console.log(`Campaign will be sent to ${{targetContacts.length}} contacts (${{filterDescription}})`);
             console.log('Sample target contacts:', targetContacts.slice(0, 3));
             
-            // Get content from Quill editor
-            const emailBody = quillEditor.root.innerHTML;
+            // Get content from Quill editor and clean it
+            let emailBody = quillEditor.root.innerHTML;
+            
+            // Remove Quill's empty paragraph placeholders and formatting artifacts
+            emailBody = emailBody
+                .replace(/<p><br><\\/p>/g, '<p></p>')  // Remove empty line breaks
+                .replace(/<p class="ql-align-[^"]*">/g, '<p>')  // Remove alignment classes
+                .replace(/<p class="ql-indent-[^"]*">/g, '<p>')  // Remove indent classes
+                .replace(/class="[^"]*"/g, '')  // Remove all class attributes
+                .replace(/data-[^=]*="[^"]*"/g, '')  // Remove all data attributes
+                .trim();
             
             // Get user name from form
             const userName = document.getElementById('userName').value.trim() || 'Web User';
@@ -3799,13 +3797,17 @@ def serve_web_ui(event):
             const ccList = parseEmails(document.getElementById('campaignCc')?.value || '');
             const bccList = parseEmails(document.getElementById('campaignBcc')?.value || '');
             
-            // Extract and validate email addresses
+            // Extract and validate email addresses from contacts
             const targetEmails = targetContacts.map(c => c?.email).filter(email => email && email.includes('@'));
             console.log(`Extracted ${{targetEmails.length}} valid emails from ${{targetContacts.length}} contacts`);
-            console.log('Sample emails:', targetEmails.slice(0, 5));
             
-            if (targetEmails.length === 0) {{
-                throw new Error('No valid email addresses found in contacts. Please check that your contacts have valid email addresses.');
+            // Add CC and BCC emails to the target list
+            const allTargetEmails = [...new Set([...targetEmails, ...ccList, ...bccList])]; // Use Set to remove duplicates
+            console.log(`Total targets including CC/BCC: ${{allTargetEmails.length}} (Contacts: ${{targetEmails.length}}, CC: ${{ccList.length}}, BCC: ${{bccList.length}})`);
+            console.log('Sample emails:', allTargetEmails.slice(0, 5));
+            
+            if (allTargetEmails.length === 0) {{
+                throw new Error('No valid email addresses found. Please check that your contacts have valid email addresses or add CC/BCC recipients.');
             }}
             
             const campaign = {{
@@ -3816,9 +3818,9 @@ def serve_web_ui(event):
                 filter_type: Object.keys(selectedCampaignFilterValues).length > 0 ? 'custom' : null,
                 filter_values: Object.keys(selectedCampaignFilterValues).length > 0 ? JSON.stringify(selectedCampaignFilterValues): null,
                 filter_description: filterDescription,
-                target_contacts: targetEmails,  // Send email list to backend
-                cc: ccList,   // array of CC emails
-                bcc: bccList, // array of BCC emails
+                target_contacts: allTargetEmails,  // Send combined email list (contacts + CC + BCC) to backend
+                cc: ccList,   // array of CC emails (for display/tracking)
+                bcc: bccList, // array of BCC emails (for display/tracking)
                 attachments: campaignAttachments  // Include attachments
             }};
                 
