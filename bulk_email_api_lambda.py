@@ -1460,6 +1460,10 @@ def serve_web_ui(event):
 
             <div style="display:flex; gap:12px; margin-top:8px;">
                 <div style="flex:1;">
+                    <label for="campaignTo" style="font-size:12px; color:var(--gray-600)">To (comma-separated)</label>
+                    <input type="text" id="campaignTo" placeholder="recipient1@example.com, recipient2@example.com" style="width:100%; padding:8px; border-radius:6px; border:1px solid #e5e7eb;">
+                </div>
+                <div style="flex:1;">
                     <label for="campaignCc" style="font-size:12px; color:var(--gray-600)">CC (comma-separated)</label>
                     <input type="text" id="campaignCc" placeholder="alice@example.com, bob@example.com" style="width:100%; padding:8px; border-radius:6px; border:1px solid #e5e7eb;">
                 </div>
@@ -1832,6 +1836,9 @@ def serve_web_ui(event):
             if (campaignCc) campaignCc.value = '';
             const campaignBcc = document.getElementById('campaignBcc');
             if (campaignBcc) campaignBcc.value = '';
+            // Clear To field
+            const campaignTo = document.getElementById('campaignTo');
+            if (campaignTo) campaignTo.value = '';
             
             console.log('Campaign form cleared');
         }};
@@ -3793,24 +3800,29 @@ def serve_web_ui(event):
             // Get user name from form
             const userName = document.getElementById('userName').value.trim() || 'Web User';
             
-            // Read CC/BCC inputs and parse into arrays
+            // Read To/CC/BCC inputs and parse into arrays
+            const toList = parseEmails(document.getElementById('campaignTo')?.value || '');
             const ccList = parseEmails(document.getElementById('campaignCc')?.value || '');
             const bccList = parseEmails(document.getElementById('campaignBcc')?.value || '');
             
             // Extract and validate email addresses from contacts
             const targetEmails = targetContacts.map(c => c?.email).filter(email => email && email.includes('@'));
-            console.log(`Extracted ${{targetEmails.length}} valid emails from ${{targetContacts.length}} contacts`);
+            // If user provided explicit To addresses, include them as targets (they may be external or not in Contacts DB)
+            if (toList.length > 0) {{
+                console.log('Using explicit To list with ' + toList.length + ' addresses');
+            }}
+            console.log('Extracted ' + targetEmails.length + ' valid emails from ' + targetContacts.length + ' contacts');
             
-            // Add CC and BCC emails to the target list
-            const allTargetEmails = [...new Set([...targetEmails, ...ccList, ...bccList])]; // Use Set to remove duplicates
-            console.log(`Total targets including CC/BCC: ${{allTargetEmails.length}} (Contacts: ${{targetEmails.length}}, CC: ${{ccList.length}}, BCC: ${{bccList.length}})`);
+            // Combine contact-derived targets with any explicit To addresses plus CC/BCC (dedupe)
+            let allTargetEmails = [...new Set([...targetEmails, ...toList, ...ccList, ...bccList])];
+            console.log('Total targets including CC/BCC: ' + allTargetEmails.length + ' (Contacts: ' + targetEmails.length + ', CC: ' + ccList.length + ', BCC: ' + bccList.length + ')');
             console.log('Sample emails:', allTargetEmails.slice(0, 5));
             
             if (allTargetEmails.length === 0) {{
                 throw new Error('No valid email addresses found. Please check that your contacts have valid email addresses or add CC/BCC recipients.');
             }}
             
-            const campaign = {{
+                const campaign = {{
                 campaign_name: document.getElementById('campaignName').value,
                 subject: document.getElementById('subject').value,
                 body: emailBody,
@@ -3818,7 +3830,9 @@ def serve_web_ui(event):
                 filter_type: Object.keys(selectedCampaignFilterValues).length > 0 ? 'custom' : null,
                 filter_values: Object.keys(selectedCampaignFilterValues).length > 0 ? JSON.stringify(selectedCampaignFilterValues): null,
                 filter_description: filterDescription,
-                target_contacts: allTargetEmails,  // Send combined email list (contacts + CC + BCC) to backend
+                // Provide explicit To list (if given) and final target contacts
+                to: toList,
+                target_contacts: allTargetEmails,  // Send combined email list (contacts + CC + BCC or explicit To) to backend
                 cc: ccList,   // array of CC emails (for display/tracking)
                 bcc: bccList, // array of BCC emails (for display/tracking)
                 attachments: campaignAttachments  // Include attachments
@@ -5054,6 +5068,9 @@ def send_campaign(body, headers, event=None):
         
         # Store recipient email list for tracking
         campaign_item['target_contacts'] = target_contact_emails
+        # Persist explicit To list if provided
+        if body.get('to'):
+            campaign_item['to'] = body.get('to')
         # Persist CC and BCC lists if provided by the client so workers can honor them
         if body.get('cc'):
             campaign_item['cc'] = body.get('cc')
@@ -5112,6 +5129,7 @@ def send_campaign(body, headers, event=None):
         all_target_emails = set([c.get('email') for c in contacts if c.get('email')])
         cc_list = body.get('cc', []) or []
         bcc_list = body.get('bcc', []) or []
+        to_list = body.get('to', []) or []
 
         # Helper to enqueue additional recipients
         def enqueue_special(recipient_email, role):
@@ -5161,6 +5179,10 @@ def send_campaign(body, headers, event=None):
         # Enqueue BCC addresses (single-send each)
         for bcc in bcc_list:
             enqueue_special(bcc, 'bcc')
+        
+        # Enqueue explicit To addresses (single-send each) - skip addresses already in target contacts
+        for to_addr in to_list:
+            enqueue_special(to_addr, 'to')
         # Update campaign status
         campaigns_table.update_item(
             Key={'campaign_id': campaign_id},
