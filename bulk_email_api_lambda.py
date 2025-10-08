@@ -3778,16 +3778,40 @@ def serve_web_ui(event):
             console.log(`Campaign will be sent to ${{targetContacts.length}} contacts (${{filterDescription}})`);
             console.log('Sample target contacts:', targetContacts.slice(0, 3));
             
-            // Get content from Quill editor and clean it
+            // Get content from Quill editor and clean it thoroughly
             let emailBody = quillEditor.root.innerHTML;
             
-            // Remove Quill's empty paragraph placeholders and formatting artifacts
+            // Create a temporary div to parse and clean the HTML
+            const tempDiv = document.createElement('div');
+            tempDiv.innerHTML = emailBody;
+            
+            // Remove all Quill-specific attributes and classes
+            const allElements = tempDiv.querySelectorAll('*');
+            allElements.forEach(element => {{
+                // Remove all class attributes
+                element.removeAttribute('class');
+                // Remove all data-* attributes
+                Array.from(element.attributes).forEach(attr => {{
+                    if (attr.name.startsWith('data-')) {{
+                        element.removeAttribute(attr.name);
+                    }}
+                }});
+                // Remove contenteditable attributes
+                element.removeAttribute('contenteditable');
+                // Remove spellcheck attributes
+                element.removeAttribute('spellcheck');
+            }});
+            
+            // Get cleaned HTML
+            emailBody = tempDiv.innerHTML;
+            
+            // Additional regex cleanup for any remaining artifacts
             emailBody = emailBody
                 .replace(/<p><br><\\/p>/g, '<p></p>')  // Remove empty line breaks
-                .replace(/<p class="ql-align-[^"]*">/g, '<p>')  // Remove alignment classes
-                .replace(/<p class="ql-indent-[^"]*">/g, '<p>')  // Remove indent classes
-                .replace(/class="[^"]*"/g, '')  // Remove all class attributes
-                .replace(/data-[^=]*="[^"]*"/g, '')  // Remove all data attributes
+                .replace(/<p>\\s*<\\/p>/g, '')  // Remove completely empty paragraphs
+                .replace(/\\s+class=""/g, '')  // Remove empty class attributes
+                .replace(/\\s+data-[^=]*="[^"]*"/g, '')  // Remove any remaining data attributes
+                .replace(/<p>\\s*<br>\\s*<\\/p>/g, '<p></p>')  // Remove paragraphs with only br
                 .trim();
             
             // Get user name from form
@@ -3809,6 +3833,40 @@ def serve_web_ui(event):
             if (allTargetEmails.length === 0) {{
                 throw new Error('No valid email addresses found. Please check that your contacts have valid email addresses or add CC/BCC recipients.');
             }}
+            
+            // CONFIRMATION POPUP - Show total recipient count and ask for confirmation
+            const confirmationMessage = `
+📧 Campaign Confirmation
+
+You are about to send this campaign to:
+
+📊 Total Recipients: ${{allTargetEmails.length}}
+
+Breakdown:
+• Contacts from database: ${{targetEmails.length}}
+• CC recipients: ${{ccList.length}}
+• BCC recipients: ${{bccList.length}}
+
+Filter: ${{filterDescription}}
+
+⚠️ Are you sure you want to send this campaign?
+
+Click OK to proceed or Cancel to abort.
+            `.trim();
+            
+            // Show confirmation dialog and wait for user response
+            const userConfirmed = confirm(confirmationMessage);
+            
+            if (!userConfirmed) {{
+                // User clicked Cancel
+                button.textContent = originalText;
+                button.classList.remove('loading');
+                button.disabled = false;
+                console.log('Campaign send cancelled by user');
+                return; // Exit without sending
+            }}
+            
+            console.log('User confirmed campaign send');
             
             const campaign = {{
                 campaign_name: document.getElementById('campaignName').value,
