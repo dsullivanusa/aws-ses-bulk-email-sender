@@ -3890,20 +3890,20 @@ def serve_web_ui(event):
             // Get user name from form
             const userName = document.getElementById('userName').value.trim() || 'Web User';
             
-            // Read To/CC/BCC inputs and parse into arrays
-            const toList = parseEmails(document.getElementById('campaignTo')?.value || '');
-            const ccList = parseEmails(document.getElementById('campaignCc')?.value || '');
-            const bccList = parseEmails(document.getElementById('campaignBcc')?.value || '');
+            // Read To/CC/BCC inputs and parse into arrays (normalize to lowercase for deduplication)
+            const toList = parseEmails(document.getElementById('campaignTo')?.value || '').map(e => e.toLowerCase());
+            const ccList = parseEmails(document.getElementById('campaignCc')?.value || '').map(e => e.toLowerCase());
+            const bccList = parseEmails(document.getElementById('campaignBcc')?.value || '').map(e => e.toLowerCase());
             
-            // Extract and validate email addresses from contacts
-            const targetEmails = targetContacts.map(c => c?.email).filter(email => email && email.includes('@'));
+            // Extract and validate email addresses from contacts (normalize to lowercase)
+            const targetEmails = targetContacts.map(c => c?.email).filter(email => email && email.includes('@')).map(e => e.toLowerCase());
             // If user provided explicit To addresses, include them as targets (they may be external or not in Contacts DB)
             if (toList.length > 0) {{
                 console.log('Using explicit To list with ' + toList.length + ' addresses');
             }}
             console.log('Extracted ' + targetEmails.length + ' valid emails from ' + targetContacts.length + ' contacts');
             
-            // Combine contact-derived targets with any explicit To addresses plus CC/BCC (dedupe)
+            // Combine contact-derived targets with any explicit To addresses plus CC/BCC (dedupe with case-insensitive comparison)
             let allTargetEmails = [...new Set([...targetEmails, ...toList, ...ccList, ...bccList])];
             console.log('Total targets including To/CC/BCC: ' + allTargetEmails.length + ' (Contacts: ' + targetEmails.length + ', To: ' + toList.length + ', CC: ' + ccList.length + ', BCC: ' + bccList.length + ')');
             console.log('Sample emails:', allTargetEmails.slice(0, 5));
@@ -5251,7 +5251,8 @@ def send_campaign(body, headers, event=None):
                 failed_to_queue += 1
         
         # Enqueue one message per CC and BCC recipient (single-send), avoid duplicates with target contacts
-        all_target_emails = set([c.get('email') for c in contacts if c.get('email')])
+        # Normalize to lowercase for case-insensitive comparison
+        all_target_emails = set([c.get('email').lower().strip() for c in contacts if c.get('email')])
         cc_list = body.get('cc', []) or []
         bcc_list = body.get('bcc', []) or []
         to_list = body.get('to', []) or []
@@ -5262,7 +5263,8 @@ def send_campaign(body, headers, event=None):
             if not recipient_email or '@' not in recipient_email:
                 print(f"Skipping invalid {role} email: {recipient_email}")
                 return
-            if recipient_email in all_target_emails:
+            # Case-insensitive comparison to avoid duplicates
+            if recipient_email.lower().strip() in all_target_emails:
                 print(f"Skipping {role} {recipient_email} because it is already in target contacts")
                 return
 
