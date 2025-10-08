@@ -3871,7 +3871,6 @@ def serve_web_ui(event):
                 throw new Error('No valid email addresses found. Please check that your contacts have valid email addresses or add CC/BCC recipients.');
             }}
             
-                const campaign = {{
             // CONFIRMATION POPUP - Show total recipient count and ask for confirmation
             const confirmationMessage = `
 📧 Campaign Confirmation
