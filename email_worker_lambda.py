@@ -367,6 +367,28 @@ def lambda_handler(event, context):
                 logger.info(f"[Message {idx}] Subject: {personalized_subject}")
                 logger.debug(f"[Message {idx}] Body length: {len(personalized_body)} characters")
                 
+                # Check message role: normal per-contact sends vs single-send for cc/bcc
+                role = message.get('role')  # None, 'cc', or 'bcc'
+
+                if role in ('cc', 'bcc'):
+                    # For single-send CC/BCC messages, do not include campaign-level CC/BCC in the envelope
+                    cc_list = []
+                    bcc_list = []
+                    logger.info(f"[Message {idx}] Special role message detected: {role} (single-send to {contact_email})")
+                else:
+                    # Determine CC/BCC for this message: prefer SQS message-level values, fallback to campaign-level
+                    cc_list = message.get('cc') if message.get('cc') is not None else campaign.get('cc', [])
+                    bcc_list = message.get('bcc') if message.get('bcc') is not None else campaign.get('bcc', [])
+
+                    # Normalize lists (ensure lists of strings)
+                    if isinstance(cc_list, str):
+                        cc_list = [e.strip() for e in cc_list.split(',') if e.strip()]
+                    if isinstance(bcc_list, str):
+                        bcc_list = [e.strip() for e in bcc_list.split(',') if e.strip()]
+
+                    logger.info(f"[Message {idx}] CC resolved: {cc_list}")
+                    logger.info(f"[Message {idx}] BCC resolved: {bcc_list}")
+
                 # Apply adaptive rate control delay before sending
                 attachments = campaign.get('attachments', [])
                 delay = rate_control.get_delay_for_email(attachments)
@@ -407,9 +429,9 @@ def lambda_handler(event, context):
                 
                 try:
                     if email_service == 'ses':
-                        success = send_ses_email(campaign, contact, from_email, personalized_subject, personalized_body, idx)
+                        success = send_ses_email(campaign, contact, from_email, personalized_subject, personalized_body, idx, cc_list=cc_list, bcc_list=bcc_list)
                     else:
-                        success = send_smtp_email(campaign, contact, from_email, personalized_subject, personalized_body, idx)
+                        success = send_smtp_email(campaign, contact, from_email, personalized_subject, personalized_body, idx, cc_list=cc_list, bcc_list=bcc_list)
                     
                     send_duration = (datetime.now() - send_start).total_seconds()
                     logger.info(f"[Message {idx}] Email send attempt completed in {send_duration:.2f} seconds")
@@ -639,7 +661,7 @@ def get_aws_credentials_from_secrets_manager(secret_name, msg_idx=0):
         logger.error(f"[Message {msg_idx}] Error retrieving credentials from Secrets Manager: {str(e)}")
         raise
 
-def send_ses_email(campaign, contact, from_email, subject, body, msg_idx=0):
+def send_ses_email(campaign, contact, from_email, subject, body, msg_idx=0, cc_list=None, bcc_list=None):
     """Send email via AWS SES using IAM role or Secrets Manager credentials with attachment support"""
     try:
         from email.mime.multipart import MIMEMultipart
@@ -650,6 +672,12 @@ def send_ses_email(campaign, contact, from_email, subject, body, msg_idx=0):
         aws_region = campaign.get('aws_region', 'us-gov-west-1')
         secret_name = campaign.get('aws_secret_name')
         attachments = campaign.get('attachments', [])
+
+        # Prefer message-level cc/bcc passed from the worker; otherwise fall back to campaign-level lists
+        if cc_list is None:
+            cc_list = campaign.get('cc') or []
+        if bcc_list is None:
+            bcc_list = campaign.get('bcc') or []
         
         # Check if we should use IAM role or explicit credentials
         if secret_name:
@@ -678,13 +706,10 @@ def send_ses_email(campaign, contact, from_email, subject, body, msg_idx=0):
 
             # Build destination with optional CC/BCC
             destination = {'ToAddresses': [contact['email']]}
-            cc_list = campaign.get('cc') or []
-            bcc_list = campaign.get('bcc') or []
             if cc_list:
                 destination['CcAddresses'] = cc_list
 
-            # For the simple send_email API SES supports To and Cc in Destination, but Bcc must be set in the envelope.
-            # SES send_email does not accept a separate BccAddresses field in all SDK versions for the simple API, so we include Bcc via Destination when supported.
+            # SES supports BccAddresses in Destination for the send_email API; include if present
             if bcc_list:
                 destination['BccAddresses'] = bcc_list
 
@@ -719,8 +744,6 @@ def send_ses_email(campaign, contact, from_email, subject, body, msg_idx=0):
         msg['Subject'] = subject
 
         # Add Cc header for recipients (BCC must not appear in headers)
-        cc_list = campaign.get('cc') or []
-        bcc_list = campaign.get('bcc') or []
         if cc_list:
             msg['Cc'] = ', '.join(cc_list)
         
@@ -828,7 +851,7 @@ def send_ses_email(campaign, contact, from_email, subject, body, msg_idx=0):
         logger.exception(f"[Message {msg_idx}]   Full Exception:")
         raise e
 
-def send_smtp_email(campaign, contact, from_email, subject, body, msg_idx=0):
+def send_smtp_email(campaign, contact, from_email, subject, body, msg_idx=0, cc_list=None, bcc_list=None):
     """Send email via SMTP"""
     try:
         import smtplib
@@ -845,8 +868,11 @@ def send_smtp_email(campaign, contact, from_email, subject, body, msg_idx=0):
         msg['To'] = contact['email']
         msg['Subject'] = subject
 
-        cc_list = campaign.get('cc') or []
-        bcc_list = campaign.get('bcc') or []
+        # Prefer message-level lists if provided
+        if cc_list is None:
+            cc_list = campaign.get('cc') or []
+        if bcc_list is None:
+            bcc_list = campaign.get('bcc') or []
         if cc_list:
             msg['Cc'] = ', '.join(cc_list)
 
