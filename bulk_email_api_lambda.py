@@ -31,9 +31,6 @@ ATTACHMENTS_BUCKET = 'jcdc-ses-contact-list'
 # 3. Make sure your custom domain routes to this Lambda function
 # If not set, it will automatically use the API Gateway URL
 CUSTOM_API_URL = os.environ.get('CUSTOM_API_URL', None)
-###*** for NOW
-CUSTOM_API_URL = None
-### *** for NOW
 
 
 # Cognito configuration (optional authentication)
