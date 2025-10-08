@@ -664,6 +664,7 @@ def get_aws_credentials_from_secrets_manager(secret_name, msg_idx=0):
 def send_ses_email(campaign, contact, from_email, subject, body, msg_idx=0, cc_list=None, bcc_list=None):
     """Send email via AWS SES using IAM role or Secrets Manager credentials with attachment support"""
     try:
+        import re
         from email.mime.multipart import MIMEMultipart
         from email.mime.text import MIMEText
         from email.mime.base import MIMEBase
@@ -698,6 +699,15 @@ def send_ses_email(campaign, contact, from_email, subject, body, msg_idx=0, cc_l
         
         logger.info(f"[Message {msg_idx}] Creating SES client for region: {aws_region}")
         logger.info(f"[Message {msg_idx}] Attachments in campaign: {len(attachments)}")
+        # Diagnostic: log any <img src=> occurrences in the HTML body to help debug Outlook image prompts
+        try:
+            img_srcs = re.findall(r'<img[^>]+src=[\"\']([^\"\']+)[\"\']', body or '', flags=re.IGNORECASE)
+            if img_srcs:
+                logger.info(f"[Message {msg_idx}] Found img srcs in HTML body: {img_srcs}")
+            else:
+                logger.info(f"[Message {msg_idx}] No <img> tags found in HTML body")
+        except Exception as img_err:
+            logger.warning(f"[Message {msg_idx}] Failed to scan HTML body for <img> tags: {str(img_err)}")
         
         # If no attachments, use simple send_email
         if not attachments or len(attachments) == 0:
@@ -796,6 +806,16 @@ def send_ses_email(campaign, contact, from_email, subject, body, msg_idx=0, cc_l
             destinations.extend(cc_list)
         if bcc_list:
             destinations.extend(bcc_list)
+
+        # Diagnostic: if this is the campaign the user reported, log a trimmed version of the raw MIME
+        try:
+            campaign_id = campaign.get('campaign_id') if isinstance(campaign, dict) else None
+            if campaign_id == 'campaign_1759948233':
+                raw = msg.as_string()
+                # Log first 12k characters to CloudWatch (avoid enormous logs) and note total length
+                logger.info(f"[Message {msg_idx}] DEBUG RAW MIME (len={len(raw)}). Head preview:\n{raw[:12000]}")
+        except Exception as dbg_err:
+            logger.warning(f"[Message {msg_idx}] Failed to produce debug raw MIME: {str(dbg_err)}")
 
         response = ses_client.send_raw_email(
             Source=from_email,
@@ -948,11 +968,13 @@ def clean_quill_html_for_email(html_content):
     html_content = re.sub(r'\s+', ' ', html_content)
     html_content = html_content.strip()
     
-    # Remove <img> tags that use data: or blob: URIs (Quill often inserts these).
-    # These images can cause mail clients (Outlook) to treat them as attachments or prompt downloads.
+    # Remove any <img> tags (data:, blob:, or external). This is defensive: it prevents mail clients
+    # from showing remote-image placeholders or inline-data images that trigger download prompts.
     try:
-        html_content = re.sub(r"<img[^>]+src=[\"'](?:data:|blob:)[^\"']*[\"'][^>]*>", '', html_content, flags=re.IGNORECASE)
-        # Remove now-empty wrappers like <p></p> or <div></div> left behind
+        # Remove any <img ...> tags regardless of src
+        html_content = re.sub(r"<img[^>]*>", '', html_content, flags=re.IGNORECASE)
+
+        # Also remove now-empty wrappers like <p></p> or <div></div> left behind
         html_content = re.sub(r'<(p|div)\s*[^>]*>\s*</\1>', '', html_content, flags=re.IGNORECASE)
     except Exception:
         # If regex removal fails for any reason, fall back to the cleaned content we already have
