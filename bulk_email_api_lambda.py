@@ -72,8 +72,6 @@ def lambda_handler(event, context):
             return delete_contact(event, headers)
         elif path == '/contacts/batch' and method == 'POST':
             return batch_add_contacts(body, headers)
-        elif path == '/groups' and method == 'GET':
-            return get_groups(headers)
         elif path == '/contacts/search' and method == 'POST':
             return search_contacts(body, headers)
         elif path == '/upload-attachment' and method == 'POST':
@@ -958,7 +956,6 @@ def serve_web_ui(event):
         }}
         
         let allContacts = [];
-        let allGroups = [];
         let userSessionId = Math.random().toString(36).substr(2, 9);
         console.log('User session ID:', userSessionId);
         
@@ -1089,27 +1086,6 @@ def serve_web_ui(event):
             applyContactFilter();
         }}
         
-        async function loadGroupsFromDB() {{
-            try {{
-                console.log('Loading groups from DynamoDB...');
-                console.log('API URL:', `${{API_URL}}/groups`);
-                const response = await fetch(`${{API_URL}}/groups`);
-                
-                if (response.ok) {{
-                    const result = await response.json();
-                    allGroups = result.groups || [];
-                    console.log('Loaded groups from API:', allGroups);
-                    console.log('Number of groups found:', allGroups.length);
-                }} else {{
-                    console.error('Error loading groups. Status:', response.status);
-                    console.error('Response:', await response.text());
-                    alert('Warning: Could not load groups from database. Status: ' + response.status);
-                }}
-            }} catch (error) {{
-                console.error('Error loading groups:', error);
-                alert('Error loading groups: ' + error.message + '\\n\\nMake sure the /groups endpoint is configured in API Gateway.');
-            }}
-        }}
         
         async function loadFilterValues() {{
             const filterType = document.getElementById('filterType').value;
@@ -1503,7 +1479,6 @@ def serve_web_ui(event):
                 if (result.success) {{
                     hideEditContact();
                     loadContacts(); // Refresh the contacts list
-                    loadGroupsFromDB(); // Refresh groups in case group changed
                     alert('Contact updated successfully!');
                 }} else {{
                     alert('Error updating contact: ' + (result.error || 'Unknown error'));
@@ -1547,7 +1522,6 @@ def serve_web_ui(event):
             if (result.success) {{
                 hideAddContact();
                 loadContacts();
-                loadGroupsFromDB(); // Refresh groups in case new group added
                 // Clear form
                 document.getElementById('newEmail').value = '';
                 document.getElementById('newFirstName').value = '';
@@ -1840,7 +1814,6 @@ def serve_web_ui(event):
                 alert(message);
                 
             loadContacts();
-                loadGroupsFromDB(); // Refresh groups from uploaded contacts
                 
             }} catch (error) {{
                 console.error('CSV upload error:', error);
@@ -2335,7 +2308,6 @@ def serve_web_ui(event):
         window.onload = () => {{
             // Initialize UI and load configuration
             loadConfig();
-            loadGroupsFromDB();  // Load groups on page load
             console.log('Web UI loaded successfully');
         }};
     </script>
@@ -2521,47 +2493,6 @@ def search_contacts(body, headers):
             'body': json.dumps({'error': str(e)})
         }
 
-def get_groups(headers):
-    """Get distinct groups from contacts - optimized for large datasets"""
-    try:
-        groups = set()
-        
-        # Scan with ProjectionExpression to only get the 'group' field
-        response = contacts_table.scan(
-            ProjectionExpression='#grp',
-            ExpressionAttributeNames={'#grp': 'group'}
-        )
-        
-        # Add groups from first batch
-        for item in response.get('Items', []):
-            if 'group' in item and item['group']:
-                groups.add(item['group'])
-        
-        # Handle pagination for large datasets
-        while 'LastEvaluatedKey' in response:
-            response = contacts_table.scan(
-                ProjectionExpression='#grp',
-                ExpressionAttributeNames={'#grp': 'group'},
-                ExclusiveStartKey=response['LastEvaluatedKey']
-            )
-            for item in response.get('Items', []):
-                if 'group' in item and item['group']:
-                    groups.add(item['group'])
-        
-        # Convert to sorted list
-        groups_list = sorted(list(groups))
-        
-        return {
-            'statusCode': 200, 
-            'headers': headers, 
-            'body': json.dumps({'groups': groups_list})
-        }
-    except Exception as e:
-        return {
-            'statusCode': 500, 
-            'headers': headers, 
-            'body': json.dumps({'error': str(e)})
-        }
 
 def upload_attachment(body, headers):
     """Upload attachment to S3 bucket"""
