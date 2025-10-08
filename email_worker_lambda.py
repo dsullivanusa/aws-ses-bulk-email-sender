@@ -948,6 +948,16 @@ def clean_quill_html_for_email(html_content):
     html_content = re.sub(r'\s+', ' ', html_content)
     html_content = html_content.strip()
     
+    # Remove <img> tags that use data: or blob: URIs (Quill often inserts these).
+    # These images can cause mail clients (Outlook) to treat them as attachments or prompt downloads.
+    try:
+        html_content = re.sub(r"<img[^>]+src=[\"'](?:data:|blob:)[^\"']*[\"'][^>]*>", '', html_content, flags=re.IGNORECASE)
+        # Remove now-empty wrappers like <p></p> or <div></div> left behind
+        html_content = re.sub(r'<(p|div)\s*[^>]*>\s*</\1>', '', html_content, flags=re.IGNORECASE)
+    except Exception:
+        # If regex removal fails for any reason, fall back to the cleaned content we already have
+        pass
+
     return html_content
 
 def personalize_content(content, contact):
