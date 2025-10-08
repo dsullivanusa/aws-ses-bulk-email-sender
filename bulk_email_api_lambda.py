@@ -5052,6 +5052,11 @@ def send_campaign(body, headers, event=None):
         
         # Store recipient email list for tracking
         campaign_item['target_contacts'] = target_contact_emails
+        # Persist CC and BCC lists if provided by the client so workers can honor them
+        if body.get('cc'):
+            campaign_item['cc'] = body.get('cc')
+        if body.get('bcc'):
+            campaign_item['bcc'] = body.get('bcc')
         
         campaigns_table.put_item(Item=campaign_item)
         print(f"Campaign {campaign_id} saved to DynamoDB")

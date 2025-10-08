@@ -675,10 +675,22 @@ def send_ses_email(campaign, contact, from_email, subject, body, msg_idx=0):
         if not attachments or len(attachments) == 0:
             logger.info(f"[Message {msg_idx}] No attachments - using send_email API")
             logger.info(f"[Message {msg_idx}] Sending to: {contact['email']}, From: {from_email}")
-            
+
+            # Build destination with optional CC/BCC
+            destination = {'ToAddresses': [contact['email']]}
+            cc_list = campaign.get('cc') or []
+            bcc_list = campaign.get('bcc') or []
+            if cc_list:
+                destination['CcAddresses'] = cc_list
+
+            # For the simple send_email API SES supports To and Cc in Destination, but Bcc must be set in the envelope.
+            # SES send_email does not accept a separate BccAddresses field in all SDK versions for the simple API, so we include Bcc via Destination when supported.
+            if bcc_list:
+                destination['BccAddresses'] = bcc_list
+
             response = ses_client.send_email(
                 Source=from_email,
-                Destination={'ToAddresses': [contact['email']]},
+                Destination=destination,
                 Message={
                     'Subject': {'Data': subject},
                     'Body': {'Html': {'Data': body}}
@@ -705,6 +717,12 @@ def send_ses_email(campaign, contact, from_email, subject, body, msg_idx=0):
         msg['From'] = from_email
         msg['To'] = contact['email']
         msg['Subject'] = subject
+
+        # Add Cc header for recipients (BCC must not appear in headers)
+        cc_list = campaign.get('cc') or []
+        bcc_list = campaign.get('bcc') or []
+        if cc_list:
+            msg['Cc'] = ', '.join(cc_list)
         
         # Attach HTML body
         msg.attach(MIMEText(body, 'html'))
@@ -749,9 +767,16 @@ def send_ses_email(campaign, contact, from_email, subject, body, msg_idx=0):
         logger.info(f"[Message {msg_idx}] Calling SES send_raw_email API with {len(attachments)} attachment(s)")
         logger.info(f"[Message {msg_idx}] Sending to: {contact['email']}, From: {from_email}")
         
+        # Build Destinations list for envelope recipients (To + Cc + Bcc)
+        destinations = [contact['email']]
+        if cc_list:
+            destinations.extend(cc_list)
+        if bcc_list:
+            destinations.extend(bcc_list)
+
         response = ses_client.send_raw_email(
             Source=from_email,
-            Destinations=[contact['email']],
+            Destinations=destinations,
             RawMessage={'Data': msg.as_string()}
         )
         
@@ -819,14 +844,24 @@ def send_smtp_email(campaign, contact, from_email, subject, body, msg_idx=0):
         msg['From'] = from_email
         msg['To'] = contact['email']
         msg['Subject'] = subject
-        
+
+        cc_list = campaign.get('cc') or []
+        bcc_list = campaign.get('bcc') or []
+        if cc_list:
+            msg['Cc'] = ', '.join(cc_list)
+
         msg.attach(MIMEText(body, 'html'))
-        
+
         logger.debug(f"[Message {msg_idx}] SMTP message prepared")
-        
+
+        # Build envelope recipients (To + Cc + Bcc)
+        envelope_recipients = [contact['email']]
+        envelope_recipients.extend(cc_list)
+        envelope_recipients.extend(bcc_list)
+
         with smtplib.SMTP(smtp_server, smtp_port) as server:
-            logger.info(f"[Message {msg_idx}] Sending via SMTP")
-            server.send_message(msg)
+            logger.info(f"[Message {msg_idx}] Sending via SMTP to envelope recipients: {len(envelope_recipients)}")
+            server.send_message(msg, from_addr=from_email, to_addrs=envelope_recipients)
         
         logger.info(f"[Message {msg_idx}] SMTP send successful")
         return True
