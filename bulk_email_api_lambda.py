@@ -3720,22 +3720,23 @@ def serve_web_ui(event):
                 selectedCampaignFilterValues: selectedCampaignFilterValues
             }});
             
-            // Check for CC/BCC early to allow CC/BCC-only campaigns
+            // Check for To/CC/BCC early to allow To/CC/BCC-only campaigns
+            const toValue = document.getElementById('campaignTo')?.value || '';
             const ccValue = document.getElementById('campaignCc')?.value || '';
             const bccValue = document.getElementById('campaignBcc')?.value || '';
-            const hasCcOrBcc = ccValue.trim().length > 0 || bccValue.trim().length > 0;
+            const hasToOrCcOrBcc = toValue.trim().length > 0 || ccValue.trim().length > 0 || bccValue.trim().length > 0;
             
             // THREE STATES: null = no filter, [] = filter with no results, [...] = filtered contacts
             if (campaignFilteredContacts === null) {{
-                // No filters applied - check if CC/BCC exist
-                if (!hasCcOrBcc) {{
-                    // No contacts selected and no CC/BCC
-                    throw new Error('⚠️ Cannot send campaign: No targets selected.\\n\\nNo emails will be sent because you have not selected any targets.\\n\\nPlease select targets by:\\n• Clicking "All" to send to all contacts, OR\\n• Applying a filter to select specific contacts, OR\\n• Adding email addresses to CC/BCC fields\\n\\nThen click "Apply Filter" (if using contacts) before sending.');
+                // No filters applied - check if To/CC/BCC exist
+                if (!hasToOrCcOrBcc) {{
+                    // No contacts selected and no To/CC/BCC
+                    throw new Error('⚠️ Cannot send campaign: No targets selected.\\n\\nNo emails will be sent because you have not selected any targets.\\n\\nPlease select targets by:\\n• Clicking "All" to send to all contacts, OR\\n• Applying a filter to select specific contacts, OR\\n• Adding email addresses to To/CC/BCC fields\\n\\nThen click "Apply Filter" (if using contacts) before sending.');
                 }}
-                // CC/BCC exist, allow campaign with empty contact list
+                // To/CC/BCC exist, allow campaign with empty contact list
                 targetContacts = [];
-                filterDescription = 'CC/BCC Recipients Only';
-                console.log('Sending to CC/BCC recipients only (no contacts from database)');
+                filterDescription = 'To/CC/BCC Recipients Only';
+                console.log('Sending to To/CC/BCC recipients only (no contacts from database)');
             }} else if (Array.isArray(campaignFilteredContacts) && campaignFilteredContacts.length > 0) {{
                 // User has applied a filter and has results
                 targetContacts = campaignFilteredContacts;
@@ -3745,15 +3746,15 @@ def serve_web_ui(event):
                 filterDescription = filterTags || 'Filtered Contacts';
                 console.log(`Using ${{targetContacts.length}} filtered contacts: ${{filterDescription}}`);
             }} else if (Array.isArray(campaignFilteredContacts) && campaignFilteredContacts.length === 0) {{
-                // Filter was applied but returned no results - check if CC/BCC exist
-                if (!hasCcOrBcc) {{
-                    // No contacts from filter and no CC/BCC
-                    throw new Error('⚠️ Cannot send campaign: Your filter returned 0 contacts.\\n\\nNo emails will be sent because no targets are selected.\\n\\nPlease adjust your filter criteria, clear filters to send to all contacts, or add email addresses to CC/BCC fields.');
+                // Filter was applied but returned no results - check if To/CC/BCC exist
+                if (!hasToOrCcOrBcc) {{
+                    // No contacts from filter and no To/CC/BCC
+                    throw new Error('⚠️ Cannot send campaign: Your filter returned 0 contacts.\\n\\nNo emails will be sent because no targets are selected.\\n\\nPlease adjust your filter criteria, clear filters to send to all contacts, or add email addresses to To/CC/BCC fields.');
                 }}
-                // CC/BCC exist, allow campaign even with 0 filtered contacts
+                // To/CC/BCC exist, allow campaign even with 0 filtered contacts
                 targetContacts = [];
-                filterDescription = 'CC/BCC Recipients Only (Filter returned 0 contacts)';
-                console.log('Filter returned 0 contacts, but sending to CC/BCC recipients');
+                filterDescription = 'To/CC/BCC Recipients Only (Filter returned 0 contacts)';
+                console.log('Filter returned 0 contacts, but sending to To/CC/BCC recipients');
             }} else if (Object.keys(selectedCampaignFilterValues || {{}}).length > 0) {{
                 // User has selected filter values but hasn't clicked "Apply Filter"
                 console.log('Filters selected but not applied. Attempting to apply filter automatically...');
@@ -3789,8 +3790,8 @@ def serve_web_ui(event):
                 }}
             }}
             
-            // Note: Validation for targetContacts is done later after CC/BCC are parsed
-            // to allow CC/BCC-only campaigns
+            // Note: Validation for targetContacts is done later after To/CC/BCC are parsed
+            // to allow To/CC/BCC-only campaigns
             console.log(`Target contacts from filter: ${{targetContacts.length}} (${{filterDescription}})`);
             if (targetContacts.length > 0) {{
                 console.log('Sample target contacts:', targetContacts.slice(0, 3));
@@ -3904,11 +3905,11 @@ def serve_web_ui(event):
             
             // Combine contact-derived targets with any explicit To addresses plus CC/BCC (dedupe)
             let allTargetEmails = [...new Set([...targetEmails, ...toList, ...ccList, ...bccList])];
-            console.log('Total targets including CC/BCC: ' + allTargetEmails.length + ' (Contacts: ' + targetEmails.length + ', CC: ' + ccList.length + ', BCC: ' + bccList.length + ')');
+            console.log('Total targets including To/CC/BCC: ' + allTargetEmails.length + ' (Contacts: ' + targetEmails.length + ', To: ' + toList.length + ', CC: ' + ccList.length + ', BCC: ' + bccList.length + ')');
             console.log('Sample emails:', allTargetEmails.slice(0, 5));
             
             if (allTargetEmails.length === 0) {{
-                throw new Error('No valid email addresses found. Please check that your contacts have valid email addresses or add CC/BCC recipients.');
+                throw new Error('No valid email addresses found. Please check that your contacts have valid email addresses or add To/CC/BCC recipients.');
             }}
 
             // CONFIRMATION POPUP - Show total recipient count and ask for confirmation
@@ -3921,6 +3922,7 @@ You are about to send this campaign to:
 
 Breakdown:
 • Contacts from database: ${{targetEmails.length}}
+• To recipients: ${{toList.length}}
 • CC recipients: ${{ccList.length}}
 • BCC recipients: ${{bccList.length}}
 
