@@ -2423,8 +2423,10 @@ def save_email_config(body, headers):
 
 def get_email_config(headers):
     """Get email configuration"""
+    print(headers)
     try:
         response = email_config_table.get_item(Key={'config_id': 'default'})
+        print("get_mail_config_Response: ", response)
         if 'Item' in response:
             config = response['Item']
             
@@ -2447,7 +2449,9 @@ def get_email_config(headers):
 
 def get_contacts(headers):
     """Get all contacts"""
+    print(headers)
     response = contacts_table.scan()
+    print("get_contacts_Response: ", response)
     contacts = []
     for item in response['Items']:
         contact = {}
