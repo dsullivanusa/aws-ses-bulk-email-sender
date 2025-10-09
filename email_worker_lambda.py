@@ -654,6 +654,63 @@ def get_aws_credentials_from_secrets_manager(secret_name, msg_idx=0):
         logger.error(f"[Message {msg_idx}] Error retrieving credentials from Secrets Manager: {str(e)}")
         raise
 
+def hide_ses_tracking_pixel(html_body):
+    """
+    Inject CSS to hide AWS SES tracking pixel (1x1 image)
+    AWS recommends: visibility:hidden; opacity:0;
+    """
+    if not html_body or '<html' not in html_body.lower():
+        # Not HTML or empty, return as-is
+        return html_body
+    
+    # CSS to hide tracking pixels (1x1 images)
+    tracking_pixel_css = """
+<style type="text/css">
+    /* Hide AWS SES tracking pixel (1x1 images) */
+    img[width="1"][height="1"] {
+        visibility: hidden !important;
+        opacity: 0 !important;
+        display: none !important;
+    }
+    img[width="1px"][height="1px"] {
+        visibility: hidden !important;
+        opacity: 0 !important;
+        display: none !important;
+    }
+    /* Also hide any images with very small dimensions */
+    img[style*="width: 1px"][style*="height: 1px"],
+    img[style*="width:1px"][style*="height:1px"] {
+        visibility: hidden !important;
+        opacity: 0 !important;
+        display: none !important;
+    }
+</style>"""
+    
+    # Try to insert CSS in <head> section
+    import re
+    
+    # Check if <head> exists
+    head_pattern = re.compile(r'<head[^>]*>', re.IGNORECASE)
+    head_match = head_pattern.search(html_body)
+    
+    if head_match:
+        # Insert after <head> tag
+        insert_pos = head_match.end()
+        html_body = html_body[:insert_pos] + tracking_pixel_css + html_body[insert_pos:]
+    else:
+        # No <head> tag, try to insert after <html> tag
+        html_pattern = re.compile(r'<html[^>]*>', re.IGNORECASE)
+        html_match = html_pattern.search(html_body)
+        
+        if html_match:
+            insert_pos = html_match.end()
+            html_body = html_body[:insert_pos] + tracking_pixel_css + html_body[insert_pos:]
+        else:
+            # No proper HTML structure, prepend the CSS
+            html_body = tracking_pixel_css + html_body
+    
+    return html_body
+
 def send_ses_email(campaign, contact, from_email, subject, body, msg_idx=0, cc_list=None, bcc_list=None):
     """Send email via AWS SES using IAM role or Secrets Manager credentials with attachment support"""
     try:
@@ -708,6 +765,9 @@ def send_ses_email(campaign, contact, from_email, subject, body, msg_idx=0, cc_l
             logger.info(f"[Message {msg_idx}] No attachments - using send_email API")
             logger.info(f"[Message {msg_idx}] Sending to: {contact['email']}, From: {from_email}")
 
+            # Hide AWS SES tracking pixel before sending
+            body_with_hidden_pixel = hide_ses_tracking_pixel(body)
+
             # Build destination with optional CC/BCC
             destination = {'ToAddresses': [contact['email']]}
             if cc_list:
@@ -722,7 +782,7 @@ def send_ses_email(campaign, contact, from_email, subject, body, msg_idx=0, cc_l
                 Destination=destination,
                 Message={
                     'Subject': {'Data': subject},
-                    'Body': {'Html': {'Data': body}}
+                    'Body': {'Html': {'Data': body_with_hidden_pixel}}
                 }
             )
             
@@ -742,6 +802,10 @@ def send_ses_email(campaign, contact, from_email, subject, body, msg_idx=0, cc_l
         
         # Build MIME message with attachments: use multipart/mixed with multipart/related for HTML+inline images
         logger.info(f"[Message {msg_idx}] Building MIME message with {len(attachments)} attachment(s)")
+        
+        # Hide AWS SES tracking pixel before creating MIME message
+        body_with_hidden_pixel = hide_ses_tracking_pixel(body)
+        
         msg = MIMEMultipart('mixed')
         msg['From'] = from_email
         msg['To'] = contact['email']
@@ -755,7 +819,7 @@ def send_ses_email(campaign, contact, from_email, subject, body, msg_idx=0, cc_l
         related = MIMEMultipart('related')
 
         # HTML part (attach first to related)
-        html_part = MIMEText(body, 'html')
+        html_part = MIMEText(body_with_hidden_pixel, 'html')
         related.attach(html_part)
 
         inline_cids = []
@@ -822,7 +886,7 @@ def send_ses_email(campaign, contact, from_email, subject, body, msg_idx=0, cc_l
 
         # Attempt to rewrite HTML body references to S3 keys or filenames to cid: references
         try:
-            new_body = body
+            new_body = body_with_hidden_pixel  # Use body with hidden pixel CSS
             for entry in inline_cids:
                 cid = entry['cid']
                 filename = entry['filename']
@@ -834,7 +898,7 @@ def send_ses_email(campaign, contact, from_email, subject, body, msg_idx=0, cc_l
                 new_body = new_body.replace(s3_key, f'cid:{cid}')
                 new_body = new_body.replace(filename, f'cid:{cid}')
 
-            if new_body != body:
+            if new_body != body_with_hidden_pixel:
                 # Replace the related html part payload
                 try:
                     related._payload[0] = MIMEText(new_body, 'html')
