@@ -971,6 +971,10 @@ def send_ses_email(campaign, contact, from_email, subject, body, msg_idx=0, cc_l
                 filename = entry['filename']
                 s3_key = entry.get('s3_key','')
                 
+                print(f"🔍 [Message {msg_idx}] Looking for image to replace:")
+                print(f"   filename: {filename}")
+                print(f"   s3_key: {s3_key}")
+                print(f"   cid: {cid}")
                 logger.debug(f"[Message {msg_idx}] Looking for image: filename={filename}, s3_key={s3_key}")
                 
                 # Try multiple replacement patterns to catch different formats
@@ -983,12 +987,31 @@ def send_ses_email(campaign, contact, from_email, subject, body, msg_idx=0, cc_l
                     (filename, f'cid:{cid}')                   # Bare filename
                 ]
                 
-                for old_pattern, new_pattern in patterns_to_try:
+                print(f"   Trying {len(patterns_to_try)} replacement patterns...")
+                
+                pattern_found = False
+                for idx, (old_pattern, new_pattern) in enumerate(patterns_to_try):
                     if old_pattern in new_body:
+                        print(f"   ✅ Pattern {idx + 1} MATCHED: '{old_pattern[:60]}...'")
                         new_body = new_body.replace(old_pattern, new_pattern)
                         replacements_made += 1
-                        print(f"✅ [Message {msg_idx}] Replaced '{old_pattern[:50]}...' with '{new_pattern}'")
+                        pattern_found = True
+                        print(f"✅ [Message {msg_idx}] Replaced with '{new_pattern}'")
                         logger.info(f"[Message {msg_idx}] ✅ Replaced '{old_pattern[:50]}...' with '{new_pattern}' in HTML body")
+                        break  # Stop after first match
+                    else:
+                        print(f"   ❌ Pattern {idx + 1} not found: '{old_pattern[:60]}...'")
+                
+                if not pattern_found:
+                    print(f"⚠️ [Message {msg_idx}] WARNING: No pattern matched for {filename}!")
+                    print(f"   This image will appear as attachment, not inline!")
+                    # Show what's actually in the HTML for this image
+                    import re
+                    img_matches = re.findall(rf'<img[^>]*{re.escape(filename[:20])}[^>]*>', new_body, re.IGNORECASE)
+                    if img_matches:
+                        print(f"   Found img tag with filename: {img_matches[0][:150]}...")
+                    else:
+                        print(f"   Could not find any img tag containing '{filename[:20]}' in HTML body")
 
             print(f"📊 [Message {msg_idx}] Total image reference replacements made: {replacements_made}")
             logger.info(f"[Message {msg_idx}] Total image reference replacements made: {replacements_made}")
