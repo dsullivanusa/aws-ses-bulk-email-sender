@@ -1008,11 +1008,25 @@ def send_ses_email(campaign, contact, from_email, subject, body, msg_idx=0, cc_l
                     print(f"   This image will appear as attachment, not inline!")
                     # Show what's actually in the HTML for this image
                     import re
-                    img_matches = re.findall(rf'<img[^>]*{re.escape(filename[:20])}[^>]*>', new_body, re.IGNORECASE)
-                    if img_matches:
-                        print(f"   Found img tag with filename: {img_matches[0][:150]}...")
+                    
+                    # Search for any img tags
+                    all_img_tags = re.findall(r'<img[^>]+>', new_body, re.IGNORECASE)
+                    if all_img_tags:
+                        print(f"   Found {len(all_img_tags)} img tag(s) in HTML body:")
+                        for i, tag in enumerate(all_img_tags):
+                            print(f"     Img {i+1}: {tag[:200]}...")
                     else:
-                        print(f"   Could not find any img tag containing '{filename[:20]}' in HTML body")
+                        print(f"   No <img> tags found in HTML body at all!")
+                    
+                    # Check if body still has data: URIs
+                    if 'data:image' in new_body:
+                        print(f"   ⚠️ HTML body still contains 'data:image' URIs - frontend replacement failed!")
+                        data_uri_count = new_body.count('data:image')
+                        print(f"   Found {data_uri_count} data:image URI(s) in body")
+                    
+                    # Show a larger sample of the body
+                    print(f"   HTML body sample (first 1000 chars):")
+                    print(f"   {new_body[:1000]}...")
 
             print(f"📊 [Message {msg_idx}] Total image reference replacements made: {replacements_made}")
             logger.info(f"[Message {msg_idx}] Total image reference replacements made: {replacements_made}")

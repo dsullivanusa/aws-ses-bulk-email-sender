@@ -4138,6 +4138,14 @@ def serve_web_ui(event):
                 
                 // Show sample of HTML with S3 keys
                 console.log(`Email body sample after S3 replacement: ${{emailBody.substring(0, 300)}}...`);
+                
+                // Verify replacement happened
+                if (emailBody.includes('data:image')) {{
+                    console.error('⚠️ WARNING: Email body still contains data:image URIs after replacement!');
+                    console.error('This will cause issues. The frontend replacement may have failed.');
+                }} else {{
+                    console.log('✅ Confirmed: No data:image URIs in email body (all replaced with S3 keys)');
+                }}
             }}
             
             // Additional regex cleanup for any remaining artifacts
