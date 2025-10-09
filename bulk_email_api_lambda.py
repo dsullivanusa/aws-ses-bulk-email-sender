@@ -3897,7 +3897,22 @@ def serve_web_ui(event):
             // This allows inline images in the email body
             const allImgTags = tempDiv.querySelectorAll('img[src^="data:"], img[src^="blob:"]');
             if (allImgTags.length > 0) {{
-                console.log(`🖼️ Found ${{allImgTags.length}} embedded image(s) in email body - converting to inline attachments`);
+                console.log(`🖼️ Found ${{allImgTags.length}} embedded image(s) in email body`);
+                
+                // Check if upload endpoint is available first
+                const ENABLE_INLINE_IMAGES = true;  // Set to false to disable automatic uploads
+                
+                if (!ENABLE_INLINE_IMAGES) {{
+                    // Remove embedded images and show error
+                    allImgTags.forEach(img => img.remove());
+                    throw new Error(
+                        `Embedded images are not supported.\\n\\n` +
+                        `Please use the "📎 Add Attachments" button to attach images instead.\\n\\n` +
+                        `To enable inline images, run: python add_attachment_endpoint.py`
+                    );
+                }}
+                
+                console.log(`Converting ${{allImgTags.length}} embedded image(s) to inline attachments...`);
                 
                 // Show progress to user
                 button.textContent = `Uploading ${{allImgTags.length}} embedded image(s)...`;
@@ -3956,8 +3971,30 @@ def serve_web_ui(event):
                         const responseText = await uploadResponse.text();
                         
                         if (!uploadResponse.ok) {{
-                            console.error(`Upload failed with status ${{uploadResponse.status}}: ${{responseText.substring(0, 200)}}`);
-                            throw new Error(`Upload failed (${{uploadResponse.status}}): ${{uploadResponse.statusText}}`);
+                            console.error(`❌ Upload failed with status ${{uploadResponse.status}}: ${{uploadResponse.statusText}}`);
+                            console.error(`Response body (first 500 chars): ${{responseText.substring(0, 500)}}`);
+                            
+                            // Handle specific error codes
+                            if (uploadResponse.status === 403) {{
+                                throw new Error(
+                                    `Upload Failed: 403 Forbidden\\n\\n` +
+                                    `The /upload-attachment endpoint is blocked by API Gateway.\\n\\n` +
+                                    `SOLUTIONS:\\n` +
+                                    `1. Run: python add_attachment_endpoint.py\\n` +
+                                    `   (This adds the endpoint to API Gateway)\\n\\n` +
+                                    `2. OR deploy API Gateway:\\n` +
+                                    `   python deploy_api_gateway.py\\n\\n` +
+                                    `3. OR check API Gateway resource policy for restrictions`
+                                );
+                            }} else if (uploadResponse.status === 404) {{
+                                throw new Error(
+                                    `Upload Failed: 404 Not Found\\n\\n` +
+                                    `The /upload-attachment endpoint does not exist.\\n\\n` +
+                                    `Run: python add_attachment_endpoint.py`
+                                );
+                            }} else {{
+                                throw new Error(`Upload failed (${{uploadResponse.status}}): ${{uploadResponse.statusText}}`);
+                            }}
                         }}
                         
                         // Try to parse as JSON
@@ -4142,24 +4179,40 @@ Click OK to proceed or Cancel to abort.
                     throw new Error(`Attachments exceed 40 MB limit (${{(totalAttachmentSize / 1024 / 1024).toFixed(2)}} MB)`);
                 }}
             
+            // Debug: Log campaign object before serialization
+            console.log('Campaign object:', {{
+                campaign_name: campaign.campaign_name,
+                subject: campaign.subject,
+                body_length: campaign.body?.length || 0,
+                attachments_count: campaign.attachments?.length || 0,
+                target_contacts_count: campaign.target_contacts?.length || 0
+            }});
+            
             // Try to serialize campaign to JSON - catch errors early
             let campaignJSON;
             try {{
                 campaignJSON = JSON.stringify(campaign);
-                console.log(`Campaign JSON size: ${{campaignJSON.length}} characters`);
+                console.log(`✅ Campaign JSON serialized successfully`);
+                console.log(`   Size: ${{(campaignJSON.length / 1024).toFixed(2)}} KB`);
+                console.log(`   Body size: ${{(campaign.body?.length || 0 / 1024).toFixed(2)}} KB`);
+                console.log(`   Attachments: ${{campaign.attachments?.length || 0}}`);
                 
                 // Warn if body is very large
                 if (campaignJSON.length > 5000000) {{ // 5MB
                     console.warn(`⚠️ Campaign data is very large (${{(campaignJSON.length / 1024 / 1024).toFixed(2)}} MB)`);
                 }}
             }} catch (jsonError) {{
-                console.error('JSON serialization error:', jsonError);
+                console.error('❌ JSON serialization error:', jsonError);
+                console.error('Campaign object:', campaign);
                 throw new Error(
                     `Failed to prepare campaign data: ${{jsonError.message}}\\n\\n` +
-                    `This usually happens when the email contains embedded images.\\n` +
-                    `Please use the "Add Attachment" button to attach images instead.`
+                    `This usually happens when the email contains invalid data.\\n` +
+                    `Check browser console for details.`
                 );
             }}
+            
+            console.log(`📤 Sending campaign to backend: ${{API_URL}}/campaign`);
+            console.log(`   Campaign JSON size: ${{campaignJSON.length}} characters (${{(campaignJSON.length / 1024).toFixed(2)}} KB)`);
             
             const response = await fetch(`${{API_URL}}/campaign`, {{
                 method: 'POST',
@@ -4167,28 +4220,48 @@ Click OK to proceed or Cancel to abort.
                 body: campaignJSON
             }});
             
+            console.log(`Response status: ${{response.status}} ${{response.statusText}}`);
+            
+            // Get response as text first to handle HTML error pages
+            const responseText = await response.text();
+            console.log(`Response length: ${{responseText.length}} characters`);
+            console.log(`Response preview: ${{responseText.substring(0, 100)}}`);
+            
+            // Check if response is HTML (error page) instead of JSON
+            if (responseText.trim().startsWith('<')) {{
+                console.error('Server returned HTML instead of JSON:');
+                console.error(responseText.substring(0, 1000));
+                throw new Error(
+                    `Campaign Failed: Server returned an error page instead of JSON response\\n\\n` +
+                    `Status: ${{response.status}} ${{response.statusText}}\\n\\n` +
+                    `This indicates a backend error. Common causes:\\n` +
+                    `• Lambda function error or crash\\n` +
+                    `• Missing permissions (S3, DynamoDB, SQS)\\n` +
+                    `• Email body too large\\n\\n` +
+                    `Check CloudWatch Logs for details:\\n` +
+                    `python tail_lambda_logs.py BulkEmailAPI`
+                );
+            }}
+            
             let result;
             try {{
-                result = await response.json();
+                result = JSON.parse(responseText);
             }} catch (parseError) {{
-                console.error('Failed to parse response:', parseError);
+                console.error('Failed to parse response as JSON:', parseError);
+                console.error('Response text:', responseText.substring(0, 500));
                 throw new Error(
-                    `Campaign Failed: Server response error\\n\\n` +
+                    `Campaign Failed: Invalid server response\\n\\n` +
                     `${{parseError.message}}\\n\\n` +
-                    `This error often occurs when embedded images (copy/paste) are in the email.\\n` +
-                    `Please use the "Add Attachment" button to attach images instead.`
+                    `The server returned: ${{responseText.substring(0, 100)}}...\\n\\n` +
+                    `Check CloudWatch Logs: python tail_lambda_logs.py BulkEmailAPI`
                 );
             }}
             
             const resultDiv = document.getElementById('campaignResult');
                 
                 if (result.error) {{
-                    // Check if error mentions JSON or unexpected token
-                    let errorMessage = result.error;
-                    if (errorMessage.includes('Unexpected token') || errorMessage.includes('JSON')) {{
-                        errorMessage += `\\n\\n💡 This usually happens when embedded images are in the email.\\nPlease remove any copy/pasted images and use the "Add Attachment" button instead.`;
-                    }}
-                    throw new Error(errorMessage);
+                    console.error('Backend returned error:', result.error);
+                    throw new Error(result.error);
                 }}
                 
                 // Create a beautiful result display
