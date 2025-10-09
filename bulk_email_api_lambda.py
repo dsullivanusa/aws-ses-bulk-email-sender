@@ -4099,7 +4099,7 @@ def serve_web_ui(event):
                     }}
                 }}
 
-git             // Get cleaned HTML (with data: URIs still intact)
+            // Get cleaned HTML (with data: URIs still intact)
             emailBody = tempDiv.innerHTML;
             
             // Replace data: URIs with S3 keys for backend transmission
