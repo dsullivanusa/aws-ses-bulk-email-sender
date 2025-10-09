@@ -946,25 +946,81 @@ def send_ses_email(campaign, contact, from_email, subject, body, msg_idx=0, cc_l
         # Attempt to rewrite HTML body references to S3 keys or filenames to cid: references
         try:
             new_body = body_with_hidden_pixel  # Use body with hidden pixel CSS
+            replacements_made = 0
+            
+            print(f"🖼️ [Message {msg_idx}] Attempting to replace {len(inline_cids)} image reference(s) with CID in HTML body")
+            logger.info(f"[Message {msg_idx}] Attempting to replace {len(inline_cids)} image reference(s) with CID in HTML body")
+            
+            # Debug: Show preview of HTML body before replacement
+            if inline_cids:
+                body_preview = new_body[:500] if len(new_body) > 500 else new_body
+                logger.debug(f"[Message {msg_idx}] HTML body preview BEFORE CID replacement: {body_preview}...")
+                
+                # Find all img tags in body for debugging
+                import re
+                img_tags = re.findall(r'<img[^>]+>', new_body, re.IGNORECASE)
+                if img_tags:
+                    logger.info(f"[Message {msg_idx}] Found {len(img_tags)} <img> tag(s) in HTML body:")
+                    for i, tag in enumerate(img_tags[:5]):  # Show first 5
+                        logger.info(f"[Message {msg_idx}]   <img> {i+1}: {tag[:100]}...")
+                else:
+                    logger.warning(f"[Message {msg_idx}] No <img> tags found in HTML body!")
+            
             for entry in inline_cids:
                 cid = entry['cid']
                 filename = entry['filename']
                 s3_key = entry.get('s3_key','')
-                s3_url1 = f'https://{ATTACHMENTS_BUCKET}.s3.amazonaws.com/{s3_key}'
-                s3_url2 = f'https://s3.amazonaws.com/{ATTACHMENTS_BUCKET}/{s3_key}'
-                new_body = new_body.replace(s3_url1, f'cid:{cid}')
-                new_body = new_body.replace(s3_url2, f'cid:{cid}')
-                new_body = new_body.replace(s3_key, f'cid:{cid}')
-                new_body = new_body.replace(filename, f'cid:{cid}')
+                
+                logger.debug(f"[Message {msg_idx}] Looking for image: filename={filename}, s3_key={s3_key}")
+                
+                # Try multiple replacement patterns to catch different formats
+                patterns_to_try = [
+                    (f'https://{ATTACHMENTS_BUCKET}.s3.amazonaws.com/{s3_key}', f'cid:{cid}'),
+                    (f'https://s3.amazonaws.com/{ATTACHMENTS_BUCKET}/{s3_key}', f'cid:{cid}'),
+                    (f'src="{s3_key}"', f'src="cid:{cid}"'),  # src="campaign-attachments/file.png"
+                    (f"src='{s3_key}'", f"src='cid:{cid}'"),  # src='campaign-attachments/file.png'
+                    (s3_key, f'cid:{cid}'),                   # Bare S3 key
+                    (filename, f'cid:{cid}')                   # Bare filename
+                ]
+                
+                for old_pattern, new_pattern in patterns_to_try:
+                    if old_pattern in new_body:
+                        new_body = new_body.replace(old_pattern, new_pattern)
+                        replacements_made += 1
+                        print(f"✅ [Message {msg_idx}] Replaced '{old_pattern[:50]}...' with '{new_pattern}'")
+                        logger.info(f"[Message {msg_idx}] ✅ Replaced '{old_pattern[:50]}...' with '{new_pattern}' in HTML body")
+
+            print(f"📊 [Message {msg_idx}] Total image reference replacements made: {replacements_made}")
+            logger.info(f"[Message {msg_idx}] Total image reference replacements made: {replacements_made}")
+            
+            # Debug: Show preview of HTML body after replacement
+            if inline_cids and replacements_made > 0:
+                body_preview = new_body[:500] if len(new_body) > 500 else new_body
+                logger.debug(f"[Message {msg_idx}] HTML body preview AFTER CID replacement: {body_preview}...")
+                
+                # Find img tags after replacement
+                import re
+                img_tags_after = re.findall(r'<img[^>]+>', new_body, re.IGNORECASE)
+                if img_tags_after:
+                    logger.info(f"[Message {msg_idx}] <img> tags AFTER replacement:")
+                    for i, tag in enumerate(img_tags_after[:5]):
+                        logger.info(f"[Message {msg_idx}]   <img> {i+1}: {tag[:100]}...")
 
             if new_body != body_with_hidden_pixel:
                 # Replace the related html part payload
                 try:
                     related._payload[0] = MIMEText(new_body, 'html')
-                except Exception:
-                    logger.warning(f"[Message {msg_idx}] Could not replace related payload directly")
+                    print(f"✅ [Message {msg_idx}] Successfully updated HTML body with CID references ({replacements_made} replacements)")
+                    logger.info(f"[Message {msg_idx}] ✅ Successfully updated HTML body with CID references ({replacements_made} replacements)")
+                except Exception as replace_error:
+                    logger.warning(f"[Message {msg_idx}] Could not replace related payload directly: {str(replace_error)}")
+            else:
+                print(f"⚠️ [Message {msg_idx}] No replacements made - body unchanged. Images will appear as attachments!")
+                logger.warning(f"[Message {msg_idx}] ⚠️ No replacements made - body unchanged. Images may appear as attachments instead of inline!")
         except Exception as rewrite_err:
-            logger.warning(f"[Message {msg_idx}] Failed to rewrite body image references to cid: {str(rewrite_err)}")
+            logger.error(f"[Message {msg_idx}] Failed to rewrite body image references to cid: {str(rewrite_err)}")
+            import traceback
+            traceback.print_exc()
 
         # Diagnostic: if this is the campaign the user reported, log a trimmed version of the raw MIME
         try:
