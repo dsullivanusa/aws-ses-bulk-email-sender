@@ -4099,7 +4099,7 @@ def serve_web_ui(event):
                     }}
                 }}
 
-            // Get cleaned HTML (with data: URIs still intact)
+git             // Get cleaned HTML (with data: URIs still intact)
             emailBody = tempDiv.innerHTML;
             
             // Replace data: URIs with S3 keys for backend transmission
@@ -4114,9 +4114,10 @@ def serve_web_ui(event):
                     
                     if (s3Key && currentSrc && currentSrc.startsWith('data:')) {{
                         // Use string replacement to avoid browser fetching the image
-                        const escapedSrc = currentSrc.replace(/[.*+?^${{}}()|[\]\\]/g, '\\$&');
-                        const regex = new RegExp(`src="${{escapedSrc}}"`, 'g');
-                        emailBody = emailBody.replace(regex, `src="${{s3Key}}"`);
+                        // Escape special regex characters in the data URI
+                        const escapedSrc = currentSrc.replace(/[.*+?^${{}}()|[\]\\\\]/g, '\\\\$&');
+                        const regex = new RegExp('src="' + escapedSrc + '"', 'g');
+                        emailBody = emailBody.replace(regex, 'src="' + s3Key + '"');
                         
                         console.log(`  Image ${{idx + 1}}: Replaced data: URI with S3 key in HTML string: ${{s3Key}}`);
                     }}
