@@ -966,7 +966,7 @@ def send_ses_email(campaign, contact, from_email, subject, body, msg_idx=0, cc_l
 
         # HTML part (attach first to related) - use an alternative container for future extensibility
         alternative = MIMEMultipart('alternative')
-        html_part = MIMEText(body_with_hidden_pixel, 'html')
+        html_part = MIMEText(body_with_hidden_pixel, 'html', 'utf-8')
         alternative.attach(html_part)
         related.attach(alternative)
 
@@ -1156,7 +1156,7 @@ def send_ses_email(campaign, contact, from_email, subject, body, msg_idx=0, cc_l
             if new_body != body_with_hidden_pixel:
                 # Replace the related html part payload
                 try:
-                    related._payload[0] = MIMEText(new_body, 'html')
+                    related._payload[0] = MIMEText(new_body, 'html', 'utf-8')
                     print(f"✅ [Message {msg_idx}] Successfully updated HTML body with CID references ({replacements_made} replacements)")
                     logger.info(f"[Message {msg_idx}] ✅ Successfully updated HTML body with CID references ({replacements_made} replacements)")
                 except Exception as replace_error:
@@ -1173,15 +1173,21 @@ def send_ses_email(campaign, contact, from_email, subject, body, msg_idx=0, cc_l
         try:
             campaign_id = campaign.get('campaign_id') if isinstance(campaign, dict) else None
             if campaign_id == 'campaign_1759948233':
-                raw = msg.as_string()
-                logger.info(f"[Message {msg_idx}] DEBUG RAW MIME (len={len(raw)}). Head preview:\n{raw[:12000]}")
+                raw_bytes = msg.as_bytes()
+                try:
+                    raw = raw_bytes.decode('utf-8')
+                except Exception:
+                    raw = raw_bytes.decode('utf-8', errors='replace')
+                logger.info(f"[Message {msg_idx}] DEBUG RAW MIME (len={len(raw_bytes)}). Head preview:\n{raw[:12000]}")
         except Exception as dbg_err:
             logger.warning(f"[Message {msg_idx}] Failed to produce debug raw MIME: {str(dbg_err)}")
 
+        # Use as_bytes() to produce the raw MIME bytes for SES to avoid newline/line-ending surprises
+        raw_bytes = msg.as_bytes()
         response = ses_client.send_raw_email(
             Source=from_email,
             Destinations=destinations,
-            RawMessage={'Data': msg.as_string()}
+            RawMessage={'Data': raw_bytes}
         )
         
         # Log complete SES response
