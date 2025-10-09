@@ -982,8 +982,24 @@ def send_ses_email(campaign, contact, from_email, subject, body, msg_idx=0, cc_l
         related = MIMEMultipart('related')
 
         # HTML part (attach first to related) - use an alternative container for future extensibility
+        # IMPORTANT: use a binary/base64-encoded MIME part for HTML to avoid
+        # quoted-printable soft-wrapping which can introduce visible newlines
+        # in some mail clients (notably Outlook). We create a MIMEBase('text','html')
+        # payload and base64-encode it explicitly.
         alternative = MIMEMultipart('alternative')
-        html_part = MIMEText(body_with_hidden_pixel, 'html', 'utf-8')
+        try:
+            html_part = MIMEBase('text', 'html')
+            html_bytes = (body_with_hidden_pixel or '').encode('utf-8')
+            html_part.set_payload(html_bytes)
+            encoders.encode_base64(html_part)
+            # Ensure the charset is visible in the Content-Type header
+            html_part.add_header('Content-Type', 'text/html; charset="utf-8"')
+            # Mark as inline (it's the main HTML body)
+            html_part.add_header('Content-Disposition', 'inline')
+        except Exception:
+            # Fallback: if anything goes wrong, use MIMEText
+            html_part = MIMEText(body_with_hidden_pixel, 'html', 'utf-8')
+
         alternative.attach(html_part)
         related.attach(alternative)
 
@@ -1171,13 +1187,24 @@ def send_ses_email(campaign, contact, from_email, subject, body, msg_idx=0, cc_l
                         logger.info(f"[Message {msg_idx}]   <img> {i+1}: {tag[:100]}...")
 
             if new_body != body_with_hidden_pixel:
-                # Replace the related html part payload
+                # Replace the HTML part inside the alternative container explicitly
                 try:
-                    related._payload[0] = MIMEText(new_body, 'html', 'utf-8')
+                    try:
+                        new_html_part = MIMEBase('text', 'html')
+                        new_html_bytes = (new_body or '').encode('utf-8')
+                        new_html_part.set_payload(new_html_bytes)
+                        encoders.encode_base64(new_html_part)
+                        new_html_part.add_header('Content-Type', 'text/html; charset="utf-8"')
+                        new_html_part.add_header('Content-Disposition', 'inline')
+                    except Exception:
+                        new_html_part = MIMEText(new_body, 'html', 'utf-8')
+
+                    # alternative._payload[0] is the HTML part we originally attached
+                    alternative._payload[0] = new_html_part
                     print(f"✅ [Message {msg_idx}] Successfully updated HTML body with CID references ({replacements_made} replacements)")
                     logger.info(f"[Message {msg_idx}] ✅ Successfully updated HTML body with CID references ({replacements_made} replacements)")
                 except Exception as replace_error:
-                    logger.warning(f"[Message {msg_idx}] Could not replace related payload directly: {str(replace_error)}")
+                    logger.warning(f"[Message {msg_idx}] Could not replace alternative payload directly: {str(replace_error)}")
             else:
                 print(f"⚠️ [Message {msg_idx}] No replacements made - body unchanged. Images will appear as attachments!")
                 logger.warning(f"[Message {msg_idx}] ⚠️ No replacements made - body unchanged. Images may appear as attachments instead of inline!")
@@ -1349,8 +1376,27 @@ def clean_quill_html_for_email(html_content):
     html_content = re.sub(r'</div>\s*$', '', html_content)  # Remove trailing div
     
     # Clean up multiple spaces
+    # Collapse runs of whitespace to a single space (keeps HTML compact)
     html_content = re.sub(r'\s+', ' ', html_content)
     html_content = html_content.strip()
+
+    # --- Additional normalization to reduce visible gaps/newlines in emails ---
+    try:
+        # Remove empty paragraph tags often emitted by editors like Quill (e.g. <p><br></p> or <p>&nbsp;</p>)
+        html_content = re.sub(r'<p(?:\s+[^>]*)?>\s*(?:&nbsp;|<br\s*/?>|\s)*\s*</p>', '', html_content, flags=re.IGNORECASE)
+
+        # Collapse multiple consecutive <br> into a single <br/>
+        html_content = re.sub(r'(<br\s*/?>\s*){2,}', '<br/>', html_content, flags=re.IGNORECASE)
+
+        # Collapse sequences of empty or near-empty paragraphs into a single paragraph
+        # Example: </p> <p> </p> <p>Some text</p>  -> </p><p>Some text</p>
+        html_content = re.sub(r'</p>\s*(?:<p(?:\s+[^>]*)?>\s*</p>\s*)+', '</p>', html_content, flags=re.IGNORECASE)
+
+        # Trim leading/trailing whitespace inside paragraph tags: <p>  text  </p> -> <p>text</p>
+        html_content = re.sub(r'<p([^>]*)>\s*(.*?)\s*</p>', lambda m: f"<p{m.group(1)}>{m.group(2).strip()}</p>", html_content, flags=re.IGNORECASE)
+    except Exception as _norm_err:
+        # If normalization fails for any reason, keep the cleaned content unchanged
+        logger.debug(f"clean_quill_html_for_email: normalization step failed: {_norm_err}")
     
     # Preserve <img> tags here — we want to inline images later in the send path.
     # Earlier versions removed all <img> tags defensively, but that prevents
