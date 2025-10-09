@@ -878,23 +878,25 @@ def send_ses_email(campaign, contact, from_email, subject, body, msg_idx=0, cc_l
         for idx, attachment in enumerate(attachments, 1):
             s3_key = attachment.get('s3_key')
             filename = attachment.get('filename')
-
+            is_inline = attachment.get('inline', False)  # Check if this is an inline image
+            
             if not s3_key or not filename:
                 logger.warning(f"[Message {msg_idx}] Attachment {idx}: Missing s3_key or filename, skipping")
                 continue
-
+            
             try:
-                logger.info(f"[Message {msg_idx}] Downloading attachment {idx}/{len(attachments)}: {filename} from S3")
+                logger.info(f"[Message {msg_idx}] Downloading attachment {idx}/{len(attachments)}: {filename} from S3 (inline={is_inline})")
                 logger.debug(f"[Message {msg_idx}] S3 bucket: {ATTACHMENTS_BUCKET}, key: {s3_key}")
-
+                
                 s3_response = s3_client.get_object(Bucket=ATTACHMENTS_BUCKET, Key=s3_key)
                 file_data = s3_response['Body'].read()
                 logger.info(f"[Message {msg_idx}] Downloaded {len(file_data)} bytes for {filename}")
-
+                
                 content_type = attachment.get('type', 'application/octet-stream')
                 maintype, subtype = content_type.split('/', 1) if '/' in content_type else ('application', 'octet-stream')
-
-                if maintype.lower() == 'image':
+                
+                # Always treat images as inline (either from inline flag or if they're images)
+                if maintype.lower() == 'image' or is_inline:
                     # Attach inline image with CID
                     cid = f"{filename.replace(' ', '_')}-{idx}-{int(time.time())}@inline"
                     try:
@@ -904,8 +906,8 @@ def send_ses_email(campaign, contact, from_email, subject, body, msg_idx=0, cc_l
                     img_part.add_header('Content-ID', f'<{cid}>')
                     img_part.add_header('Content-Disposition', 'inline', filename=filename)
                     related.attach(img_part)
-                    inline_cids.append({'cid': cid, 'filename': filename, 's3_key': s3_key})
-                    logger.info(f"[Message {msg_idx}] Attached image {filename} as inline CID <{cid}>")
+                    inline_cids.append({{'cid': cid, 'filename': filename, 's3_key': s3_key}})
+                    logger.info(f"[Message {msg_idx}] Attached image {filename} as inline CID <{cid}> (inline={is_inline})")
                 else:
                     part = MIMEBase(maintype, subtype)
                     part.set_payload(file_data)
@@ -913,7 +915,7 @@ def send_ses_email(campaign, contact, from_email, subject, body, msg_idx=0, cc_l
                     part.add_header('Content-Disposition', f'attachment; filename="{filename}"')
                     other_parts.append(part)
                     logger.info(f"[Message {msg_idx}] Prepared non-image attachment {filename}")
-
+                
             except Exception as attachment_error:
                 logger.error(f"[Message {msg_idx}] Error downloading/processing attachment {filename}: {str(attachment_error)}")
                 # Continue with other attachments even if one fails

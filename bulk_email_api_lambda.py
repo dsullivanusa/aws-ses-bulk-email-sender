@@ -1483,8 +1483,20 @@ def serve_web_ui(event):
             </div>
             <div class="form-group">
                 <label>📄 Email Body:</label>
+                <div style="background: #eff6ff; padding: 10px; border-radius: 6px; border-left: 4px solid #3b82f6; margin-bottom: 8px; font-size: 12px;">
+                    <strong>✨ Editor Features:</strong><br>
+                    • <strong>Copy/Paste HTML:</strong> Paste formatted HTML directly (Ctrl+V) or use 📋 Paste HTML button<br>
+                    • <strong>Inline Images:</strong> Paste/embed images - they're auto-converted to work in emails<br>
+                    • <strong>Formatting:</strong> Use toolbar for bold, colors, lists, alignment, etc.<br>
+                    • <strong>Placeholders:</strong> Use {{{{first_name}}}}, {{{{email}}}}, etc. for personalization
+                </div>
                 <div id="body" style="min-height: 200px; background: white;"></div>
-                <small>Available placeholders: {{{{first_name}}}}, {{{{last_name}}}}, {{{{email}}}}, {{{{title}}}}, {{{{entity_type}}}}, {{{{state}}}}, {{{{agency_name}}}}, {{{{sector}}}}, {{{{subsection}}}}, {{{{phone}}}}, {{{{ms_isac_member}}}}, {{{{soc_call}}}}, {{{{fusion_center}}}}, {{{{k12}}}}, {{{{water_wastewater}}}}, {{{{weekly_rollup}}}}, {{{{alternate_email}}}}, {{{{region}}}}, {{{{group}}}}</small>
+                <div style="display: flex; gap: 10px; margin-top: 8px;">
+                    <small style="flex: 1; color: #6b7280;">💡 Tip: You can paste HTML directly (Ctrl+V) or click "📋 Paste HTML" for a dialog</small>
+                    <button onclick="pasteRawHTML()" type="button" style="font-size: 11px; padding: 4px 8px; background: #6366f1; color: white; border: none; border-radius: 4px; cursor: pointer;" title="Paste HTML from clipboard or dialog">
+                        📋 Paste HTML
+                    </button>
+                </div>
             </div>
             
             <div class="form-group">
@@ -1847,6 +1859,52 @@ def serve_web_ui(event):
         function parseEmails(input) {{
             if (!input) return [];
             return input.split(',').map(s => s.trim()).filter(s => s.length > 0);
+        }}
+        
+        // Paste raw HTML into Quill editor
+        function pasteRawHTML() {{
+            const htmlContent = prompt(
+                'Paste your HTML content below:\\n\\n' +
+                '✅ Supports: HTML formatting, styles, tables, links\\n' +
+                '✅ Images: Copy/paste images work (auto-converted to inline)\\n' +
+                '✅ Placeholders: Use {{{{first_name}}}}, {{{{email}}}}, etc.\\n\\n' +
+                'Your HTML:'
+            );
+            
+            if (htmlContent === null) {{
+                // User cancelled
+                return;
+            }}
+            
+            if (!htmlContent.trim()) {{
+                alert('No HTML content provided');
+                return;
+            }}
+            
+            try {{
+                console.log('Pasting raw HTML into Quill editor');
+                console.log('HTML length:', htmlContent.length);
+                
+                // Quill's clipboard API to paste HTML
+                const delta = quillEditor.clipboard.convert(htmlContent);
+                quillEditor.setContents(delta, 'user');
+                
+                console.log('✅ HTML pasted successfully');
+                
+                // Show success message
+                setTimeout(() => {{
+                    alert(
+                        '✅ HTML Content Pasted Successfully!\\n\\n' +
+                        'Your HTML has been imported into the editor.\\n\\n' +
+                        'Note: Quill preserves formatting but may simplify some complex styles.\\n\\n' +
+                        'You can now edit the content or send the campaign.'
+                    );
+                }}, 100);
+                
+            }} catch (error) {{
+                console.error('Error pasting HTML:', error);
+                alert('Failed to paste HTML: ' + error.message);
+            }}
         }}
         
         async function loadContacts(resetPagination = true) {{
@@ -3835,6 +3893,89 @@ def serve_web_ui(event):
                 element.removeAttribute('autocapitalize');
             }});
             
+            // IMPORTANT: Convert embedded images (base64 data URIs) to attachments
+            // This allows inline images in the email body
+            const allImgTags = tempDiv.querySelectorAll('img[src^="data:"], img[src^="blob:"]');
+            if (allImgTags.length > 0) {{
+                console.log(`🖼️ Found ${{allImgTags.length}} embedded image(s) in email body - converting to inline attachments`);
+                
+                for (let index = 0; index < allImgTags.length; index++) {{
+                    const img = allImgTags[index];
+                    const dataUri = img.src;
+                    const altText = img.alt || img.title || `InlineImage${{index + 1}}`;
+                    
+                    try {{
+                        // Extract base64 data from data URI
+                        const matches = dataUri.match(/^data:([^;]+);base64,(.+)$/);
+                        if (!matches) {{
+                            console.warn(`Skipping invalid data URI for image ${{index}}`);
+                            continue;
+                        }}
+                        
+                        const mimeType = matches[1];
+                        const base64Data = matches[2];
+                        
+                        // Determine file extension from MIME type
+                        const extension = mimeType.split('/')[1] || 'png';
+                        const filename = `${{altText.replace(/[^a-zA-Z0-9]/g, '_')}}_${{Date.now()}}_${{index}}.${{extension}}`;
+                        
+                        // Convert base64 to blob
+                        const byteCharacters = atob(base64Data);
+                        const byteNumbers = new Array(byteCharacters.length);
+                        for (let i = 0; i < byteCharacters.length; i++) {{
+                            byteNumbers[i] = byteCharacters.charCodeAt(i);
+                        }}
+                        const byteArray = new Uint8Array(byteNumbers);
+                        const blob = new Blob([byteArray], {{ type: mimeType }});
+                        
+                        // Upload to S3 via backend
+                        const formData = new FormData();
+                        formData.append('file', blob, filename);
+                        
+                        console.log(`Uploading embedded image ${{index + 1}}/${{allImgTags.length}}: ${{filename}} (${{(blob.size / 1024).toFixed(2)}} KB)`);
+                        
+                        const uploadResponse = await fetch(`${{API_URL}}/upload-attachment`, {{
+                            method: 'POST',
+                            body: formData
+                        }});
+                        
+                        if (!uploadResponse.ok) {{
+                            throw new Error(`Upload failed: ${{uploadResponse.statusText}}`);
+                        }}
+                        
+                        const uploadResult = await uploadResponse.json();
+                        
+                        if (uploadResult.error) {{
+                            throw new Error(uploadResult.error);
+                        }}
+                        
+                        console.log(`✅ Uploaded embedded image: ${{uploadResult.s3_key}}`);
+                        
+                        // Add to campaign attachments with inline flag
+                        campaignAttachments.push({{
+                            filename: uploadResult.filename,
+                            s3_key: uploadResult.s3_key,
+                            size: uploadResult.size,
+                            type: uploadResult.type,
+                            inline: true  // Mark as inline image
+                        }});
+                        
+                        // Replace data URI with S3 key reference
+                        // Email worker will convert this to cid: reference
+                        img.src = uploadResult.s3_key;
+                        img.setAttribute('data-inline', 'true');
+                        
+                    }} catch (uploadError) {{
+                        console.error(`Failed to upload embedded image ${{index}}:`, uploadError);
+                        // Keep the image but show warning
+                        alert(`⚠️ Failed to upload embedded image "${{altText}}": ${{uploadError.message}}\\n\\nThe image will be removed from the email.`);
+                        img.remove();
+                    }}
+                }}
+                
+                console.log(`✅ Converted ${{allImgTags.length}} embedded image(s) to inline attachments`);
+            }}
+            
                 // Remove only the trailing Quill-added image (commonly a data: or blob: image placed at the end)
                 const imgElements = tempDiv.querySelectorAll('img');
                 if (imgElements.length > 0) {{
@@ -3974,17 +4115,53 @@ Click OK to proceed or Cancel to abort.
                     throw new Error(`Attachments exceed 40 MB limit (${{(totalAttachmentSize / 1024 / 1024).toFixed(2)}} MB)`);
                 }}
             
+            // Try to serialize campaign to JSON - catch errors early
+            let campaignJSON;
+            try {{
+                campaignJSON = JSON.stringify(campaign);
+                console.log(`Campaign JSON size: ${{campaignJSON.length}} characters`);
+                
+                // Warn if body is very large
+                if (campaignJSON.length > 5000000) {{ // 5MB
+                    console.warn(`⚠️ Campaign data is very large (${{(campaignJSON.length / 1024 / 1024).toFixed(2)}} MB)`);
+                }}
+            }} catch (jsonError) {{
+                console.error('JSON serialization error:', jsonError);
+                throw new Error(
+                    `Failed to prepare campaign data: ${{jsonError.message}}\\n\\n` +
+                    `This usually happens when the email contains embedded images.\\n` +
+                    `Please use the "Add Attachment" button to attach images instead.`
+                );
+            }}
+            
             const response = await fetch(`${{API_URL}}/campaign`, {{
                 method: 'POST',
                 headers: {{'Content-Type': 'application/json'}},
-                body: JSON.stringify(campaign)
+                body: campaignJSON
             }});
             
-            const result = await response.json();
+            let result;
+            try {{
+                result = await response.json();
+            }} catch (parseError) {{
+                console.error('Failed to parse response:', parseError);
+                throw new Error(
+                    `Campaign Failed: Server response error\\n\\n` +
+                    `${{parseError.message}}\\n\\n` +
+                    `This error often occurs when embedded images (copy/paste) are in the email.\\n` +
+                    `Please use the "Add Attachment" button to attach images instead.`
+                );
+            }}
+            
             const resultDiv = document.getElementById('campaignResult');
                 
                 if (result.error) {{
-                    throw new Error(result.error);
+                    // Check if error mentions JSON or unexpected token
+                    let errorMessage = result.error;
+                    if (errorMessage.includes('Unexpected token') || errorMessage.includes('JSON')) {{
+                        errorMessage += `\\n\\n💡 This usually happens when embedded images are in the email.\\nPlease remove any copy/pasted images and use the "Add Attachment" button instead.`;
+                    }}
+                    throw new Error(errorMessage);
                 }}
                 
                 // Create a beautiful result display
