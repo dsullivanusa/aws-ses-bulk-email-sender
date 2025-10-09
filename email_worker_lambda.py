@@ -770,6 +770,9 @@ def send_ses_email(campaign, contact, from_email, subject, body, msg_idx=0, cc_l
     """Send email via AWS SES using IAM role or Secrets Manager credentials with attachment support"""
     try:
         import re
+        import urllib.request
+        import base64
+        import mimetypes
         from email.mime.multipart import MIMEMultipart
         from email.mime.text import MIMEText
         from email.mime.base import MIMEBase
@@ -814,25 +817,124 @@ def send_ses_email(campaign, contact, from_email, subject, body, msg_idx=0, cc_l
                 logger.info(f"[Message {msg_idx}] No <img> tags found in HTML body")
         except Exception as img_err:
             logger.warning(f"[Message {msg_idx}] Failed to scan HTML body for <img> tags: {str(img_err)}")
-        
-        # If no attachments, use simple send_email
-        if not attachments or len(attachments) == 0:
-            logger.info(f"[Message {msg_idx}] No attachments - using send_email API")
+
+        # Prepare body and inline images found in the HTML body (data:, http(s) and s3 references)
+        body_with_hidden_pixel = hide_ses_tracking_pixel(body)
+        logger.debug(f"[Message {msg_idx}] Applied tracking pixel hiding CSS to email body")
+
+        pre_inline_parts = []
+        pre_inline_cids = []
+
+        try:
+            img_srcs = re.findall(r'<img[^>]+src=[\"\']([^\"\']+)[\"\']', body_with_hidden_pixel or '', flags=re.IGNORECASE)
+            for i_src, src in enumerate(img_srcs, 1):
+                try:
+                    if not src or src.lower().startswith('cid:'):
+                        continue
+
+                    # Data URI
+                    if src.startswith('data:'):
+                        header, b64 = src.split(',', 1)
+                        if ';base64' in header:
+                            mime_type = header.split(':', 1)[1].split(';', 1)[0] if ':' in header else 'image/png'
+                            data_bytes = base64.b64decode(b64)
+                            maintype, subtype = mime_type.split('/', 1) if '/' in mime_type else ('image', 'octet-stream')
+                            if maintype.lower() == 'image':
+                                try:
+                                    img_part = MIMEImage(data_bytes, _subtype=subtype)
+                                except Exception:
+                                    img_part = MIMEBase(maintype, subtype)
+                                    img_part.set_payload(data_bytes)
+                                    encoders.encode_base64(img_part)
+                                cid = f"inline-data-{i_src}-{int(time.time())}@inline"
+                                img_part.add_header('Content-ID', f'<{cid}>')
+                                img_part.add_header('Content-Disposition', 'inline')
+                                pre_inline_parts.append(img_part)
+                                pre_inline_cids.append({'cid': cid, 'filename': None, 's3_key': None})
+                                body_with_hidden_pixel = body_with_hidden_pixel.replace(src, f'cid:{cid}')
+                                logger.info(f"[Message {msg_idx}] Inlined data URI as CID <{cid}>")
+
+                    # HTTP/HTTPS URL
+                    elif src.lower().startswith('http://') or src.lower().startswith('https://'):
+                        try:
+                            req = urllib.request.Request(src, headers={'User-Agent': 'aws-ses-inline-agent/1.0'})
+                            with urllib.request.urlopen(req, timeout=8) as resp:
+                                data_bytes = resp.read()
+                                content_type = resp.headers.get('Content-Type') or mimetypes.guess_type(src)[0] or 'application/octet-stream'
+                            maintype, subtype = content_type.split('/', 1) if '/' in content_type else ('application', 'octet-stream')
+                            if maintype.lower() == 'image':
+                                try:
+                                    img_part = MIMEImage(data_bytes, _subtype=subtype)
+                                except Exception:
+                                    img_part = MIMEBase(maintype, subtype)
+                                    img_part.set_payload(data_bytes)
+                                    encoders.encode_base64(img_part)
+                                cid = f"inline-http-{i_src}-{int(time.time())}@inline"
+                                img_part.add_header('Content-ID', f'<{cid}>')
+                                img_part.add_header('Content-Disposition', 'inline', filename=os.path.basename(src))
+                                pre_inline_parts.append(img_part)
+                                pre_inline_cids.append({'cid': cid, 'filename': os.path.basename(src), 's3_key': None})
+                                body_with_hidden_pixel = body_with_hidden_pixel.replace(src, f'cid:{cid}')
+                                logger.info(f"[Message {msg_idx}] Downloaded and inlined HTTP image as CID <{cid}>")
+                        except Exception as http_err:
+                            logger.warning(f"[Message {msg_idx}] Failed to download image {src}: {str(http_err)}")
+
+                    # S3-like references
+                    elif src.startswith('s3://') or (ATTACHMENTS_BUCKET in src and ('s3.amazonaws.com' in src or src.startswith('/'))):
+                        s3_key_candidate = None
+                        try:
+                            if src.startswith('s3://'):
+                                parts = src.split('/', 3)
+                                s3_key_candidate = parts[3] if len(parts) > 3 else None
+                            elif 's3.amazonaws.com' in src:
+                                parts = src.split('/', 3)
+                                s3_key_candidate = parts[3] if len(parts) > 3 else None
+                            else:
+                                s3_key_candidate = src.lstrip('/')
+
+                            if s3_key_candidate:
+                                try:
+                                    s3_resp = s3_client.get_object(Bucket=ATTACHMENTS_BUCKET, Key=s3_key_candidate)
+                                    data_bytes = s3_resp['Body'].read()
+                                    content_type = s3_resp.get('ContentType') or mimetypes.guess_type(s3_key_candidate)[0] or 'application/octet-stream'
+                                    maintype, subtype = content_type.split('/', 1) if '/' in content_type else ('application', 'octet-stream')
+                                    if maintype.lower() == 'image':
+                                        try:
+                                            img_part = MIMEImage(data_bytes, _subtype=subtype)
+                                        except Exception:
+                                            img_part = MIMEBase(maintype, subtype)
+                                            img_part.set_payload(data_bytes)
+                                            encoders.encode_base64(img_part)
+                                        cid = f"inline-s3-{i_src}-{int(time.time())}@inline"
+                                        img_part.add_header('Content-ID', f'<{cid}>')
+                                        img_part.add_header('Content-Disposition', 'inline', filename=os.path.basename(s3_key_candidate))
+                                        pre_inline_parts.append(img_part)
+                                        pre_inline_cids.append({'cid': cid, 'filename': os.path.basename(s3_key_candidate), 's3_key': s3_key_candidate})
+                                        body_with_hidden_pixel = body_with_hidden_pixel.replace(src, f'cid:{cid}')
+                                        logger.info(f"[Message {msg_idx}] Inlined S3 image {s3_key_candidate} as CID <{cid}>")
+                                except Exception as s3_err:
+                                    logger.warning(f"[Message {msg_idx}] Could not retrieve S3 object {s3_key_candidate}: {str(s3_err)}")
+                        except Exception:
+                            continue
+
+                    else:
+                        logger.debug(f"[Message {msg_idx}] Found image src that may be matched to attachments later: {src}")
+
+                except Exception as single_err:
+                    logger.warning(f"[Message {msg_idx}] Error inlining image {src}: {str(single_err)}")
+                    continue
+        except Exception as inline_err:
+            logger.warning(f"[Message {msg_idx}] Failed to scan/inline images: {str(inline_err)}")
+
+        # If there are no attachments and no inlined HTML images, use send_email
+        if not attachments and not pre_inline_parts:
+            logger.info(f"[Message {msg_idx}] No attachments and no inlined HTML images - using send_email API")
             logger.info(f"[Message {msg_idx}] Sending to: {contact['email']}, From: {from_email}")
-
-            # Hide AWS SES tracking pixel before sending
-            body_with_hidden_pixel = hide_ses_tracking_pixel(body)
-            logger.debug(f"[Message {msg_idx}] Applied tracking pixel hiding CSS to email body")
-
-            # Build destination with optional CC/BCC
             destination = {'ToAddresses': [contact['email']]}
             if cc_list:
                 destination['CcAddresses'] = cc_list
-
-            # SES supports BccAddresses in Destination for the send_email API; include if present
             if bcc_list:
                 destination['BccAddresses'] = bcc_list
-
             response = ses_client.send_email(
                 Source=from_email,
                 Destination=destination,
@@ -841,28 +943,15 @@ def send_ses_email(campaign, contact, from_email, subject, body, msg_idx=0, cc_l
                     'Body': {'Html': {'Data': body_with_hidden_pixel}}
                 }
             )
-            
-            # Log complete SES response
             logger.info(f"[Message {msg_idx}] ✅ SES Response: {json.dumps(response, default=str)}")
-            message_id = response.get('MessageId', 'unknown')
-            response_metadata = response.get('ResponseMetadata', {})
-            http_status = response_metadata.get('HTTPStatusCode', 'unknown')
-            request_id = response_metadata.get('RequestId', 'unknown')
-            
-            logger.info(f"[Message {msg_idx}] SES send successful!")
-            logger.info(f"[Message {msg_idx}]   Message ID: {message_id}")
-            logger.info(f"[Message {msg_idx}]   HTTP Status: {http_status}")
-            logger.info(f"[Message {msg_idx}]   Request ID: {request_id}")
-            
             return True
         
         # Build MIME message with attachments: use multipart/mixed with multipart/related for HTML+inline images
-        logger.info(f"[Message {msg_idx}] Building MIME message with {len(attachments)} attachment(s)")
-        
-        # Hide AWS SES tracking pixel before creating MIME message
-        body_with_hidden_pixel = hide_ses_tracking_pixel(body)
-        logger.debug(f"[Message {msg_idx}] Applied tracking pixel hiding CSS to MIME email body")
-        
+        logger.info(f"[Message {msg_idx}] Building MIME message with {len(attachments)} attachment(s) and {len(pre_inline_parts)} pre-inlined HTML image(s)")
+
+        # Ensure body reflects any pre-inlining replacements
+        body_with_hidden_pixel = body_with_hidden_pixel
+
         msg = MIMEMultipart('mixed')
         msg['From'] = from_email
         msg['To'] = contact['email']
@@ -875,38 +964,59 @@ def send_ses_email(campaign, contact, from_email, subject, body, msg_idx=0, cc_l
         # multipart/related container for HTML body and inline images
         related = MIMEMultipart('related')
 
-        # HTML part (attach first to related)
+        # HTML part (attach first to related) - use an alternative container for future extensibility
+        alternative = MIMEMultipart('alternative')
         html_part = MIMEText(body_with_hidden_pixel, 'html')
-        related.attach(html_part)
+        alternative.attach(html_part)
+        related.attach(alternative)
+
+        # Attach any pre-inlined parts (downloaded data:, http(s), s3 images from HTML scanning)
+        already_inlined_s3_keys = set()
+        already_inlined_filenames = set()
+        for part_meta, ppart in zip(pre_inline_cids, pre_inline_parts):
+            try:
+                related.attach(ppart)
+            except Exception as p_attach_err:
+                logger.warning(f"[Message {msg_idx}] Failed to attach pre-inlined part: {str(p_attach_err)}")
+            s3_k = part_meta.get('s3_key')
+            fname = part_meta.get('filename')
+            if s3_k:
+                already_inlined_s3_keys.add(s3_k)
+            if fname:
+                already_inlined_filenames.add(fname)
 
         inline_cids = []
         other_parts = []
 
         # Download and classify attachments from S3
-        for idx, attachment in enumerate(attachments, 1):
+        for a_idx, attachment in enumerate(attachments, 1):
             s3_key = attachment.get('s3_key')
             filename = attachment.get('filename')
             is_inline = attachment.get('inline', False)  # Check if this is an inline image
-            
+
             if not s3_key or not filename:
-                logger.warning(f"[Message {msg_idx}] Attachment {idx}: Missing s3_key or filename, skipping")
+                logger.warning(f"[Message {msg_idx}] Attachment {a_idx}: Missing s3_key or filename, skipping")
                 continue
-            
+
+            # Skip attachments that were already inlined via HTML scanning
+            if s3_key in already_inlined_s3_keys or filename in already_inlined_filenames:
+                logger.info(f"[Message {msg_idx}] Skipping attachment {filename} because it was already inlined from HTML")
+                continue
+
             try:
-                logger.info(f"[Message {msg_idx}] Downloading attachment {idx}/{len(attachments)}: {filename} from S3 (inline={is_inline})")
+                logger.info(f"[Message {msg_idx}] Downloading attachment {a_idx}/{len(attachments)}: {filename} from S3 (inline={is_inline})")
                 logger.debug(f"[Message {msg_idx}] S3 bucket: {ATTACHMENTS_BUCKET}, key: {s3_key}")
-                
+
                 s3_response = s3_client.get_object(Bucket=ATTACHMENTS_BUCKET, Key=s3_key)
                 file_data = s3_response['Body'].read()
                 logger.info(f"[Message {msg_idx}] Downloaded {len(file_data)} bytes for {filename}")
-                
-                content_type = attachment.get('type', 'application/octet-stream')
+
+                content_type = attachment.get('type') or s3_response.get('ContentType') or 'application/octet-stream'
                 maintype, subtype = content_type.split('/', 1) if '/' in content_type else ('application', 'octet-stream')
-                
-                # Always treat images as inline (either from inline flag or if they're images)
+
+                # Treat images as inline if flagged or detected by content type
                 if maintype.lower() == 'image' or is_inline:
-                    # Attach inline image with CID
-                    cid = f"{filename.replace(' ', '_')}-{idx}-{int(time.time())}@inline"
+                    cid = f"{filename.replace(' ', '_')}-{a_idx}-{int(time.time())}@inline"
                     try:
                         img_part = MIMEImage(file_data, _subtype=subtype)
                     except Exception:
@@ -915,8 +1025,7 @@ def send_ses_email(campaign, contact, from_email, subject, body, msg_idx=0, cc_l
                     img_part.add_header('Content-Disposition', 'inline', filename=filename)
                     related.attach(img_part)
                     inline_cids.append({'cid': cid, 'filename': filename, 's3_key': s3_key})
-                    print(f"✅ [Message {msg_idx}] Attached image {filename} as inline CID <{cid}>")
-                    logger.info(f"[Message {msg_idx}] Attached image {filename} as inline CID <{cid}> (inline={is_inline})")
+                    logger.info(f"[Message {msg_idx}] Attached image {filename} as inline CID <{cid}> (from S3)")
                 else:
                     part = MIMEBase(maintype, subtype)
                     part.set_payload(file_data)
@@ -924,11 +1033,11 @@ def send_ses_email(campaign, contact, from_email, subject, body, msg_idx=0, cc_l
                     part.add_header('Content-Disposition', f'attachment; filename="{filename}"')
                     other_parts.append(part)
                     logger.info(f"[Message {msg_idx}] Prepared non-image attachment {filename}")
-                
+
             except Exception as attachment_error:
                 logger.error(f"[Message {msg_idx}] Error downloading/processing attachment {filename}: {str(attachment_error)}")
                 # Continue with other attachments even if one fails
-        
+
         # Attach related (HTML + inline images) to root, then any other attachments
         msg.attach(related)
         for p in other_parts:
@@ -1206,17 +1315,11 @@ def clean_quill_html_for_email(html_content):
     html_content = re.sub(r'\s+', ' ', html_content)
     html_content = html_content.strip()
     
-    # Remove any <img> tags (data:, blob:, or external). This is defensive: it prevents mail clients
-    # from showing remote-image placeholders or inline-data images that trigger download prompts.
-    try:
-        # Remove any <img ...> tags regardless of src
-        html_content = re.sub(r"<img[^>]*>", '', html_content, flags=re.IGNORECASE)
-
-        # Also remove now-empty wrappers like <p></p> or <div></div> left behind
-        html_content = re.sub(r'<(p|div)\s*[^>]*>\s*</\1>', '', html_content, flags=re.IGNORECASE)
-    except Exception:
-        # If regex removal fails for any reason, fall back to the cleaned content we already have
-        pass
+    # Preserve <img> tags here — we want to inline images later in the send path.
+    # Earlier versions removed all <img> tags defensively, but that prevents
+    # legitimate inline images (and inlining logic) from working. Any empty
+    # wrappers (e.g., <p></p>) will be harmless; further cleanup can be done
+    # downstream when assembling the MIME message.
 
     return html_content
 
