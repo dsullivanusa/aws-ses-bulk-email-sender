@@ -3899,12 +3899,19 @@ def serve_web_ui(event):
             if (allImgTags.length > 0) {{
                 console.log(`🖼️ Found ${{allImgTags.length}} embedded image(s) in email body - converting to inline attachments`);
                 
+                // Show progress to user
+                button.textContent = `Uploading ${{allImgTags.length}} embedded image(s)...`;
+                
                 for (let index = 0; index < allImgTags.length; index++) {{
+                    // Update progress
+                    button.textContent = `Uploading embedded image ${{index + 1}}/${{allImgTags.length}}...`;
                     const img = allImgTags[index];
                     const dataUri = img.src;
                     const altText = img.alt || img.title || `InlineImage${{index + 1}}`;
                     
                     try {{
+                        console.log(`Processing embedded image ${{index + 1}}/${{allImgTags.length}}`);
+                        
                         // Extract base64 data from data URI
                         const matches = dataUri.match(/^data:([^;]+);base64,(.+)$/);
                         if (!matches) {{
@@ -3915,35 +3922,52 @@ def serve_web_ui(event):
                         const mimeType = matches[1];
                         const base64Data = matches[2];
                         
+                        console.log(`  MIME type: ${{mimeType}}`);
+                        console.log(`  Base64 length: ${{base64Data.length}} chars`);
+                        
                         // Determine file extension from MIME type
                         const extension = mimeType.split('/')[1] || 'png';
                         const filename = `${{altText.replace(/[^a-zA-Z0-9]/g, '_')}}_${{Date.now()}}_${{index}}.${{extension}}`;
                         
-                        // Convert base64 to blob
-                        const byteCharacters = atob(base64Data);
-                        const byteNumbers = new Array(byteCharacters.length);
-                        for (let i = 0; i < byteCharacters.length; i++) {{
-                            byteNumbers[i] = byteCharacters.charCodeAt(i);
-                        }}
-                        const byteArray = new Uint8Array(byteNumbers);
-                        const blob = new Blob([byteArray], {{ type: mimeType }});
+                        // Generate S3 key for this image
+                        const timestamp = Date.now();
+                        const randomStr = Math.random().toString(36).substring(7);
+                        const s3Key = `campaign-attachments/${{timestamp}}-${{randomStr}}-${{filename}}`;
                         
-                        // Upload to S3 via backend
-                        const formData = new FormData();
-                        formData.append('file', blob, filename);
+                        console.log(`  Generated filename: ${{filename}}`);
+                        console.log(`  S3 key: ${{s3Key}}`);
+                        console.log(`  Uploading to ${{API_URL}}/upload-attachment...`);
                         
-                        console.log(`Uploading embedded image ${{index + 1}}/${{allImgTags.length}}: ${{filename}} (${{(blob.size / 1024).toFixed(2)}} KB)`);
-                        
+                        // Upload to S3 via backend (using same format as regular attachments)
                         const uploadResponse = await fetch(`${{API_URL}}/upload-attachment`, {{
                             method: 'POST',
-                            body: formData
+                            headers: {{'Content-Type': 'application/json'}},
+                            body: JSON.stringify({{
+                                filename: filename,
+                                content_type: mimeType,
+                                s3_key: s3Key,
+                                data: base64Data  // Already extracted above
+                            }})
                         }});
                         
+                        console.log(`  Upload response status: ${{uploadResponse.status}} ${{uploadResponse.statusText}}`);
+                        
+                        // Get response text first to handle HTML error responses
+                        const responseText = await uploadResponse.text();
+                        
                         if (!uploadResponse.ok) {{
-                            throw new Error(`Upload failed: ${{uploadResponse.statusText}}`);
+                            console.error(`Upload failed with status ${{uploadResponse.status}}: ${{responseText.substring(0, 200)}}`);
+                            throw new Error(`Upload failed (${{uploadResponse.status}}): ${{uploadResponse.statusText}}`);
                         }}
                         
-                        const uploadResult = await uploadResponse.json();
+                        // Try to parse as JSON
+                        let uploadResult;
+                        try {{
+                            uploadResult = JSON.parse(responseText);
+                        }} catch (parseError) {{
+                            console.error('Failed to parse upload response as JSON:', responseText.substring(0, 500));
+                            throw new Error(`Upload endpoint returned invalid response (expected JSON, got HTML). Check Lambda logs.`);
+                        }}
                         
                         if (uploadResult.error) {{
                             throw new Error(uploadResult.error);
@@ -3974,6 +3998,9 @@ def serve_web_ui(event):
                 }}
                 
                 console.log(`✅ Converted ${{allImgTags.length}} embedded image(s) to inline attachments`);
+                
+                // Reset button text
+                button.textContent = 'Sending Campaign...';
             }}
             
                 // Remove only the trailing Quill-added image (commonly a data: or blob: image placed at the end)
@@ -5029,15 +5056,18 @@ def get_groups(headers):
 def upload_attachment(body, headers):
     """Upload attachment to S3 bucket"""
     try:
-        print(f"Upload attachment request received")
+        print(f"📎 Upload attachment request received")
+        print(f"Request body keys: {list(body.keys())}")
         
         filename = body.get('filename')
         content_type = body.get('content_type', 'application/octet-stream')
         s3_key = body.get('s3_key')
         data = body.get('data')  # Base64 encoded file data
         
-        print(f"Filename: {filename}, ContentType: {content_type}, S3Key: {s3_key}")
-        print(f"Data length: {len(data) if data else 0} characters")
+        print(f"📄 Filename: {filename}")
+        print(f"📋 ContentType: {content_type}")
+        print(f"🗂️  S3Key: {s3_key}")
+        print(f"📊 Data length: {len(data) if data else 0} characters (base64)")
         
         if not all([filename, s3_key, data]):
             missing = []
@@ -5098,9 +5128,11 @@ def upload_attachment(body, headers):
             'headers': headers, 
             'body': json.dumps({
                 'success': True,
+                'filename': filename,
                 's3_key': s3_key,
                 'bucket': ATTACHMENTS_BUCKET,
-                'size': len(file_data)
+                'size': len(file_data),
+                'type': content_type
             })
         }
     except Exception as e:
