@@ -4106,22 +4106,38 @@ def serve_web_ui(event):
             // Do this via string replacement to avoid triggering browser image loads
             const imagesWithS3Keys = tempDiv.querySelectorAll('img[data-s3-key]');
             if (imagesWithS3Keys.length > 0) {{
-                console.log(`Replacing ${{imagesWithS3Keys.length}} data: URI(s) with S3 keys in HTML string`);
+                console.log(`📸 Replacing ${{imagesWithS3Keys.length}} data: URI(s) with S3 keys in HTML string`);
+                console.log(`Email body length before replacement: ${{emailBody.length}}`);
                 
                 imagesWithS3Keys.forEach((img, idx) => {{
                     const s3Key = img.getAttribute('data-s3-key');
                     const currentSrc = img.getAttribute('src');
+                    
+                    console.log(`Image ${{idx + 1}}:`);
+                    console.log(`  Current src: ${{currentSrc.substring(0, 80)}}...`);
+                    console.log(`  S3 key: ${{s3Key}}`);
                     
                     if (s3Key && currentSrc && currentSrc.startsWith('data:')) {{
                         // Use string replacement to avoid browser fetching the image
                         // Escape special regex characters in the data URI
                         const escapedSrc = currentSrc.replace(/[.*+?^${{}}()|[\]\\\\]/g, '\\\\$&');
                         const regex = new RegExp('src="' + escapedSrc + '"', 'g');
+                        const beforeLength = emailBody.length;
                         emailBody = emailBody.replace(regex, 'src="' + s3Key + '"');
+                        const afterLength = emailBody.length;
                         
-                        console.log(`  Image ${{idx + 1}}: Replaced data: URI with S3 key in HTML string: ${{s3Key}}`);
+                        if (beforeLength !== afterLength) {{
+                            console.log(`  ✅ Replaced in HTML (length changed: ${{beforeLength}} → ${{afterLength}})`);
+                        }} else {{
+                            console.warn(`  ⚠️ No replacement made (length unchanged)`);
+                        }}
+                        
+                        console.log(`  New src will be: ${{s3Key}}`);
                     }}
                 }});
+                
+                // Show sample of HTML with S3 keys
+                console.log(`Email body sample after S3 replacement: ${{emailBody.substring(0, 300)}}...`);
             }}
             
             // Additional regex cleanup for any remaining artifacts
@@ -4192,6 +4208,17 @@ Click OK to proceed or Cancel to abort.
             }}
             
             console.log('User confirmed campaign send');
+            
+            // Log final email body for debugging
+            console.log(`📧 Final email body length: ${{emailBody.length}} characters`);
+            console.log(`📧 Email body sample (first 500 chars): ${{emailBody.substring(0, 500)}}...`);
+            console.log(`📎 Campaign attachments: ${{campaignAttachments.length}}`);
+            if (campaignAttachments.length > 0) {{
+                console.log(`📎 Attachment details:`);
+                campaignAttachments.forEach((att, i) => {{
+                    console.log(`  ${{i + 1}}. ${{att.filename}} (s3_key: ${{att.s3_key}}, inline: ${{att.inline}})`);
+                }});
+            }}
             
             const campaign = {{
                 campaign_name: document.getElementById('campaignName').value,
