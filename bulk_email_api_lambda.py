@@ -4160,7 +4160,20 @@ def serve_web_ui(event):
                 .replace(/\\n\\s*\\n/g, '\\n')  // Remove double newlines
                 .trim();
             
-            console.log('✅ Applied HTML cleanup to remove extra line breaks and spacing');
+            // Convert paragraph breaks to line breaks for single-line spacing
+            // This prevents email clients from adding extra spacing between lines
+            emailBody = emailBody
+                .replace(/<\\/p><p>/g, '<br>')  // Convert </p><p> to <br>
+                .replace(/^<p>/g, '')  // Remove opening <p> at start
+                .replace(/<\\/p>$/g, '');  // Remove closing </p> at end
+            
+            // If there are still multiple <p> tags (for formatted sections), wrap everything
+            if (!emailBody.startsWith('<p>')) {{
+                emailBody = '<p>' + emailBody + '</p>';
+            }}
+            
+            console.log('✅ Applied HTML cleanup and converted to single-line spacing');
+            console.log(`Final email body preview: ${{emailBody.substring(0, 200)}}...`);
             
             // Get user name from form
             const userName = document.getElementById('userName').value.trim() || 'Web User';

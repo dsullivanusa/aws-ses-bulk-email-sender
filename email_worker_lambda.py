@@ -722,16 +722,22 @@ def hide_ses_tracking_pixel(html_body):
         position: absolute !important;
         left: -9999px !important;
     }
-    /* Normalize paragraph spacing to reduce extra line breaks */
+    /* Normalize paragraph spacing for single-line spacing */
     p {
-        margin: 0 0 10px 0 !important;
+        margin: 0 !important;
         padding: 0 !important;
+        margin-bottom: 0 !important;
     }
     /* Remove extra space from empty paragraphs */
     p:empty {
         margin: 0 !important;
         line-height: 0 !important;
         height: 0 !important;
+        display: none !important;
+    }
+    /* Ensure line height is normal */
+    body, p, div {
+        line-height: 1.4 !important;
     }
 </style>"""
     
