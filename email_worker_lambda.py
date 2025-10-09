@@ -240,6 +240,8 @@ def check_campaign_completion_status(campaign_id, expected_total):
                     logger.warning(f"Campaign {campaign_id} only {completion_percentage:.1f}% complete ({total_processed}/{expected_total})")
                     
                     # Send metric for incomplete campaign
+                    print(f"📊 ERROR METRIC → CloudWatch: IncompleteCampaigns (Campaign: {campaign_id}, Completion: {completion_percentage:.1f}%)")
+                    logger.warning(f"📊 Sending ERROR metric to CloudWatch: IncompleteCampaigns - Campaign {campaign_id} is {completion_percentage:.1f}% complete")
                     send_cloudwatch_metric(
                         'IncompleteCampaigns',
                         1,
@@ -436,6 +438,8 @@ def lambda_handler(event, context):
                         logger.warning(f"[Message {idx}] Throttle exception detected: {str(send_exception)}")
                         
                         # Send CloudWatch metric for throttle exception
+                        print(f"📊 ERROR METRIC → CloudWatch: ThrottleExceptions (Campaign: {campaign_id}, Type: SES_Throttle)")
+                        logger.error(f"📊 Sending ERROR metric to CloudWatch: ThrottleExceptions - Campaign {campaign_id} hit SES throttle limit")
                         send_cloudwatch_metric(
                             'ThrottleExceptions',
                             1,
@@ -562,16 +566,29 @@ def lambda_handler(event, context):
         send_cloudwatch_metric('BatchProcessing', 1, 'Count')
         send_cloudwatch_metric('EmailsProcessed', total_emails, 'Count')
         send_cloudwatch_metric('EmailsSentSuccessfully', results['successful'], 'Count')
-        send_cloudwatch_metric('EmailsFailed', results['failed'], 'Count')
+        
+        # EmailsFailed metric - Log if any failures
+        if results['failed'] > 0:
+            print(f"📊 ERROR METRIC → CloudWatch: EmailsFailed = {results['failed']} (out of {total_emails} total)")
+            logger.error(f"📊 Sending ERROR metric to CloudWatch: EmailsFailed = {results['failed']} emails failed to send")
+            send_cloudwatch_metric('EmailsFailed', results['failed'], 'Count')
+        
         send_cloudwatch_metric('ProcessingDuration', duration, 'Seconds')
         
         # Send rate metrics
         send_cloudwatch_metric('SendRatePerSecond', send_rate_per_second, 'Count/Second')
         send_cloudwatch_metric('SendRatePerMinute', send_rate_per_minute, 'Count/Second')  # SES measures in emails/second
         send_cloudwatch_metric('SuccessRate', success_rate, 'Percent')
-        send_cloudwatch_metric('FailureRate', failure_rate, 'Percent')
+        
+        # FailureRate metric - Log if failure rate is significant
+        if failure_rate > 0:
+            print(f"📊 ERROR METRIC → CloudWatch: FailureRate = {failure_rate:.1f}%")
+            logger.warning(f"📊 Sending ERROR metric to CloudWatch: FailureRate = {failure_rate:.1f}% ({results['failed']}/{total_emails})")
+            send_cloudwatch_metric('FailureRate', failure_rate, 'Percent')
         
         if results['rate_control_stats']['throttles_detected'] > 0:
+            print(f"📊 ERROR METRIC → CloudWatch: ThrottleExceptionsInBatch = {results['rate_control_stats']['throttles_detected']}")
+            logger.error(f"📊 Sending ERROR metric to CloudWatch: ThrottleExceptionsInBatch = {results['rate_control_stats']['throttles_detected']} throttles detected in this batch")
             send_cloudwatch_metric('ThrottleExceptionsInBatch', results['rate_control_stats']['throttles_detected'], 'Count')
         
         # Log rate control statistics and send rate metrics

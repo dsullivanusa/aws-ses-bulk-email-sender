@@ -1,4 +1,4 @@
-#!/bin/bash
+git #!/bin/bash
 # Simple script to create all CloudWatch alarms
 
 echo "🚨 Creating CloudWatch Alarms for Email Monitoring"
