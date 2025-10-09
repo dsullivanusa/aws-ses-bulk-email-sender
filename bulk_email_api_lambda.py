@@ -62,8 +62,18 @@ def lambda_handler(event, context):
         path = event.get('resource', event.get('path', '/'))
         method = event['httpMethod']
         
+        # DEBUG: Log incoming request details
+        print(f"📨 Incoming request: {method} {path}")
+        print(f"   resource: {event.get('resource')}")
+        print(f"   path: {event.get('path')}")
+        print(f"   httpMethod: {event.get('httpMethod')}")
+        if event.get('body'):
+            body_preview = event.get('body', '')[:200]
+            print(f"   body preview: {body_preview}...")
+        
         # Serve web UI for GET requests to root
         if method == 'GET' and path == '/':
+            print("   → Serving Web UI")
             return serve_web_ui(event)
         
         # Parse request body
@@ -93,16 +103,23 @@ def lambda_handler(event, context):
         elif path == '/contacts/search' and method == 'POST':
             return search_contacts(body, headers)
         elif path == '/upload-attachment' and method == 'POST':
+            print("   → Calling upload_attachment()")
             return upload_attachment(body, headers)
         elif path == '/campaign' and method == 'POST':
+            print("   → Calling send_campaign()")
             return send_campaign(body, headers, event)
         elif path == '/campaign/{campaign_id}' and method == 'GET':
             campaign_id = event['pathParameters']['campaign_id']
             return get_campaign_status(campaign_id, headers)
         else:
-            return {'statusCode': 404, 'headers': headers, 'body': json.dumps({'error': 'Not found'})}
+            print(f"   → Route not found: {method} {path}")
+            print(f"   Available routes: /config, /contacts, /campaign, /upload-attachment, etc.")
+            return {'statusCode': 404, 'headers': headers, 'body': json.dumps({'error': f'Route not found: {method} {path}'})}
             
     except Exception as e:
+        print(f"❌ Lambda handler exception: {str(e)}")
+        import traceback
+        traceback.print_exc()
         return {'statusCode': 500, 'headers': headers, 'body': json.dumps({'error': str(e)})}
 
 def serve_web_ui(event):
@@ -1503,9 +1520,9 @@ def serve_web_ui(event):
                 <label>📎 Attachments (Optional):</label>
                 <div style="margin-bottom: 10px; padding: 12px; background: #fef3c7; border-left: 4px solid #f59e0b; border-radius: 4px;">
                     <strong>Important:</strong> Maximum total size is <strong>40 MB per email</strong> (including all attachments). 
-                    Supported formats: PDF, DOC, DOCX, XLS, XLSX, PNG, JPG, TXT, CSV
+                    Supported formats: PDF, DOC, DOCX, XLS, XLSX, PNG, JPG, TXT, CSV, ICS, MSG
                 </div>
-                <input type="file" id="attachmentFiles" multiple style="display: none;" onchange="handleAttachmentUpload()">
+                <input type="file" id="attachmentFiles" multiple style="display: none;" onchange="handleAttachmentUpload()" accept=".pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg,.txt,.csv,.ics,.msg">
                 <button onclick="document.getElementById('attachmentFiles').click()" style="background: #6366f1;">
                     📎 Add Attachments
                 </button>
