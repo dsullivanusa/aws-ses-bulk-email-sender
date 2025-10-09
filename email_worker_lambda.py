@@ -657,25 +657,35 @@ def get_aws_credentials_from_secrets_manager(secret_name, msg_idx=0):
 def hide_ses_tracking_pixel(html_body):
     """
     Inject CSS to hide AWS SES tracking pixel (1x1 image)
-    AWS recommends: visibility:hidden; opacity:0;
+    AWS recommends: visibility:hidden; opacity:0; position:absolute; left:-9999px;
     """
+    print("🔍 hide_ses_tracking_pixel() called")
+    logger.info("🔍 hide_ses_tracking_pixel() function called")
+    
     if not html_body or '<html' not in html_body.lower():
         # Not HTML or empty, return as-is
+        print("⚠️  Email body is not HTML or empty - skipping tracking pixel CSS injection")
+        logger.warning("Email body is not HTML or empty - skipping tracking pixel CSS injection")
         return html_body
     
     # CSS to hide tracking pixels (1x1 images)
+    # AWS Support recommends: visibility:hidden; opacity:0; position:absolute; left:-9999px;
     tracking_pixel_css = """
 <style type="text/css">
-    /* Hide AWS SES tracking pixel (1x1 images) */
+    /* Hide AWS SES tracking pixel (1x1 images) - AWS Support recommended */
     img[width="1"][height="1"] {
         visibility: hidden !important;
         opacity: 0 !important;
         display: none !important;
+        position: absolute !important;
+        left: -9999px !important;
     }
     img[width="1px"][height="1px"] {
         visibility: hidden !important;
         opacity: 0 !important;
         display: none !important;
+        position: absolute !important;
+        left: -9999px !important;
     }
     /* Also hide any images with very small dimensions */
     img[style*="width: 1px"][style*="height: 1px"],
@@ -683,6 +693,17 @@ def hide_ses_tracking_pixel(html_body):
         visibility: hidden !important;
         opacity: 0 !important;
         display: none !important;
+        position: absolute !important;
+        left: -9999px !important;
+    }
+    /* Catch-all for any 1-pixel images */
+    img[width="1"], img[height="1"],
+    img[width="1px"], img[height="1px"] {
+        visibility: hidden !important;
+        opacity: 0 !important;
+        display: none !important;
+        position: absolute !important;
+        left: -9999px !important;
     }
 </style>"""
     
@@ -697,6 +718,8 @@ def hide_ses_tracking_pixel(html_body):
         # Insert after <head> tag
         insert_pos = head_match.end()
         html_body = html_body[:insert_pos] + tracking_pixel_css + html_body[insert_pos:]
+        print("✅ CSS injected after <head> tag")
+        logger.info("✅ Tracking pixel hiding CSS injected after <head> tag")
     else:
         # No <head> tag, try to insert after <html> tag
         html_pattern = re.compile(r'<html[^>]*>', re.IGNORECASE)
@@ -705,9 +728,16 @@ def hide_ses_tracking_pixel(html_body):
         if html_match:
             insert_pos = html_match.end()
             html_body = html_body[:insert_pos] + tracking_pixel_css + html_body[insert_pos:]
+            print("✅ CSS injected after <html> tag (no <head> found)")
+            logger.info("✅ Tracking pixel hiding CSS injected after <html> tag (no <head> found)")
         else:
             # No proper HTML structure, prepend the CSS
             html_body = tracking_pixel_css + html_body
+            print("✅ CSS prepended to email body (no proper HTML structure)")
+            logger.info("✅ Tracking pixel hiding CSS prepended to email body (no proper HTML structure)")
+    
+    print(f"✅ hide_ses_tracking_pixel() completed - CSS injected ({len(tracking_pixel_css)} chars)")
+    logger.info(f"✅ hide_ses_tracking_pixel() completed - CSS successfully injected ({len(tracking_pixel_css)} characters)")
     
     return html_body
 
@@ -767,6 +797,7 @@ def send_ses_email(campaign, contact, from_email, subject, body, msg_idx=0, cc_l
 
             # Hide AWS SES tracking pixel before sending
             body_with_hidden_pixel = hide_ses_tracking_pixel(body)
+            logger.debug(f"[Message {msg_idx}] Applied tracking pixel hiding CSS to email body")
 
             # Build destination with optional CC/BCC
             destination = {'ToAddresses': [contact['email']]}
@@ -805,6 +836,7 @@ def send_ses_email(campaign, contact, from_email, subject, body, msg_idx=0, cc_l
         
         # Hide AWS SES tracking pixel before creating MIME message
         body_with_hidden_pixel = hide_ses_tracking_pixel(body)
+        logger.debug(f"[Message {msg_idx}] Applied tracking pixel hiding CSS to MIME email body")
         
         msg = MIMEMultipart('mixed')
         msg['From'] = from_email
