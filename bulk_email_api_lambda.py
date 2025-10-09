@@ -4099,23 +4099,28 @@ def serve_web_ui(event):
                     }}
                 }}
 
-            // Get cleaned HTML
+            // Get cleaned HTML (with data: URIs still intact)
             emailBody = tempDiv.innerHTML;
             
-            // Replace data: URIs with S3 keys for embedded images before sending
-            // (Keep data: URIs while editing so browser can display, but send S3 keys to backend)
+            // Replace data: URIs with S3 keys for backend transmission
+            // Do this via string replacement to avoid triggering browser image loads
             const imagesWithS3Keys = tempDiv.querySelectorAll('img[data-s3-key]');
             if (imagesWithS3Keys.length > 0) {{
-                console.log(`Replacing ${{imagesWithS3Keys.length}} data: URI(s) with S3 keys for transmission`);
-                imagesWithS3Keys.forEach(img => {{
+                console.log(`Replacing ${{imagesWithS3Keys.length}} data: URI(s) with S3 keys in HTML string`);
+                
+                imagesWithS3Keys.forEach((img, idx) => {{
                     const s3Key = img.getAttribute('data-s3-key');
-                    if (s3Key) {{
-                        img.src = s3Key;  // Replace data: URI with S3 key for backend
-                        console.log(`  Replaced data: URI with S3 key: ${{s3Key}}`);
+                    const currentSrc = img.getAttribute('src');
+                    
+                    if (s3Key && currentSrc && currentSrc.startsWith('data:')) {{
+                        // Use string replacement to avoid browser fetching the image
+                        const escapedSrc = currentSrc.replace(/[.*+?^${{}}()|[\]\\]/g, '\\$&');
+                        const regex = new RegExp(`src="${{escapedSrc}}"`, 'g');
+                        emailBody = emailBody.replace(regex, `src="${{s3Key}}"`);
+                        
+                        console.log(`  Image ${{idx + 1}}: Replaced data: URI with S3 key in HTML string: ${{s3Key}}`);
                     }}
                 }});
-                // Get updated HTML with S3 keys
-                emailBody = tempDiv.innerHTML;
             }}
             
             // Additional regex cleanup for any remaining artifacts
