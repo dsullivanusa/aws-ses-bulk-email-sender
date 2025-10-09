@@ -679,10 +679,10 @@ def hide_ses_tracking_pixel(html_body):
     print("🔍 hide_ses_tracking_pixel() called")
     logger.info("🔍 hide_ses_tracking_pixel() function called")
     
-    if not html_body or '<html' not in html_body.lower():
-        # Not HTML or empty, return as-is
-        print("⚠️  Email body is not HTML or empty - skipping tracking pixel CSS injection")
-        logger.warning("Email body is not HTML or empty - skipping tracking pixel CSS injection")
+    if not html_body:
+        # Empty body, return as-is
+        print("⚠️  Email body is empty - skipping tracking pixel CSS injection")
+        logger.warning("Email body is empty - skipping tracking pixel CSS injection")
         return html_body
     
     # CSS to hide tracking pixels (1x1 images)
@@ -748,10 +748,18 @@ def hide_ses_tracking_pixel(html_body):
             print("✅ CSS injected after <html> tag (no <head> found)")
             logger.info("✅ Tracking pixel hiding CSS injected after <html> tag (no <head> found)")
         else:
-            # No proper HTML structure, prepend the CSS
-            html_body = tracking_pixel_css + html_body
-            print("✅ CSS prepended to email body (no proper HTML structure)")
-            logger.info("✅ Tracking pixel hiding CSS prepended to email body (no proper HTML structure)")
+            # HTML fragment without proper structure (common from Quill editor)
+            # Wrap in basic HTML structure and inject CSS
+            html_body = f'''<html>
+<head>
+{tracking_pixel_css}
+</head>
+<body>
+{html_body}
+</body>
+</html>'''
+            print("✅ CSS injected by wrapping HTML fragment in full HTML document")
+            logger.info("✅ Tracking pixel hiding CSS injected by wrapping HTML fragment in full HTML document")
     
     print(f"✅ hide_ses_tracking_pixel() completed - CSS injected ({len(tracking_pixel_css)} chars)")
     logger.info(f"✅ hide_ses_tracking_pixel() completed - CSS successfully injected ({len(tracking_pixel_css)} characters)")
