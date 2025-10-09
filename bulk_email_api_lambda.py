@@ -4038,10 +4038,12 @@ def serve_web_ui(event):
                             inline: true  // Mark as inline image
                         }});
                         
-                        // Replace data URI with S3 key reference
-                        // Email worker will convert this to cid: reference
-                        img.src = uploadResult.s3_key;
+                        // Store S3 key as data attribute for reference, but KEEP the data URI for display
+                        // The browser needs the data: URI to display the image in the editor
+                        // Email worker will use the S3 key to fetch and embed the image
+                        img.setAttribute('data-s3-key', uploadResult.s3_key);
                         img.setAttribute('data-inline', 'true');
+                        // Keep img.src as data URI so image still displays in editor
                         
                     }} catch (uploadError) {{
                         console.error(`Failed to upload embedded image ${{index}}:`, uploadError);
@@ -4099,6 +4101,22 @@ def serve_web_ui(event):
 
             // Get cleaned HTML
             emailBody = tempDiv.innerHTML;
+            
+            // Replace data: URIs with S3 keys for embedded images before sending
+            // (Keep data: URIs while editing so browser can display, but send S3 keys to backend)
+            const imagesWithS3Keys = tempDiv.querySelectorAll('img[data-s3-key]');
+            if (imagesWithS3Keys.length > 0) {{
+                console.log(`Replacing ${{imagesWithS3Keys.length}} data: URI(s) with S3 keys for transmission`);
+                imagesWithS3Keys.forEach(img => {{
+                    const s3Key = img.getAttribute('data-s3-key');
+                    if (s3Key) {{
+                        img.src = s3Key;  // Replace data: URI with S3 key for backend
+                        console.log(`  Replaced data: URI with S3 key: ${{s3Key}}`);
+                    }}
+                }});
+                // Get updated HTML with S3 keys
+                emailBody = tempDiv.innerHTML;
+            }}
             
             // Additional regex cleanup for any remaining artifacts
             emailBody = emailBody
