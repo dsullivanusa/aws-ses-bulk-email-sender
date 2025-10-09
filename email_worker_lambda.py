@@ -722,6 +722,17 @@ def hide_ses_tracking_pixel(html_body):
         position: absolute !important;
         left: -9999px !important;
     }
+    /* Normalize paragraph spacing to reduce extra line breaks */
+    p {
+        margin: 0 0 10px 0 !important;
+        padding: 0 !important;
+    }
+    /* Remove extra space from empty paragraphs */
+    p:empty {
+        margin: 0 !important;
+        line-height: 0 !important;
+        height: 0 !important;
+    }
 </style>"""
     
     # Try to insert CSS in <head> section

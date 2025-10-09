@@ -4152,10 +4152,15 @@ def serve_web_ui(event):
             emailBody = emailBody
                 .replace(/<p><br><\\/p>/g, '<p></p>')  // Remove empty line breaks
                 .replace(/<p>\\s*<\\/p>/g, '')  // Remove completely empty paragraphs
+                .replace(/<p>\\s*<br>\\s*<\\/p>/g, '<p></p>')  // Remove paragraphs with only br
+                .replace(/<br>\\s*<br>/g, '<br>')  // Remove double line breaks (reduce to single)
+                .replace(/(<\\/p>)\\s*(<p>)/g, '$1$2')  // Remove whitespace between paragraphs
                 .replace(/\\s+class=""/g, '')  // Remove empty class attributes
                 .replace(/\\s+data-[^=]*="[^"]*"/g, '')  // Remove any remaining data attributes
-                .replace(/<p>\\s*<br>\\s*<\\/p>/g, '<p></p>')  // Remove paragraphs with only br
+                .replace(/\\n\\s*\\n/g, '\\n')  // Remove double newlines
                 .trim();
+            
+            console.log('✅ Applied HTML cleanup to remove extra line breaks and spacing');
             
             // Get user name from form
             const userName = document.getElementById('userName').value.trim() || 'Web User';
