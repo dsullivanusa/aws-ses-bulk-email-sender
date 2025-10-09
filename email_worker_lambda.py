@@ -914,7 +914,8 @@ def send_ses_email(campaign, contact, from_email, subject, body, msg_idx=0, cc_l
                     img_part.add_header('Content-ID', f'<{cid}>')
                     img_part.add_header('Content-Disposition', 'inline', filename=filename)
                     related.attach(img_part)
-                    inline_cids.append({{'cid': cid, 'filename': filename, 's3_key': s3_key}})
+                    inline_cids.append({'cid': cid, 'filename': filename, 's3_key': s3_key})
+                    print(f"✅ [Message {msg_idx}] Attached image {filename} as inline CID <{cid}>")
                     logger.info(f"[Message {msg_idx}] Attached image {filename} as inline CID <{cid}> (inline={is_inline})")
                 else:
                     part = MIMEBase(maintype, subtype)
