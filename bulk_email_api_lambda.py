@@ -530,18 +530,27 @@ def serve_web_ui(event):
         .ql-editor img {{
             cursor: pointer;
             max-width: 100%;
+            height: auto !important;  /* Allow height changes */
+            max-height: none !important;  /* Remove max-height restriction */
         }}
         .ql-editor img:hover {{
             outline: 2px solid #3b82f6;
         }}
         /* Resize handle styles */
         .image-resize-handle {{
-            background: #3b82f6;
-            border: 2px solid white;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+            background: white !important;
+            border: 2px solid #3b82f6 !important;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2) !important;
+            width: 12px !important;
+            height: 12px !important;
+            cursor: nwse-resize !important;
         }}
         .image-resize-overlay {{
-            border: 2px dashed #3b82f6;
+            border: 2px dashed #3b82f6 !important;
+        }}
+        /* Ensure image container doesn't restrict height */
+        .ql-editor .image-resizing {{
+            max-height: none !important;
         }}
         
         .card {{ 
@@ -1715,7 +1724,16 @@ def serve_web_ui(event):
                             border: 'none',
                             color: 'white'
                         }},
-                        modules: ['Resize', 'DisplaySize', 'Toolbar']
+                        modules: ['Resize', 'DisplaySize', 'Toolbar'],
+                        handleStyles: {{
+                            backgroundColor: 'white',
+                            border: '2px solid #3b82f6',
+                            width: '10px',
+                            height: '10px'
+                        }},
+                        overlayStyles: {{
+                            border: '2px dashed #3b82f6'
+                        }}
                     }}
                 }}
             }});
