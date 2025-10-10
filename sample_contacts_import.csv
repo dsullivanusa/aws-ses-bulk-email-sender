@@ -1,7 +1,0 @@
-email,first_name,last_name,title,entity_type,state,agency_name,sector,subsection,phone,ms_isac_member,soc_call,fusion_center,k12,water_wastewater,weekly_rollup,alternate_email,region,group
-john.doe@example.com,John,Doe,IT Director,State Government,CA,California Office of Technology,Government,IT Security,555-0100,Yes,Yes,No,No,No,Yes,john.alt@example.com,West,State CISOs
-jane.smith@example.com,Jane,Smith,Security Manager,City Government,NY,New York City IT,Government,Cybersecurity,555-0101,Yes,No,Yes,No,No,Yes,jane.alt@example.com,East,City IT Managers
-bob.wilson@example.com,Bob,Wilson,CISO,County Government,TX,Harris County IT,Government,Information Security,555-0102,Yes,Yes,No,No,No,Yes,bob.alt@example.com,South,County CISOs
-alice.brown@example.com,Alice,Brown,Network Admin,School District,FL,Miami-Dade Schools,Education,IT Operations,555-0103,No,No,No,Yes,No,Yes,alice.alt@example.com,South,K12 Admins
-charlie.davis@example.com,Charlie,Davis,Water Supervisor,Water Authority,WA,Seattle Water Dept,Utilities,Operations,555-0104,No,No,No,No,Yes,Yes,charlie.alt@example.com,West,Water Utilities
-
