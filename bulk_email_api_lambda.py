@@ -4,6 +4,7 @@ import smtplib
 import ssl
 import time
 import os
+import traceback
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email.mime.base import MIMEBase
@@ -111,6 +112,13 @@ def lambda_handler(event, context):
         elif path == '/campaign/{campaign_id}' and method == 'GET':
             campaign_id = event['pathParameters']['campaign_id']
             return get_campaign_status(campaign_id, headers)
+        elif path == '/preview' and method == 'POST':
+            print("   → Calling save_preview()")
+            return save_preview(body, headers)
+        elif path == '/preview/{preview_id}' and method == 'GET':
+            preview_id = event['pathParameters']['preview_id']
+            print(f"   → Calling get_preview({preview_id})")
+            return get_preview(preview_id, headers)
         else:
             print(f"   → Route not found: {method} {path}")
             print(f"   Available routes: /config, /contacts, /campaign, /upload-attachment, etc.")
@@ -1563,9 +1571,13 @@ def serve_web_ui(event):
             </div>
             
             <div style="display: flex; gap: 15px; margin-top: 20px;">
-            <button class="btn-success" onclick="sendCampaign(event)">🚀 Send Campaign</button>
+                <button class="btn-success" onclick="sendCampaign(event)">🚀 Send Campaign</button>
+                <button class="btn-primary" onclick="previewCampaign(event)" style="background: #3b82f6;">👁️ Preview Email</button>
                 <button onclick="clearCampaignForm()">🗑️ Clear Form</button>
             </div>
+            <small style="color: #6b7280; display: block; margin-top: 8px;">
+                💡 Use Preview to see exactly what recipients will receive before sending
+            </small>
             
             <div id="campaignResult" class="result hidden"></div>
         </div>
@@ -3936,6 +3948,185 @@ def serve_web_ui(event):
             const tempDiv = document.createElement('div');
             tempDiv.innerHTML = emailBody;
             
+            // IMPORTANT: LOCK IMAGE SIZE & POSITION at the moment user clicks Send Campaign
+            // This ensures the received email matches exactly what's shown in the Quill editor
+            
+            // Step 1: Find all images currently in the Quill editor (not in tempDiv yet)
+            const editorImages = quillEditor.root.querySelectorAll('img');
+            const imageComputedStyles = new Map();
+            
+            editorImages.forEach((editorImg, idx) => {{
+                // Get the COMPUTED styles (actual rendered styles) from the live editor
+                const computedStyle = window.getComputedStyle(editorImg);
+                
+                // Capture exact size and position as rendered
+                const lockedStyles = {{
+                    width: computedStyle.width,           // Exact rendered width
+                    height: computedStyle.height,         // Exact rendered height
+                    display: computedStyle.display,       // Display mode
+                    margin: computedStyle.margin,         // All margins
+                    marginLeft: computedStyle.marginLeft,
+                    marginRight: computedStyle.marginRight,
+                    marginTop: computedStyle.marginTop,
+                    marginBottom: computedStyle.marginBottom,
+                    float: computedStyle.float,           // Floating alignment
+                    verticalAlign: computedStyle.verticalAlign,
+                    textAlign: computedStyle.textAlign,   // Parent text alignment
+                    maxWidth: computedStyle.maxWidth,
+                    maxHeight: computedStyle.maxHeight
+                }};
+                
+                // Store by src attribute for matching later
+                const src = editorImg.getAttribute('src');
+                if (src) {{
+                    imageComputedStyles.set(src.substring(0, 100), lockedStyles); // Use first 100 chars as key
+                    console.log(`🔒 Locked image ${{idx + 1}} size/position:`, {{
+                        width: lockedStyles.width,
+                        height: lockedStyles.height,
+                        display: lockedStyles.display,
+                        float: lockedStyles.float
+                    }});
+                }}
+            }});
+            
+            // Step 2: Now process the HTML in tempDiv
+            // Unwrap images from resize containers FIRST (before any cleanup)
+            // The Quill image resize module wraps images in span containers
+            const allImageElements = tempDiv.querySelectorAll('img');
+            let unwrappedCount = 0;
+            
+            allImageElements.forEach((img, idx) => {{
+                // FIRST: Apply locked styles from the live editor to ensure exact match
+                const imgSrc = img.getAttribute('src');
+                if (imgSrc && imageComputedStyles.has(imgSrc.substring(0, 100))) {{
+                    const lockedStyles = imageComputedStyles.get(imgSrc.substring(0, 100));
+                    
+                    // Build complete style string with all locked attributes
+                    let styleString = '';
+                    
+                    // Essential sizing (use exact rendered values)
+                    if (lockedStyles.width && lockedStyles.width !== 'auto') {{
+                        styleString += `width: ${{lockedStyles.width}}; `;
+                    }}
+                    if (lockedStyles.height && lockedStyles.height !== 'auto') {{
+                        styleString += `height: ${{lockedStyles.height}}; `;
+                    }}
+                    
+                    // Display mode
+                    if (lockedStyles.display && lockedStyles.display !== 'inline') {{
+                        styleString += `display: ${{lockedStyles.display}}; `;
+                    }}
+                    
+                    // Positioning and spacing
+                    if (lockedStyles.float && lockedStyles.float !== 'none') {{
+                        styleString += `float: ${{lockedStyles.float}}; `;
+                    }}
+                    if (lockedStyles.verticalAlign && lockedStyles.verticalAlign !== 'baseline') {{
+                        styleString += `vertical-align: ${{lockedStyles.verticalAlign}}; `;
+                    }}
+                    
+                    // Margins (for positioning)
+                    // Only add non-zero margins
+                    if (lockedStyles.marginTop && lockedStyles.marginTop !== '0px') {{
+                        styleString += `margin-top: ${{lockedStyles.marginTop}}; `;
+                    }}
+                    if (lockedStyles.marginBottom && lockedStyles.marginBottom !== '0px') {{
+                        styleString += `margin-bottom: ${{lockedStyles.marginBottom}}; `;
+                    }}
+                    if (lockedStyles.marginLeft && lockedStyles.marginLeft !== '0px') {{
+                        styleString += `margin-left: ${{lockedStyles.marginLeft}}; `;
+                    }}
+                    if (lockedStyles.marginRight && lockedStyles.marginRight !== '0px') {{
+                        styleString += `margin-right: ${{lockedStyles.marginRight}}; `;
+                    }}
+                    
+                    // Max width/height constraints
+                    if (lockedStyles.maxWidth && lockedStyles.maxWidth !== 'none') {{
+                        styleString += `max-width: ${{lockedStyles.maxWidth}}; `;
+                    }}
+                    if (lockedStyles.maxHeight && lockedStyles.maxHeight !== 'none') {{
+                        styleString += `max-height: ${{lockedStyles.maxHeight}}; `;
+                    }}
+                    
+                    // Apply the locked styles
+                    if (styleString.trim()) {{
+                        img.setAttribute('style', styleString.trim());
+                        console.log(`  ✅ Applied locked styles to image ${{idx + 1}}`);
+                    }}
+                }}
+                
+                // SECOND: Check if image is wrapped in a resize container and unwrap it
+                const parent = img.parentElement;
+                if (parent && parent !== tempDiv && parent.tagName.toLowerCase() !== 'p') {{
+                    // Check if this is a resize wrapper (typically has only the image and maybe text nodes)
+                    const meaningfulChildren = Array.from(parent.childNodes).filter(n => {{
+                        if (n.nodeType === Node.ELEMENT_NODE) return true;
+                        if (n.nodeType === Node.TEXT_NODE && n.textContent.trim() !== '') return true;
+                        return false;
+                    }});
+                    
+                    // If parent only contains this image (and nothing else meaningful), unwrap it
+                    if (meaningfulChildren.length === 1 && meaningfulChildren[0] === img) {{
+                        const grandParent = parent.parentElement;
+                        if (grandParent) {{
+                            // Copy any alignment from parent's context
+                            const parentStyle = parent.getAttribute('style');
+                            if (parentStyle && parentStyle.includes('text-align')) {{
+                                const textAlignMatch = parentStyle.match(/text-align:\s*([^;]+)/);
+                                if (textAlignMatch) {{
+                                    // Wrap in a div with text-align for email client compatibility
+                                    const alignDiv = document.createElement('div');
+                                    alignDiv.setAttribute('style', `text-align: ${{textAlignMatch[1].trim()}}`);
+                                    grandParent.insertBefore(alignDiv, parent);
+                                    alignDiv.appendChild(img);
+                                    parent.remove();
+                                    console.log(`  📍 Preserved alignment: ${{textAlignMatch[1]}}`);
+                                    unwrappedCount++;
+                                    return; // Skip normal unwrap since we created alignment div
+                                }}
+                            }}
+                            
+                            // Normal unwrap: insert image before wrapper, then remove wrapper
+                            grandParent.insertBefore(img, parent);
+                            parent.remove();
+                            unwrappedCount++;
+                        }}
+                    }}
+                }}
+            }});
+            
+            if (unwrappedCount > 0) {{
+                console.log(`✂️ Unwrapped ${{unwrappedCount}} image(s) from resize containers`);
+            }}
+            console.log(`🔒 Locked ${{imageComputedStyles.size}} image(s) to exact editor size/position`);
+            
+            // THIRD: Preserve paragraph-level alignment for images (centered, right-aligned, etc.)
+            tempDiv.querySelectorAll('p, div').forEach(container => {{
+                // Check if this container has text-align style
+                const containerStyle = container.getAttribute('style');
+                if (containerStyle && (containerStyle.includes('text-align: center') || 
+                                       containerStyle.includes('text-align: right') ||
+                                       containerStyle.includes('text-align:center') ||
+                                       containerStyle.includes('text-align:right'))) {{
+                    // Check if container has an image
+                    const imgInside = container.querySelector('img');
+                    if (imgInside) {{
+                        // Extract text-align value
+                        const alignMatch = containerStyle.match(/text-align:\s*(center|right|left)/);
+                        if (alignMatch) {{
+                            const alignment = alignMatch[1];
+                            // Make sure the container style is preserved
+                            let cleanedStyle = containerStyle.replace(/\s+/g, ' ').trim();
+                            if (!cleanedStyle.includes('text-align')) {{
+                                cleanedStyle += `; text-align: ${{alignment}}`;
+                            }}
+                            container.setAttribute('style', cleanedStyle);
+                            console.log(`  📍 Preserved container alignment: ${{alignment}} for image`);
+                        }}
+                    }}
+                }}
+            }});
+            
             // Remove Quill's clipboard container element (often contains unwanted HTML at bottom)
             const clipboardElements = tempDiv.querySelectorAll('.ql-clipboard, [id*="ql-clipboard"], [class*="ql-clipboard"]');
             clipboardElements.forEach(el => el.remove());
@@ -4466,6 +4657,290 @@ Click OK to proceed or Cancel to abort.
                 resultDiv.classList.remove('hidden');
                 
                 button.textContent = 'Error';
+                button.style.background = 'linear-gradient(135deg, var(--danger-color), #dc2626)';
+                setTimeout(() => {{
+                    button.textContent = originalText;
+                    button.style.background = '';
+                }}, 3000);
+            }} finally {{
+                button.classList.remove('loading');
+                button.disabled = false;
+            }}
+        }}
+        
+        // PREVIEW EMAIL FUNCTION - Shows what recipients will receive
+        async function previewCampaign(event) {{
+            // Check form availability first
+            if (!checkFormAvailability()) {{
+                alert('Form is currently unavailable. Please refresh the page and try again.');
+                return;
+            }}
+            
+            const button = event?.target || document.querySelector('.btn-primary');
+            const originalText = button?.textContent || '👁️ Preview Email';
+            
+            try {{
+                // Show loading state
+                button.textContent = 'Generating Preview...';
+                button.classList.add('loading');
+                button.disabled = true;
+                
+                // Get content from Quill editor and process it (same as sendCampaign)
+                let emailBody = quillEditor.root.innerHTML;
+                
+                // Create a temporary div to parse and clean the HTML
+                const tempDiv = document.createElement('div');
+                tempDiv.innerHTML = emailBody;
+                
+                // IMPORTANT: LOCK IMAGE SIZE & POSITION (same logic as sendCampaign)
+                const editorImages = quillEditor.root.querySelectorAll('img');
+                const imageComputedStyles = new Map();
+                
+                console.log('👁️ PREVIEW: Locking image sizes and positions...');
+                editorImages.forEach((editorImg, idx) => {{
+                    const computedStyle = window.getComputedStyle(editorImg);
+                    const lockedStyles = {{
+                        width: computedStyle.width,
+                        height: computedStyle.height,
+                        display: computedStyle.display,
+                        marginLeft: computedStyle.marginLeft,
+                        marginRight: computedStyle.marginRight,
+                        marginTop: computedStyle.marginTop,
+                        marginBottom: computedStyle.marginBottom,
+                        float: computedStyle.float,
+                        verticalAlign: computedStyle.verticalAlign,
+                        maxWidth: computedStyle.maxWidth,
+                        maxHeight: computedStyle.maxHeight
+                    }};
+                    
+                    const src = editorImg.getAttribute('src');
+                    if (src) {{
+                        imageComputedStyles.set(src.substring(0, 100), lockedStyles);
+                        console.log(`🔒 PREVIEW: Locked image ${{idx + 1}} size/position`);
+                    }}
+                }});
+                
+                // Apply locked styles and unwrap images (same as sendCampaign)
+                const allImageElements = tempDiv.querySelectorAll('img');
+                let unwrappedCount = 0;
+                
+                allImageElements.forEach((img, idx) => {{
+                    const imgSrc = img.getAttribute('src');
+                    if (imgSrc && imageComputedStyles.has(imgSrc.substring(0, 100))) {{
+                        const lockedStyles = imageComputedStyles.get(imgSrc.substring(0, 100));
+                        let styleString = '';
+                        
+                        if (lockedStyles.width && lockedStyles.width !== 'auto') {{
+                            styleString += `width: ${{lockedStyles.width}}; `;
+                        }}
+                        if (lockedStyles.height && lockedStyles.height !== 'auto') {{
+                            styleString += `height: ${{lockedStyles.height}}; `;
+                        }}
+                        if (lockedStyles.display && lockedStyles.display !== 'inline') {{
+                            styleString += `display: ${{lockedStyles.display}}; `;
+                        }}
+                        if (lockedStyles.float && lockedStyles.float !== 'none') {{
+                            styleString += `float: ${{lockedStyles.float}}; `;
+                        }}
+                        if (lockedStyles.verticalAlign && lockedStyles.verticalAlign !== 'baseline') {{
+                            styleString += `vertical-align: ${{lockedStyles.verticalAlign}}; `;
+                        }}
+                        if (lockedStyles.marginTop && lockedStyles.marginTop !== '0px') {{
+                            styleString += `margin-top: ${{lockedStyles.marginTop}}; `;
+                        }}
+                        if (lockedStyles.marginBottom && lockedStyles.marginBottom !== '0px') {{
+                            styleString += `margin-bottom: ${{lockedStyles.marginBottom}}; `;
+                        }}
+                        if (lockedStyles.marginLeft && lockedStyles.marginLeft !== '0px') {{
+                            styleString += `margin-left: ${{lockedStyles.marginLeft}}; `;
+                        }}
+                        if (lockedStyles.marginRight && lockedStyles.marginRight !== '0px') {{
+                            styleString += `margin-right: ${{lockedStyles.marginRight}}; `;
+                        }}
+                        if (lockedStyles.maxWidth && lockedStyles.maxWidth !== 'none') {{
+                            styleString += `max-width: ${{lockedStyles.maxWidth}}; `;
+                        }}
+                        if (lockedStyles.maxHeight && lockedStyles.maxHeight !== 'none') {{
+                            styleString += `max-height: ${{lockedStyles.maxHeight}}; `;
+                        }}
+                        
+                        if (styleString.trim()) {{
+                            img.setAttribute('style', styleString.trim());
+                        }}
+                    }}
+                    
+                    // Unwrap from resize containers
+                    const parent = img.parentElement;
+                    if (parent && parent !== tempDiv && parent.tagName.toLowerCase() !== 'p') {{
+                        const meaningfulChildren = Array.from(parent.childNodes).filter(n => {{
+                            if (n.nodeType === Node.ELEMENT_NODE) return true;
+                            if (n.nodeType === Node.TEXT_NODE && n.textContent.trim() !== '') return true;
+                            return false;
+                        }});
+                        
+                        if (meaningfulChildren.length === 1 && meaningfulChildren[0] === img) {{
+                            const grandParent = parent.parentElement;
+                            if (grandParent) {{
+                                grandParent.insertBefore(img, parent);
+                                parent.remove();
+                                unwrappedCount++;
+                            }}
+                        }}
+                    }}
+                }});
+                
+                console.log(`👁️ PREVIEW: Unwrapped ${{unwrappedCount}} image(s)`);
+                console.log(`👁️ PREVIEW: Locked ${{imageComputedStyles.size}} image(s) to exact editor size/position`);
+                
+                // Clean up HTML (same as sendCampaign)
+                const clipboardElements = tempDiv.querySelectorAll('.ql-clipboard, [id*="ql-clipboard"], [class*="ql-clipboard"]');
+                clipboardElements.forEach(el => el.remove());
+                
+                const hiddenElements = tempDiv.querySelectorAll('[style*="display: none"], [style*="display:none"]');
+                hiddenElements.forEach(el => el.remove());
+                
+                const allElements = tempDiv.querySelectorAll('*');
+                allElements.forEach(element => {{
+                    element.removeAttribute('class');
+                    Array.from(element.attributes).forEach(attr => {{
+                        if (attr.name.startsWith('data-')) {{
+                            element.removeAttribute(attr.name);
+                        }}
+                    }});
+                    element.removeAttribute('contenteditable');
+                    element.removeAttribute('spellcheck');
+                    element.removeAttribute('autocorrect');
+                    element.removeAttribute('autocapitalize');
+                }});
+                
+                // Process embedded images (same as sendCampaign)
+                const allImgTags = tempDiv.querySelectorAll('img[src^="data:"], img[src^="blob:"]');
+                if (allImgTags.length > 0) {{
+                    console.log(`👁️ PREVIEW: Found ${{allImgTags.length}} embedded image(s)`);
+                    button.textContent = `Uploading ${{allImgTags.length}} image(s)...`;
+                    
+                    for (let index = 0; index < allImgTags.length; index++) {{
+                        button.textContent = `Uploading image ${{index + 1}}/${{allImgTags.length}}...`;
+                        const img = allImgTags[index];
+                        const dataUri = img.src;
+                        const altText = img.alt || img.title || `PreviewImage${{index + 1}}`;
+                        
+                        try {{
+                            const matches = dataUri.match(/^data:([^;]+);base64,(.+)$/);
+                            if (!matches) continue;
+                            
+                            const mimeType = matches[1];
+                            const base64Data = matches[2];
+                            const extension = mimeType.split('/')[1] || 'png';
+                            const filename = `${{altText.replace(/[^a-zA-Z0-9]/g, '_')}}_${{Date.now()}}_${{index}}.${{extension}}`;
+                            const timestamp = Date.now();
+                            const randomStr = Math.random().toString(36).substring(7);
+                            const s3Key = `campaign-attachments/${{timestamp}}-${{randomStr}}-${{filename}}`;
+                            
+                            const uploadResponse = await fetch(`${{API_URL}}/upload-attachment`, {{
+                                method: 'POST',
+                                headers: {{'Content-Type': 'application/json'}},
+                                body: JSON.stringify({{
+                                    filename: filename,
+                                    content_type: mimeType,
+                                    s3_key: s3Key,
+                                    data: base64Data
+                                }})
+                            }});
+                            
+                            if (!uploadResponse.ok) {{
+                                throw new Error(`Upload failed: ${{uploadResponse.status}}`);
+                            }}
+                            
+                            const uploadResult = await uploadResponse.json();
+                            campaignAttachments.push({{
+                                filename: uploadResult.filename,
+                                s3_key: uploadResult.s3_key,
+                                size: uploadResult.size,
+                                type: uploadResult.type,
+                                inline: true
+                            }});
+                            
+                            img.setAttribute('data-s3-key', uploadResult.s3_key);
+                            img.setAttribute('data-inline', 'true');
+                        }} catch (uploadError) {{
+                            console.error(`Failed to upload image ${{index}}:`, uploadError);
+                            img.remove();
+                        }}
+                    }}
+                }}
+                
+                // Replace data URIs with S3 keys
+                emailBody = tempDiv.innerHTML;
+                const imagesWithS3Keys = tempDiv.querySelectorAll('img[data-s3-key]');
+                if (imagesWithS3Keys.length > 0) {{
+                    imagesWithS3Keys.forEach((img) => {{
+                        const s3Key = img.getAttribute('data-s3-key');
+                        const currentSrc = img.getAttribute('src');
+                        if (s3Key && currentSrc && currentSrc.startsWith('data:')) {{
+                            const escapedSrc = currentSrc.replace(/[.*+?^${{}}()|[\\]\\\\]/g, '\\\\$&');
+                            const regex = new RegExp('src="' + escapedSrc + '"', 'g');
+                            emailBody = emailBody.replace(regex, 'src="' + s3Key + '"');
+                        }}
+                    }});
+                }}
+                
+                // Additional HTML cleanup
+                emailBody = emailBody
+                    .replace(/<p><br><\\/p>/g, '<p></p>')
+                    .replace(/<p>\\s*<\\/p>/g, '')
+                    .replace(/\\s+class=""/g, '')
+                    .replace(/\\s+data-[^=]*="[^"]*"/g, '')
+                    .trim();
+                
+                button.textContent = 'Generating preview...';
+                
+                // Create preview data object
+                const previewData = {{
+                    campaign_name: document.getElementById('campaignName').value || 'Untitled Preview',
+                    subject: document.getElementById('subject').value || 'No Subject',
+                    body: emailBody,
+                    attachments: campaignAttachments
+                }};
+                
+                console.log('👁️ PREVIEW: Sending to backend...');
+                console.log(`   Body length: ${{emailBody.length}} characters`);
+                console.log(`   Attachments: ${{campaignAttachments.length}}`);
+                
+                // Send preview to backend
+                const response = await fetch(`${{API_URL}}/preview`, {{
+                    method: 'POST',
+                    headers: {{'Content-Type': 'application/json'}},
+                    body: JSON.stringify(previewData)
+                }});
+                
+                if (!response.ok) {{
+                    throw new Error(`Preview generation failed: ${{response.status}} ${{response.statusText}}`);
+                }}
+                
+                const result = await response.json();
+                console.log('👁️ PREVIEW: Generated successfully!', result);
+                
+                // Open preview in new window
+                const previewUrl = `${{API_URL}}/preview/${{result.preview_id}}`;
+                console.log(`👁️ PREVIEW: Opening in new window: ${{previewUrl}}`);
+                window.open(previewUrl, '_blank', 'width=900,height=800,scrollbars=yes,resizable=yes');
+                
+                // Show success message
+                Toast.success('Preview generated! Opening in new window...', 2000);
+                button.textContent = '✅ Preview Ready!';
+                button.style.background = 'linear-gradient(135deg, var(--success-color), #059669)';
+                setTimeout(() => {{
+                    button.textContent = originalText;
+                    button.style.background = '';
+                }}, 2000);
+                
+            }} catch (error) {{
+                console.error('Preview error:', error);
+                Toast.error(`Preview failed: ${{error.message}}`);
+                alert(`Preview failed: ${{error.message}}`);
+                
+                button.textContent = '❌ Preview Failed';
                 button.style.background = 'linear-gradient(135deg, var(--danger-color), #dc2626)';
                 setTimeout(() => {{
                     button.textContent = originalText;
@@ -5824,6 +6299,252 @@ def send_smtp_email(config, contact, subject, body):
     except Exception as e:
         print(f"SMTP Error: {str(e)}")
         return False
+
+
+def save_preview(body, headers):
+    """Save email preview to S3 and DynamoDB for later retrieval"""
+    import uuid
+    import datetime
+    
+    try:
+        print("📧 Saving email preview...")
+        
+        # Generate unique preview ID
+        preview_id = str(uuid.uuid4())
+        timestamp = datetime.datetime.now(datetime.timezone.utc).isoformat()
+        
+        # Extract preview data from request
+        subject = body.get('subject', 'No Subject')
+        email_body = body.get('body', '')
+        campaign_name = body.get('campaign_name', 'Untitled Preview')
+        attachments = body.get('attachments', [])
+        
+        print(f"   Preview ID: {preview_id}")
+        print(f"   Subject: {subject}")
+        print(f"   Body length: {len(email_body)} characters")
+        print(f"   Attachments: {len(attachments)}")
+        
+        # Replace S3 keys with actual image URLs for preview display
+        # This converts "campaign-attachments/..." to full S3 URLs
+        preview_html = email_body
+        for attachment in attachments:
+            if attachment.get('inline'):
+                s3_key = attachment.get('s3_key')
+                if s3_key:
+                    # Generate presigned URL for image (valid for 1 hour)
+                    try:
+                        image_url = s3_client.generate_presigned_url(
+                            'get_object',
+                            Params={'Bucket': ATTACHMENTS_BUCKET, 'Key': s3_key},
+                            ExpiresIn=3600  # 1 hour
+                        )
+                        # Replace S3 key with presigned URL in HTML
+                        preview_html = preview_html.replace(f'src="{s3_key}"', f'src="{image_url}"')
+                        print(f"   ✅ Replaced S3 key with presigned URL: {s3_key}")
+                    except Exception as url_error:
+                        print(f"   ⚠️ Failed to generate presigned URL for {s3_key}: {url_error}")
+        
+        # Create complete HTML document for preview
+        complete_html = f"""<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Email Preview: {subject}</title>
+    <style>
+        body {{
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }}
+        .preview-container {{
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }}
+        .preview-header {{
+            background: #6366f1;
+            color: white;
+            padding: 20px;
+            border-bottom: 3px solid #4f46e5;
+        }}
+        .preview-header h1 {{
+            margin: 0 0 10px 0;
+            font-size: 24px;
+        }}
+        .preview-meta {{
+            font-size: 14px;
+            opacity: 0.9;
+        }}
+        .preview-body {{
+            padding: 30px;
+            background: white;
+        }}
+        .preview-body img {{
+            max-width: 100%;
+            height: auto;
+        }}
+        .preview-footer {{
+            padding: 15px 20px;
+            background: #f9fafb;
+            border-top: 1px solid #e5e7eb;
+            text-align: center;
+            font-size: 12px;
+            color: #6b7280;
+        }}
+        .attachments-list {{
+            margin-top: 20px;
+            padding: 15px;
+            background: #f9fafb;
+            border-radius: 6px;
+            border-left: 4px solid #3b82f6;
+        }}
+        .attachments-list h3 {{
+            margin: 0 0 10px 0;
+            font-size: 14px;
+            color: #4b5563;
+        }}
+        .attachment-item {{
+            padding: 8px 0;
+            font-size: 13px;
+            color: #6b7280;
+        }}
+    </style>
+</head>
+<body>
+    <div class="preview-container">
+        <div class="preview-header">
+            <h1>📧 Email Preview</h1>
+            <div class="preview-meta">
+                <strong>Subject:</strong> {subject}<br>
+                <strong>Campaign:</strong> {campaign_name}<br>
+                <strong>Preview ID:</strong> {preview_id}<br>
+                <strong>Generated:</strong> {timestamp}
+            </div>
+        </div>
+        <div class="preview-body">
+            {preview_html}
+        </div>
+        {f'''<div class="attachments-list">
+            <h3>📎 Attachments ({len(attachments)})</h3>
+            {''.join([f'<div class="attachment-item">• {att.get("filename")} ({att.get("type", "unknown")}){" - Inline Image" if att.get("inline") else ""}</div>' for att in attachments])}
+        </div>''' if attachments else ''}
+        <div class="preview-footer">
+            This is a preview of what recipients will see. Generated at {timestamp}
+        </div>
+    </div>
+</body>
+</html>"""
+        
+        # Save preview HTML to S3
+        s3_key = f"email-previews/{preview_id}.html"
+        s3_client.put_object(
+            Bucket=ATTACHMENTS_BUCKET,
+            Key=s3_key,
+            Body=complete_html.encode('utf-8'),
+            ContentType='text/html',
+            Metadata={
+                'preview-id': preview_id,
+                'subject': subject[:100],  # Truncate to fit metadata limits
+                'timestamp': timestamp
+            }
+        )
+        print(f"   ✅ Saved preview HTML to S3: {s3_key}")
+        
+        # Save preview metadata to DynamoDB
+        preview_record = {
+            'preview_id': preview_id,
+            'campaign_name': campaign_name,
+            'subject': subject,
+            'body_length': len(email_body),
+            'attachment_count': len(attachments),
+            's3_key': s3_key,
+            'created_at': timestamp,
+            'expires_at': (datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(hours=24)).isoformat()  # Expire after 24 hours
+        }
+        
+        # Store in campaigns table with type='preview'
+        campaigns_table.put_item(Item={
+            **preview_record,
+            'campaign_id': preview_id,  # Use preview_id as campaign_id for compatibility
+            'status': 'preview',
+            'type': 'preview'
+        })
+        print(f"   ✅ Saved preview metadata to DynamoDB")
+        
+        return {
+            'statusCode': 200,
+            'headers': headers,
+            'body': json.dumps({
+                'success': True,
+                'preview_id': preview_id,
+                'message': 'Preview saved successfully',
+                's3_key': s3_key,
+                'timestamp': timestamp
+            })
+        }
+        
+    except Exception as e:
+        print(f"Preview save error: {str(e)}")
+        traceback.print_exc()
+        return {
+            'statusCode': 500,
+            'headers': headers,
+            'body': json.dumps({'error': str(e)})
+        }
+
+
+def get_preview(preview_id, headers):
+    """Retrieve and serve email preview HTML"""
+    try:
+        print(f"📧 Retrieving preview: {preview_id}")
+        
+        # Get preview metadata from DynamoDB
+        response = campaigns_table.get_item(Key={'campaign_id': preview_id})
+        
+        if 'Item' not in response:
+            print(f"   ❌ Preview not found: {preview_id}")
+            return {
+                'statusCode': 404,
+                'headers': {'Content-Type': 'text/html'},
+                'body': '<h1>Preview Not Found</h1><p>This preview may have expired or does not exist.</p>'
+            }
+        
+        preview_item = response['Item']
+        s3_key = preview_item.get('s3_key')
+        
+        print(f"   Preview found: {preview_item.get('subject')}")
+        print(f"   S3 key: {s3_key}")
+        
+        # Retrieve HTML from S3
+        s3_response = s3_client.get_object(Bucket=ATTACHMENTS_BUCKET, Key=s3_key)
+        html_content = s3_response['Body'].read().decode('utf-8')
+        
+        print(f"   ✅ Retrieved preview HTML ({len(html_content)} characters)")
+        
+        return {
+            'statusCode': 200,
+            'headers': {
+                **headers,
+                'Content-Type': 'text/html'
+            },
+            'body': html_content
+        }
+        
+    except Exception as e:
+        print(f"Preview retrieval error: {str(e)}")
+        traceback.print_exc()
+        return {
+            'statusCode': 500,
+            'headers': {'Content-Type': 'text/html'},
+            'body': f'<h1>Error Loading Preview</h1><p>{str(e)}</p>'
+        }
+
 
 def get_campaign_status(campaign_id, headers):
     """Get campaign status"""
