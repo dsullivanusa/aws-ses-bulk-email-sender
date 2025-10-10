@@ -148,6 +148,9 @@ def serve_web_ui(event):
     <link href="https://cdn.quilljs.com/1.3.6/quill.snow.css" rel="stylesheet">
     <script src="https://cdn.quilljs.com/1.3.6/quill.js"></script>
     
+    <!-- Quill Image Resize Module -->
+    <script src="https://cdn.jsdelivr.net/npm/quill-image-resize-module@3.0.0/image-resize.min.js"></script>
+    
     <style>
         /* Modern CSS Variables for Consistent Theming */
         :root {{
@@ -522,6 +525,25 @@ def serve_web_ui(event):
             color: #9ca3af;
             font-style: normal;
         }}
+        
+        /* Image Resize Module Styling */
+        .ql-editor img {{
+            cursor: pointer;
+            max-width: 100%;
+        }}
+        .ql-editor img:hover {{
+            outline: 2px solid #3b82f6;
+        }}
+        /* Resize handle styles */
+        .image-resize-handle {{
+            background: #3b82f6;
+            border: 2px solid white;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        }}
+        .image-resize-overlay {{
+            border: 2px dashed #3b82f6;
+        }}
+        
         .card {{ 
             background: white; 
             border-radius: var(--border-radius); 
@@ -1504,6 +1526,7 @@ def serve_web_ui(event):
                     <strong>✨ Editor Features:</strong><br>
                     • <strong>Copy/Paste HTML:</strong> Paste formatted HTML directly (Ctrl+V) or use 📋 Paste HTML button<br>
                     • <strong>Inline Images:</strong> Paste/embed images - they're auto-converted to work in emails<br>
+                    • <strong>Resize Images:</strong> Click any image to see resize handles - drag to resize<br>
                     • <strong>Formatting:</strong> Use toolbar for bold, colors, lists, alignment, etc.<br>
                     • <strong>Placeholders:</strong> Use {{{{first_name}}}}, {{{{email}}}}, etc. for personalization
                 </div>
@@ -1667,6 +1690,12 @@ def serve_web_ui(event):
         // Initialize Quill Rich Text Editor
         let quillEditor;
         document.addEventListener('DOMContentLoaded', function() {{
+            // Register Image Resize module if available
+            if (typeof ImageResize !== 'undefined') {{
+                Quill.register('modules/imageResize', ImageResize.default);
+                console.log('✅ Quill Image Resize module registered');
+            }}
+            
             quillEditor = new Quill('#body', {{
                 theme: 'snow',
                 placeholder: 'Dear {{{{first_name}}}} {{{{last_name}}}},\\n\\nYour message here...',
@@ -1679,9 +1708,19 @@ def serve_web_ui(event):
                         [{{ 'align': [] }}],
                         ['link', 'image'],
                         ['clean']
-                    ]
+                    ],
+                    imageResize: {{
+                        displayStyles: {{
+                            backgroundColor: 'black',
+                            border: 'none',
+                            color: 'white'
+                        }},
+                        modules: ['Resize', 'DisplaySize', 'Toolbar']
+                    }}
                 }}
             }});
+            
+            console.log('✅ Quill editor initialized with image resize support');
         }});
         
         // Initialize the application
