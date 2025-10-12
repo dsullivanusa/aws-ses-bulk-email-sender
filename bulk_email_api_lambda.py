@@ -1,5 +1,6 @@
 import json
 import boto3
+from botocore.config import Config
 import smtplib
 import ssl
 import time
@@ -20,7 +21,10 @@ campaigns_table = dynamodb.Table('EmailCampaigns')
 email_config_table = dynamodb.Table('EmailConfig')
 secrets_client = boto3.client('secretsmanager', region_name='us-gov-west-1')
 sqs_client = boto3.client('sqs', region_name='us-gov-west-1')
-s3_client = boto3.client('s3', region_name='us-gov-west-1')
+
+# S3 client with Signature Version 4 (required for KMS-encrypted buckets)
+s3_config = Config(signature_version='s3v4', region_name='us-gov-west-1')
+s3_client = boto3.client('s3', region_name='us-gov-west-1', config=s3_config)
 
 # S3 bucket for attachments
 ATTACHMENTS_BUCKET = 'jcdc-ses-contact-list'
@@ -6565,11 +6569,11 @@ def save_preview(body, headers):
         .preview-body {{
             padding: 30px;
             background: white;
-            line-height: 1.2;
+            line-height: 1.0;
         }}
         .preview-body p {{
             margin: 0 0 4px 0;
-            line-height: 1.2;
+            line-height: 1.0;
         }}
         .preview-body p + p {{
             margin-top: 0;
@@ -6581,10 +6585,10 @@ def save_preview(body, headers):
             margin: 10px 0;
         }}
         .preview-body br {{
-            line-height: 1.2;
+            line-height: 1.0;
         }}
         .preview-body * {{
-            line-height: 1.2;
+            line-height: 1.0;
         }}
         .preview-footer {{
             padding: 15px 20px;

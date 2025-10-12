@@ -7,6 +7,7 @@ Sends emails via AWS SES with adaptive rate control
 
 import json
 import boto3
+from botocore.config import Config
 import logging
 import time
 import os
@@ -24,7 +25,11 @@ dynamodb = boto3.resource('dynamodb', region_name='us-gov-west-1')
 campaigns_table = dynamodb.Table('EmailCampaigns')
 contacts_table = dynamodb.Table('EmailContacts')
 secrets_client = boto3.client('secretsmanager', region_name='us-gov-west-1')
-s3_client = boto3.client('s3', region_name='us-gov-west-1')
+
+# S3 client with Signature Version 4 (required for KMS-encrypted buckets)
+s3_config = Config(signature_version='s3v4', region_name='us-gov-west-1')
+s3_client = boto3.client('s3', region_name='us-gov-west-1', config=s3_config)
+
 cloudwatch = boto3.client('cloudwatch', region_name='us-gov-west-1')
 
 # S3 bucket for attachments
