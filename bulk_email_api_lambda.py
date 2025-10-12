@@ -1168,6 +1168,24 @@ def serve_web_ui(event):
             font-size: 2.5em;
             line-height: 1.3;  /* More spacing for huge text */
         }}
+        
+        /* Apply same line-height to Quill editor so it shows in real-time */
+        .ql-editor .ql-size-small {{
+            font-size: 0.75em;
+            line-height: 0.9 !important;
+        }}
+        .ql-editor .ql-size-large {{
+            font-size: 1.5em;
+            line-height: 1.2 !important;
+        }}
+        .ql-editor .ql-size-huge {{
+            font-size: 2.5em;
+            line-height: 1.3 !important;
+        }}
+        .ql-editor p {{
+            line-height: 1.2;
+            margin: 0;
+        }}
     </style>
 </head>
 <body>
@@ -1763,10 +1781,78 @@ def serve_web_ui(event):
             
             // Configure custom font families
             const Font = Quill.import('formats/font');
-            // Override Quill's default fonts with custom list
+            // IMPORTANT: false = default font (removed from whitelist to avoid "Sans Serif" showing)
+            // Only include custom fonts we want in the dropdown
             Font.whitelist = ['arial', 'times-new-roman', 'courier-new', 'georgia', 'verdana', 'comic-sans', 'trebuchet', 'impact'];
             Quill.register(Font, true);
+            
+            // Add custom CSS for font dropdown labels
+            const fontStyle = document.createElement('style');
+            fontStyle.textContent = `
+                .ql-snow .ql-picker.ql-font .ql-picker-label[data-value="arial"]::before,
+                .ql-snow .ql-picker.ql-font .ql-picker-item[data-value="arial"]::before {{
+                    content: 'Arial';
+                }}
+                .ql-snow .ql-picker.ql-font .ql-picker-label[data-value="times-new-roman"]::before,
+                .ql-snow .ql-picker.ql-font .ql-picker-item[data-value="times-new-roman"]::before {{
+                    content: 'Times New Roman';
+                }}
+                .ql-snow .ql-picker.ql-font .ql-picker-label[data-value="courier-new"]::before,
+                .ql-snow .ql-picker.ql-font .ql-picker-item[data-value="courier-new"]::before {{
+                    content: 'Courier New';
+                }}
+                .ql-snow .ql-picker.ql-font .ql-picker-label[data-value="georgia"]::before,
+                .ql-snow .ql-picker.ql-font .ql-picker-item[data-value="georgia"]::before {{
+                    content: 'Georgia';
+                }}
+                .ql-snow .ql-picker.ql-font .ql-picker-label[data-value="verdana"]::before,
+                .ql-snow .ql-picker.ql-font .ql-picker-item[data-value="verdana"]::before {{
+                    content: 'Verdana';
+                }}
+                .ql-snow .ql-picker.ql-font .ql-picker-label[data-value="comic-sans"]::before,
+                .ql-snow .ql-picker.ql-font .ql-picker-item[data-value="comic-sans"]::before {{
+                    content: 'Comic Sans';
+                }}
+                .ql-snow .ql-picker.ql-font .ql-picker-label[data-value="trebuchet"]::before,
+                .ql-snow .ql-picker.ql-font .ql-picker-item[data-value="trebuchet"]::before {{
+                    content: 'Trebuchet MS';
+                }}
+                .ql-snow .ql-picker.ql-font .ql-picker-label[data-value="impact"]::before,
+                .ql-snow .ql-picker.ql-font .ql-picker-item[data-value="impact"]::before {{
+                    content: 'Impact';
+                }}
+                .ql-snow .ql-picker.ql-font .ql-picker-label::before {{
+                    content: 'Normal Font';
+                }}
+                /* Show each font in its actual typeface in the dropdown */
+                .ql-snow .ql-picker.ql-font .ql-picker-item[data-value="arial"]::before {{
+                    font-family: Arial, sans-serif !important;
+                }}
+                .ql-snow .ql-picker.ql-font .ql-picker-item[data-value="times-new-roman"]::before {{
+                    font-family: 'Times New Roman', Times, serif !important;
+                }}
+                .ql-snow .ql-picker.ql-font .ql-picker-item[data-value="courier-new"]::before {{
+                    font-family: 'Courier New', Courier, monospace !important;
+                }}
+                .ql-snow .ql-picker.ql-font .ql-picker-item[data-value="georgia"]::before {{
+                    font-family: Georgia, serif !important;
+                }}
+                .ql-snow .ql-picker.ql-font .ql-picker-item[data-value="verdana"]::before {{
+                    font-family: Verdana, sans-serif !important;
+                }}
+                .ql-snow .ql-picker.ql-font .ql-picker-item[data-value="comic-sans"]::before {{
+                    font-family: 'Comic Sans MS', cursive !important;
+                }}
+                .ql-snow .ql-picker.ql-font .ql-picker-item[data-value="trebuchet"]::before {{
+                    font-family: 'Trebuchet MS', sans-serif !important;
+                }}
+                .ql-snow .ql-picker.ql-font .ql-picker-item[data-value="impact"]::before {{
+                    font-family: Impact, sans-serif !important;
+                }}
+            `;
+            document.head.appendChild(fontStyle);
             console.log('✅ Quill Font module registered with custom fonts:', Font.whitelist);
+            console.log('✅ Font dropdown labels customized');
             
             // Configure font sizes
             const Size = Quill.import('formats/size');
