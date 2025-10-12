@@ -1130,15 +1130,6 @@ def serve_web_ui(event):
         }}
         
         /* Quill Font Families */
-        .ql-font-sans-serif {{
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-        }}
-        .ql-font-serif {{
-            font-family: Georgia, 'Times New Roman', serif;
-        }}
-        .ql-font-monospace {{
-            font-family: 'Courier New', Courier, monospace;
-        }}
         .ql-font-arial {{
             font-family: Arial, sans-serif;
         }}
@@ -1154,19 +1145,28 @@ def serve_web_ui(event):
         .ql-font-verdana {{
             font-family: Verdana, sans-serif;
         }}
+        .ql-font-comic-sans {{
+            font-family: 'Comic Sans MS', cursive;
+        }}
+        .ql-font-trebuchet {{
+            font-family: 'Trebuchet MS', sans-serif;
+        }}
+        .ql-font-impact {{
+            font-family: Impact, sans-serif;
+        }}
         
-        /* Quill Font Sizes */
+        /* Quill Font Sizes with Proportional Line Spacing */
         .ql-size-small {{
             font-size: 0.75em;
-        }}
-        .ql-size-normal {{
-            font-size: 1em;
+            line-height: 0.9;  /* Tighter spacing for small text */
         }}
         .ql-size-large {{
             font-size: 1.5em;
+            line-height: 1.2;  /* Slightly more spacing for large text */
         }}
         .ql-size-huge {{
             font-size: 2.5em;
+            line-height: 1.3;  /* More spacing for huge text */
         }}
     </style>
 </head>
@@ -1761,17 +1761,18 @@ def serve_web_ui(event):
                 console.log('✅ Quill Image Resize module registered');
             }}
             
-            // Configure font families (add custom fonts)
+            // Configure custom font families
             const Font = Quill.import('formats/font');
-            Font.whitelist = ['sans-serif', 'serif', 'monospace', 'arial', 'times-new-roman', 'courier-new', 'georgia', 'verdana'];
+            // Override Quill's default fonts with custom list
+            Font.whitelist = ['arial', 'times-new-roman', 'courier-new', 'georgia', 'verdana', 'comic-sans', 'trebuchet', 'impact'];
             Quill.register(Font, true);
-            console.log('✅ Quill Font module registered with custom fonts');
+            console.log('✅ Quill Font module registered with custom fonts:', Font.whitelist);
             
             // Configure font sizes
             const Size = Quill.import('formats/size');
-            Size.whitelist = ['small', 'normal', 'large', 'huge'];
+            Size.whitelist = ['small', 'large', 'huge'];
             Quill.register(Size, true);
-            console.log('✅ Quill Size module registered');
+            console.log('✅ Quill Size module registered:', Size.whitelist);
             
             quillEditor = new Quill('#body', {{
                 theme: 'snow',
@@ -1810,6 +1811,75 @@ def serve_web_ui(event):
             }});
             
             console.log('✅ Quill editor initialized with image resize support');
+            
+            // Add tooltips to Quill toolbar buttons
+            setTimeout(() => {{
+                const toolbar = document.querySelector('.ql-toolbar');
+                if (toolbar) {{
+                    // Header dropdown
+                    const headerSelect = toolbar.querySelector('.ql-header');
+                    if (headerSelect) headerSelect.setAttribute('title', 'Heading level (H1, H2, H3, Normal)');
+                    
+                    // Font dropdown
+                    const fontSelect = toolbar.querySelector('.ql-font');
+                    if (fontSelect) fontSelect.setAttribute('title', 'Font family (Arial, Georgia, etc.)');
+                    
+                    // Size dropdown
+                    const sizeSelect = toolbar.querySelector('.ql-size');
+                    if (sizeSelect) sizeSelect.setAttribute('title', 'Font size (Small, Normal, Large, Huge)');
+                    
+                    // Formatting buttons
+                    const boldBtn = toolbar.querySelector('.ql-bold');
+                    if (boldBtn) boldBtn.setAttribute('title', 'Bold (Ctrl+B)');
+                    
+                    const italicBtn = toolbar.querySelector('.ql-italic');
+                    if (italicBtn) italicBtn.setAttribute('title', 'Italic (Ctrl+I)');
+                    
+                    const underlineBtn = toolbar.querySelector('.ql-underline');
+                    if (underlineBtn) underlineBtn.setAttribute('title', 'Underline (Ctrl+U)');
+                    
+                    const strikeBtn = toolbar.querySelector('.ql-strike');
+                    if (strikeBtn) strikeBtn.setAttribute('title', 'Strikethrough');
+                    
+                    // Color pickers
+                    const colorBtn = toolbar.querySelector('.ql-color');
+                    if (colorBtn) colorBtn.setAttribute('title', 'Text color');
+                    
+                    const backgroundBtn = toolbar.querySelector('.ql-background');
+                    if (backgroundBtn) backgroundBtn.setAttribute('title', 'Background color / Highlight');
+                    
+                    // Lists
+                    const orderedBtn = toolbar.querySelector('.ql-list[value="ordered"]');
+                    if (orderedBtn) orderedBtn.setAttribute('title', 'Numbered list');
+                    
+                    const bulletBtn = toolbar.querySelector('.ql-list[value="bullet"]');
+                    if (bulletBtn) bulletBtn.setAttribute('title', 'Bullet list');
+                    
+                    // Alignment
+                    const alignSelect = toolbar.querySelector('.ql-align');
+                    if (alignSelect) alignSelect.setAttribute('title', 'Text alignment (Left, Center, Right, Justify)');
+                    
+                    // Indent
+                    const indentMinus = toolbar.querySelector('.ql-indent[value="-1"]');
+                    if (indentMinus) indentMinus.setAttribute('title', 'Decrease indent');
+                    
+                    const indentPlus = toolbar.querySelector('.ql-indent[value="+1"]');
+                    if (indentPlus) indentPlus.setAttribute('title', 'Increase indent');
+                    
+                    // Link and Image
+                    const linkBtn = toolbar.querySelector('.ql-link');
+                    if (linkBtn) linkBtn.setAttribute('title', 'Insert link');
+                    
+                    const imageBtn = toolbar.querySelector('.ql-image');
+                    if (imageBtn) imageBtn.setAttribute('title', 'Insert image (or paste with Ctrl+V)');
+                    
+                    // Clean
+                    const cleanBtn = toolbar.querySelector('.ql-clean');
+                    if (cleanBtn) cleanBtn.setAttribute('title', 'Remove formatting');
+                    
+                    console.log('✅ Added tooltips to Quill toolbar buttons');
+                }}
+            }}, 100);  // Small delay to ensure toolbar is rendered
         }});
         
         // Initialize the application
@@ -4530,11 +4600,17 @@ def serve_web_ui(event):
             
             console.log('✅ Applied HTML cleanup and preserved blank lines as <p>&nbsp;</p>');
             
-            // Add inline style to all <p> tags for consistent line-height: 1.0
-            // This ensures recipients see single-spaced text
-            emailBody = emailBody.replace(/<p>/g, '<p style="line-height: 1.0; margin: 0;">');
-            emailBody = emailBody.replace(/<p([^>]*?)style="([^"]*)"([^>]*)>/g, '<p$1style="$2; line-height: 1.0; margin: 0;"$3>');
-            console.log('✅ Added line-height: 1.0 to all <p> tags for recipients');
+            // Add margin: 0 to all <p> tags for tight spacing
+            // Line-height is controlled by .ql-size-* classes (0.9 for small, 1.2 for large, 1.3 for huge)
+            emailBody = emailBody.replace(/<p>/g, '<p style="margin: 0;">');
+            emailBody = emailBody.replace(/<p([^>]*?)style="([^"]*)"([^>]*)>/g, function(match, before, style, after) {{
+                // Only add margin if not already present
+                if (!style.includes('margin')) {{
+                    return `<p${{before}}style="${{style}}; margin: 0;"${{after}}>`;
+                }}
+                return match;
+            }});
+            console.log('✅ Added margin: 0 to <p> tags (line-height controlled by size classes)');
             
             // Add Quill CSS styles to email body so Quill classes work in recipient emails
             const quillCSS = `<style type="text/css">
@@ -4546,20 +4622,19 @@ def serve_web_ui(event):
     .ql-indent-1 {{ padding-left: 3em; }}
     .ql-indent-2 {{ padding-left: 6em; }}
     .ql-indent-3 {{ padding-left: 9em; }}
-    .ql-size-small {{ font-size: 0.75em; }}
-    .ql-size-normal {{ font-size: 1em; }}
-    .ql-size-large {{ font-size: 1.5em; }}
-    .ql-size-huge {{ font-size: 2.5em; }}
-    .ql-font-sans-serif {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }}
-    .ql-font-serif {{ font-family: Georgia, 'Times New Roman', serif; }}
-    .ql-font-monospace {{ font-family: 'Courier New', Courier, monospace; }}
+    .ql-size-small {{ font-size: 0.75em; line-height: 0.9; }}
+    .ql-size-large {{ font-size: 1.5em; line-height: 1.2; }}
+    .ql-size-huge {{ font-size: 2.5em; line-height: 1.3; }}
     .ql-font-arial {{ font-family: Arial, sans-serif; }}
     .ql-font-times-new-roman {{ font-family: 'Times New Roman', Times, serif; }}
     .ql-font-courier-new {{ font-family: 'Courier New', Courier, monospace; }}
     .ql-font-georgia {{ font-family: Georgia, serif; }}
     .ql-font-verdana {{ font-family: Verdana, sans-serif; }}
-    /* Preserve user's custom classes - add more as needed */
-    p {{ line-height: 1.0; margin: 0; }}
+    .ql-font-comic-sans {{ font-family: 'Comic Sans MS', cursive; }}
+    .ql-font-trebuchet {{ font-family: 'Trebuchet MS', sans-serif; }}
+    .ql-font-impact {{ font-family: Impact, sans-serif; }}
+    /* Default paragraph spacing - size classes override line-height */
+    p {{ line-height: 1.2; margin: 0; }}
 </style>`;
             
             // Prepend CSS to email body
@@ -5191,11 +5266,17 @@ Click OK to proceed or Cancel to abort.
                 
                 console.log(`👁️ PREVIEW: Final email body length: ${{emailBody.length}} characters`);
                 
-                // Add inline style to all <p> tags for consistent line-height: 1.0
-                // This ensures preview and actual email both show single-spaced text
-                emailBody = emailBody.replace(/<p>/g, '<p style="line-height: 1.0; margin: 0;">');
-                emailBody = emailBody.replace(/<p([^>]*?)style="([^"]*)"([^>]*)>/g, '<p$1style="$2; line-height: 1.0; margin: 0;"$3>');
-                console.log(`   ✅ Added line-height: 1.0 to all <p> tags`);
+                // Add margin: 0 to all <p> tags for tight spacing
+                // Line-height is controlled by .ql-size-* classes (0.9 for small, 1.2 for large, 1.3 for huge)
+                emailBody = emailBody.replace(/<p>/g, '<p style="margin: 0;">');
+                emailBody = emailBody.replace(/<p([^>]*?)style="([^"]*)"([^>]*)>/g, function(match, before, style, after) {{
+                    // Only add margin if not already present
+                    if (!style.includes('margin')) {{
+                        return `<p${{before}}style="${{style}}; margin: 0;"${{after}}>`;
+                    }}
+                    return match;
+                }});
+                console.log(`   ✅ Added margin: 0 to <p> tags (line-height controlled by size classes)`);
                 
                 // Add Quill CSS styles so Quill classes work in preview
                 const quillCSS = `<style type="text/css">
@@ -5207,18 +5288,17 @@ Click OK to proceed or Cancel to abort.
     .ql-indent-1 {{ padding-left: 3em; }}
     .ql-indent-2 {{ padding-left: 6em; }}
     .ql-indent-3 {{ padding-left: 9em; }}
-    .ql-size-small {{ font-size: 0.75em; }}
-    .ql-size-normal {{ font-size: 1em; }}
-    .ql-size-large {{ font-size: 1.5em; }}
-    .ql-size-huge {{ font-size: 2.5em; }}
-    .ql-font-sans-serif {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }}
-    .ql-font-serif {{ font-family: Georgia, 'Times New Roman', serif; }}
-    .ql-font-monospace {{ font-family: 'Courier New', Courier, monospace; }}
+    .ql-size-small {{ font-size: 0.75em; line-height: 0.9; }}
+    .ql-size-large {{ font-size: 1.5em; line-height: 1.2; }}
+    .ql-size-huge {{ font-size: 2.5em; line-height: 1.3; }}
     .ql-font-arial {{ font-family: Arial, sans-serif; }}
     .ql-font-times-new-roman {{ font-family: 'Times New Roman', Times, serif; }}
     .ql-font-courier-new {{ font-family: 'Courier New', Courier, monospace; }}
     .ql-font-georgia {{ font-family: Georgia, serif; }}
     .ql-font-verdana {{ font-family: Verdana, sans-serif; }}
+    .ql-font-comic-sans {{ font-family: 'Comic Sans MS', cursive; }}
+    .ql-font-trebuchet {{ font-family: 'Trebuchet MS', sans-serif; }}
+    .ql-font-impact {{ font-family: Impact, sans-serif; }}
     /* User custom classes preserved */
     p {{ line-height: 1.0; margin: 0; }}
 </style>`;
@@ -6872,11 +6952,10 @@ def save_preview(body, headers):
         .preview-body {{
             padding: 30px;
             background: white;
-            line-height: 1.0;
         }}
         .preview-body p {{
             margin: 0 0 4px 0;
-            line-height: 1.0;
+            line-height: 1.2;  /* Default spacing, overridden by .ql-size-* classes */
         }}
         .preview-body p + p {{
             margin-top: 0;
@@ -6887,11 +6966,15 @@ def save_preview(body, headers):
             display: block;
             margin: 10px 0;
         }}
-        .preview-body br {{
-            line-height: 1.0;
+        /* Let size classes control line-height for proportional spacing */
+        .preview-body .ql-size-small {{
+            line-height: 0.9;
         }}
-        .preview-body * {{
-            line-height: 1.0;
+        .preview-body .ql-size-large {{
+            line-height: 1.2;
+        }}
+        .preview-body .ql-size-huge {{
+            line-height: 1.3;
         }}
         .preview-footer {{
             padding: 15px 20px;
