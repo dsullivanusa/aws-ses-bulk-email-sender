@@ -80,11 +80,16 @@ def lambda_handler(event, context):
     }
     
     try:
-        if event['httpMethod'] == 'OPTIONS':
+        # Safely get HTTP method
+        method = event.get('httpMethod')
+        if not method:
+            return {'statusCode': 400, 'headers': headers, 'body': json.dumps({'error': 'httpMethod is required in event'})}
+            
+        if method == 'OPTIONS':
             return {'statusCode': 200, 'headers': headers, 'body': ''}
         
         path = event.get('resource', event.get('path', '/'))
-        method = event['httpMethod']
+        print(f"🔍 Processing request: {method} {path}")
         
         # DEBUG: Log incoming request details
         print(f"📨 Incoming request: {method} {path}")
@@ -133,13 +138,21 @@ def lambda_handler(event, context):
             print("   → Calling send_campaign()")
             return send_campaign(body, headers, event)
         elif path == '/campaign/{campaign_id}' and method == 'GET':
-            campaign_id = event['pathParameters']['campaign_id']
+            # Safely get campaign_id from pathParameters
+            path_params = event.get('pathParameters') or {}
+            campaign_id = path_params.get('campaign_id')
+            if not campaign_id:
+                return {'statusCode': 400, 'headers': headers, 'body': json.dumps({'error': 'campaign_id parameter is required'})}
             return get_campaign_status(campaign_id, headers)
         elif path == '/preview' and method == 'POST':
             print("   → Calling save_preview()")
             return save_preview(body, headers)
         elif path == '/preview/{preview_id}' and method == 'GET':
-            preview_id = event['pathParameters']['preview_id']
+            # Safely get preview_id from pathParameters
+            path_params = event.get('pathParameters') or {}
+            preview_id = path_params.get('preview_id')
+            if not preview_id:
+                return {'statusCode': 400, 'headers': headers, 'body': json.dumps({'error': 'preview_id parameter is required'})}
             print(f"   → Calling get_preview({preview_id})")
             return get_preview(preview_id, headers)
         else:
@@ -1667,7 +1680,7 @@ def serve_web_ui(event):
     </div>
     
     <script>
-        const API_URL = '{{api_url}}';
+        const API_URL = '{api_url}';
         
         // ============================================
         // TOAST NOTIFICATION SYSTEM
@@ -5578,7 +5591,7 @@ Click OK to proceed or Cancel to abort.
         };
     </script>
 </body>
-</html>""".format(api_url=api_url).format(api_url=api_url)
+</html>""".format(api_url=api_url)
     
     return {
         'statusCode': 200,
