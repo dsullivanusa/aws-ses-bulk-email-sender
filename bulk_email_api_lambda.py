@@ -3847,6 +3847,23 @@ def serve_web_ui(event):
             const originalText = button?.textContent || 'Send Campaign';
             
             try {{
+                // IMPORTANT: Deactivate any active image resize handles first
+                // This ensures images are in their final state before processing
+                const resizeOverlays = document.querySelectorAll('.image-resize-overlay, .ql-image-resize-overlay');
+                const resizeHandles = document.querySelectorAll('.image-resize-handle, .ql-image-resize-handle');
+                
+                if (resizeOverlays.length > 0 || resizeHandles.length > 0) {{
+                    console.log(`🔧 Detected ${{resizeOverlays.length + resizeHandles.length}} active resize handle(s) - deactivating...`);
+                    // Click elsewhere in the editor to deactivate resize handles
+                    quillEditor.root.blur();
+                    quillEditor.root.focus();
+                    // Small delay to let resize module clean up
+                    await new Promise(resolve => setTimeout(resolve, 100));
+                    console.log(`   ✅ Resize handles deactivated`);
+                }} else {{
+                    console.log(`✅ No active resize handles detected`);
+                }}
+                
                 // Show loading state
                 button.textContent = 'Sending Campaign...';
                 button.classList.add('loading');
@@ -4680,6 +4697,23 @@ Click OK to proceed or Cancel to abort.
             const originalText = button?.textContent || '👁️ Preview Email';
             
             try {{
+                // IMPORTANT: Deactivate any active image resize handles first
+                // This ensures images are in their final state before processing
+                const resizeOverlays = document.querySelectorAll('.image-resize-overlay, .ql-image-resize-overlay');
+                const resizeHandles = document.querySelectorAll('.image-resize-handle, .ql-image-resize-handle');
+                
+                if (resizeOverlays.length > 0 || resizeHandles.length > 0) {{
+                    console.log(`🔧 PREVIEW: Detected ${{resizeOverlays.length + resizeHandles.length}} active resize handle(s) - deactivating...`);
+                    // Click elsewhere in the editor to deactivate resize handles
+                    quillEditor.root.blur();
+                    quillEditor.root.focus();
+                    // Small delay to let resize module clean up
+                    await new Promise(resolve => setTimeout(resolve, 100));
+                    console.log(`   ✅ Resize handles deactivated`);
+                }} else {{
+                    console.log(`✅ PREVIEW: No active resize handles detected`);
+                }}
+                
                 // Show loading state
                 button.textContent = 'Generating Preview...';
                 button.classList.add('loading');
@@ -4814,9 +4848,44 @@ Click OK to proceed or Cancel to abort.
                 }});
                 
                 // Process embedded images (same as sendCampaign)
+                // Check what images exist first
+                const allImages = tempDiv.querySelectorAll('img');
+                console.log(`👁️ PREVIEW: Total images in HTML: ${{allImages.length}}`);
+                allImages.forEach((img, i) => {{
+                    const src = img.getAttribute('src');
+                    const srcType = src.startsWith('data:') ? 'data:' : 
+                                   src.startsWith('blob:') ? 'blob:' : 
+                                   src.startsWith('http') ? 'http' : 
+                                   src.startsWith('campaign-attachments/') ? 'S3 key' : 'other';
+                    console.log(`   Image ${{i + 1}}: type=${{srcType}}, src=${{src.substring(0, 60)}}...`);
+                }});
+                
+                // Also check for images that already have S3 keys (from previous upload)
+                const imagesWithExistingS3Keys = tempDiv.querySelectorAll('img[src^="campaign-attachments/"]');
+                console.log(`👁️ PREVIEW: Found ${{imagesWithExistingS3Keys.length}} image(s) already uploaded to S3`);
+                
+                // Add existing S3 images to campaignAttachments
+                imagesWithExistingS3Keys.forEach((img, idx) => {{
+                    const s3Key = img.getAttribute('src');
+                    console.log(`   ♻️ Using existing S3 image: ${{s3Key}}`);
+                    // Check if this S3 key is already in campaignAttachments
+                    const alreadyExists = campaignAttachments.some(att => att.s3_key === s3Key);
+                    if (!alreadyExists) {{
+                        campaignAttachments.push({{
+                            filename: `ExistingImage${{idx + 1}}.png`,
+                            s3_key: s3Key,
+                            size: 0,  // Unknown size for existing images
+                            type: 'image/png',
+                            inline: true
+                        }});
+                        console.log(`   ✅ Added existing S3 image to attachments`);
+                    }}
+                }});
+                
                 const allImgTags = tempDiv.querySelectorAll('img[src^="data:"], img[src^="blob:"]');
+                console.log(`👁️ PREVIEW: Found ${{allImgTags.length}} embedded image(s) with data:/blob: URIs to upload`);
+                
                 if (allImgTags.length > 0) {{
-                    console.log(`👁️ PREVIEW: Found ${{allImgTags.length}} embedded image(s)`);
                     button.textContent = `Uploading ${{allImgTags.length}} image(s)...`;
                     
                     for (let index = 0; index < allImgTags.length; index++) {{
@@ -4861,28 +4930,57 @@ Click OK to proceed or Cancel to abort.
                                 inline: true
                             }});
                             
+                            // Store S3 key as data attribute for reference, but KEEP the data URI for display
+                            // This allows preview to work correctly even after upload
                             img.setAttribute('data-s3-key', uploadResult.s3_key);
                             img.setAttribute('data-inline', 'true');
+                            // Keep img.src as data URI so image still displays in preview HTML
+                            console.log(`   ✅ Uploaded and stored S3 key: ${{uploadResult.s3_key}}`);
                         }} catch (uploadError) {{
-                            console.error(`Failed to upload image ${{index}}:`, uploadError);
+                            console.error(`   ❌ Failed to upload image ${{index}}:`, uploadError);
+                            alert(`Failed to upload image: ${{uploadError.message}}`);
                             img.remove();
                         }}
                     }}
                 }}
                 
+                console.log(`👁️ PREVIEW: Finished processing images. Total attachments: ${{campaignAttachments.length}}`);
+                
                 // Replace data URIs with S3 keys
                 emailBody = tempDiv.innerHTML;
                 const imagesWithS3Keys = tempDiv.querySelectorAll('img[data-s3-key]');
+                console.log(`👁️ PREVIEW: Found ${{imagesWithS3Keys.length}} image(s) with S3 keys to replace in HTML`);
+                
                 if (imagesWithS3Keys.length > 0) {{
-                    imagesWithS3Keys.forEach((img) => {{
+                    imagesWithS3Keys.forEach((img, idx) => {{
                         const s3Key = img.getAttribute('data-s3-key');
                         const currentSrc = img.getAttribute('src');
+                        console.log(`   Replacing image ${{idx + 1}}: S3 key=${{s3Key}}, current src type=${{currentSrc.substring(0, 20)}}...`);
+                        
                         if (s3Key && currentSrc && currentSrc.startsWith('data:')) {{
                             const escapedSrc = currentSrc.replace(/[.*+?^${{}}()|[\\]\\\\]/g, '\\\\$&');
                             const regex = new RegExp('src="' + escapedSrc + '"', 'g');
+                            const beforeLength = emailBody.length;
                             emailBody = emailBody.replace(regex, 'src="' + s3Key + '"');
+                            const afterLength = emailBody.length;
+                            
+                            if (beforeLength !== afterLength) {{
+                                console.log(`   ✅ Replaced data: URI with S3 key (length: ${{beforeLength}} → ${{afterLength}})`);
+                            }} else {{
+                                console.warn(`   ⚠️ No replacement made (length unchanged) - trying alternate method`);
+                                // Try simpler replacement
+                                emailBody = emailBody.replace(currentSrc, s3Key);
+                                console.log(`   ✅ Used simple replace method`);
+                            }}
                         }}
                     }});
+                }}
+                
+                // Verify no data: URIs remain
+                if (emailBody.includes('data:image')) {{
+                    console.warn(`   ⚠️ WARNING: Email body still contains data:image URIs!`);
+                }} else {{
+                    console.log(`   ✅ All data: URIs replaced with S3 keys`);
                 }}
                 
                 // Additional HTML cleanup
@@ -6453,11 +6551,11 @@ def save_preview(body, headers):
         .preview-body {{
             padding: 30px;
             background: white;
-            line-height: 1.5;
+            line-height: 1.2;
         }}
         .preview-body p {{
-            margin: 0 0 8px 0;
-            line-height: 1.5;
+            margin: 0 0 4px 0;
+            line-height: 1.2;
         }}
         .preview-body p + p {{
             margin-top: 0;
@@ -6469,10 +6567,10 @@ def save_preview(body, headers):
             margin: 10px 0;
         }}
         .preview-body br {{
-            line-height: 1.5;
+            line-height: 1.2;
         }}
         .preview-body * {{
-            line-height: 1.5;
+            line-height: 1.2;
         }}
         .preview-footer {{
             padding: 15px 20px;
