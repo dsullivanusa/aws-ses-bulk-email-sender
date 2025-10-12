@@ -4895,15 +4895,31 @@ Click OK to proceed or Cancel to abort.
                 
                 button.textContent = 'Generating preview...';
                 
+                // Get from email from form (use default from email config if not set)
+                const fromEmail = document.getElementById('fromEmail')?.value || 'noreply@example.com';
+                
+                // Parse To, CC, BCC recipients
+                const toList = parseEmails(document.getElementById('campaignTo')?.value || '');
+                const ccList = parseEmails(document.getElementById('campaignCc')?.value || '');
+                const bccList = parseEmails(document.getElementById('campaignBcc')?.value || '');
+                
                 // Create preview data object
                 const previewData = {{
                     campaign_name: document.getElementById('campaignName').value || 'Untitled Preview',
                     subject: document.getElementById('subject').value || 'No Subject',
                     body: emailBody,
-                    attachments: campaignAttachments
+                    attachments: campaignAttachments,
+                    from_email: fromEmail,
+                    to: toList,
+                    cc: ccList,
+                    bcc: bccList
                 }};
                 
                 console.log('👁️ PREVIEW: Sending to backend...');
+                console.log(`   From: ${{fromEmail}}`);
+                console.log(`   To: ${{toList.length}} recipients`);
+                console.log(`   CC: ${{ccList.length}} recipients`);
+                console.log(`   BCC: ${{bccList.length}} recipients`);
                 console.log(`   Body length: ${{emailBody.length}} characters`);
                 console.log(`   Attachments: ${{campaignAttachments.length}}`);
                 
@@ -6318,9 +6334,17 @@ def save_preview(body, headers):
         email_body = body.get('body', '')
         campaign_name = body.get('campaign_name', 'Untitled Preview')
         attachments = body.get('attachments', [])
+        from_email = body.get('from_email', 'noreply@example.com')
+        to_recipients = body.get('to', [])
+        cc_recipients = body.get('cc', [])
+        bcc_recipients = body.get('bcc', [])
         
         print(f"   Preview ID: {preview_id}")
         print(f"   Subject: {subject}")
+        print(f"   From: {from_email}")
+        print(f"   To: {len(to_recipients)} recipients")
+        print(f"   CC: {len(cc_recipients)} recipients")
+        print(f"   BCC: {len(bcc_recipients)} recipients")
         print(f"   Body length: {len(email_body)} characters")
         print(f"   Attachments: {len(attachments)}")
         
@@ -6380,14 +6404,36 @@ def save_preview(body, headers):
         .preview-meta {{
             font-size: 14px;
             opacity: 0.9;
+            line-height: 1.8;
+        }}
+        .preview-meta .label {{
+            display: inline-block;
+            min-width: 50px;
+            font-weight: 600;
         }}
         .preview-body {{
             padding: 30px;
             background: white;
+            line-height: 1.5;
+        }}
+        .preview-body p {{
+            margin: 0 0 8px 0;
+            line-height: 1.5;
+        }}
+        .preview-body p + p {{
+            margin-top: 0;
         }}
         .preview-body img {{
             max-width: 100%;
             height: auto;
+            display: block;
+            margin: 10px 0;
+        }}
+        .preview-body br {{
+            line-height: 1.5;
+        }}
+        .preview-body * {{
+            line-height: 1.5;
         }}
         .preview-footer {{
             padding: 15px 20px;
@@ -6421,21 +6467,22 @@ def save_preview(body, headers):
         <div class="preview-header">
             <h1>📧 Email Preview</h1>
             <div class="preview-meta">
-                <strong>Subject:</strong> {subject}<br>
-                <strong>Campaign:</strong> {campaign_name}<br>
-                <strong>Preview ID:</strong> {preview_id}<br>
-                <strong>Generated:</strong> {timestamp}
+                <div><span class="label">From:</span> {from_email}</div>
+                {f'<div><span class="label">To:</span> {", ".join(to_recipients) if to_recipients else "(No recipients)"}</div>' if to_recipients or True else ''}
+                {f'<div><span class="label">CC:</span> {", ".join(cc_recipients)}</div>' if cc_recipients else ''}
+                {f'<div><span class="label">BCC:</span> {", ".join(bcc_recipients)}</div>' if bcc_recipients else ''}
+                <div><span class="label">Subject:</span> {subject}</div>
             </div>
         </div>
         <div class="preview-body">
             {preview_html}
         </div>
         {f'''<div class="attachments-list">
-            <h3>📎 Attachments ({len(attachments)})</h3>
-            {''.join([f'<div class="attachment-item">• {att.get("filename")} ({att.get("type", "unknown")}){" - Inline Image" if att.get("inline") else ""}</div>' for att in attachments])}
-        </div>''' if attachments else ''}
+            <h3>📎 Attachments ({len([att for att in attachments if not att.get("inline")])})</h3>
+            {''.join([f'<div class="attachment-item">• {att.get("filename")} ({att.get("type", "unknown")})</div>' for att in attachments if not att.get("inline")])}
+        </div>''' if any(not att.get("inline") for att in attachments) else ''}
         <div class="preview-footer">
-            This is a preview of what recipients will see. Generated at {timestamp}
+            This is a preview of what recipients will see.
         </div>
     </div>
 </body>
