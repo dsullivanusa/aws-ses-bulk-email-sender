@@ -38,12 +38,17 @@ def add_preview_endpoints():
                 print(f"  - {api['name']} (ID: {api['id']})")
             return
         
-        # Get Lambda function ARN
+        # Get Lambda function ARN and extract account ID
         try:
             lambda_response = lambda_client.get_function(FunctionName=LAMBDA_FUNCTION_NAME)
             lambda_arn = lambda_response['Configuration']['FunctionArn']
             print(f"✅ Found Lambda function: {LAMBDA_FUNCTION_NAME}")
             print(f"   ARN: {lambda_arn}")
+            
+            # Extract account ID from Lambda ARN
+            # Format: arn:aws-us-gov:lambda:region:account-id:function:function-name
+            account_id = lambda_arn.split(':')[4]
+            print(f"   Account ID: {account_id}")
         except Exception as e:
             print(f"❌ ERROR: Could not find Lambda function '{LAMBDA_FUNCTION_NAME}': {e}")
             return
@@ -134,7 +139,7 @@ def add_preview_endpoints():
                     StatementId=f'apigateway-preview-post-{api_id}',
                     Action='lambda:InvokeFunction',
                     Principal='apigateway.amazonaws.com',
-                    SourceArn=f'arn:aws-us-gov:execute-api:{REGION}:*:{api_id}/*/*/preview'
+                    SourceArn=f'arn:aws-us-gov:execute-api:{REGION}:{account_id}:{api_id}/*/POST/preview'
                 )
                 print("   ✅ Lambda permission added")
             except lambda_client.exceptions.ResourceConflictException:
@@ -215,7 +220,7 @@ def add_preview_endpoints():
                     StatementId=f'apigateway-preview-get-{api_id}',
                     Action='lambda:InvokeFunction',
                     Principal='apigateway.amazonaws.com',
-                    SourceArn=f'arn:aws-us-gov:execute-api:{REGION}:*:{api_id}/*/*/*'
+                    SourceArn=f'arn:aws-us-gov:execute-api:{REGION}:{account_id}:{api_id}/*/GET/preview/*'
                 )
                 print("   ✅ Lambda permission added")
             except lambda_client.exceptions.ResourceConflictException:
