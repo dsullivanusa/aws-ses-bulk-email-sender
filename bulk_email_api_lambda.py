@@ -6425,7 +6425,7 @@ def save_preview(body, headers):
         
         # Generate unique preview ID
         preview_id = str(uuid.uuid4())
-        timestamp = datetime.datetime.now(datetime.timezone.utc).isoformat()
+        timestamp = int(time.time())  # Seconds since epoch (integer)
         
         # Extract preview data from request
         subject = body.get('subject', 'No Subject')
@@ -6465,10 +6465,13 @@ def save_preview(body, headers):
         
         # Replace S3 keys with actual image URLs for preview display
         # This converts "campaign-attachments/..." to full S3 URLs
+        print(f"   🖼️ Processing {len(attachments)} attachment(s) for image URL replacement...")
+        
         for attachment in attachments:
             if attachment.get('inline'):
                 s3_key = attachment.get('s3_key')
                 if s3_key:
+                    print(f"   📸 Processing inline image: {s3_key}")
                     # Generate presigned URL for image (valid for 1 hour)
                     try:
                         image_url = s3_client.generate_presigned_url(
@@ -6476,6 +6479,7 @@ def save_preview(body, headers):
                             Params={'Bucket': ATTACHMENTS_BUCKET, 'Key': s3_key},
                             ExpiresIn=3600  # 1 hour
                         )
+                        print(f"      Generated presigned URL (first 100 chars): {image_url[:100]}...")
                         
                         # Try multiple replacement patterns
                         replaced = False
@@ -6484,26 +6488,36 @@ def save_preview(body, headers):
                         if f'src="{s3_key}"' in preview_html:
                             preview_html = preview_html.replace(f'src="{s3_key}"', f'src="{image_url}"')
                             replaced = True
-                            print(f"   ✅ Replaced S3 key (pattern 1): {s3_key}")
+                            print(f"      ✅ Replaced S3 key using pattern 1 (double quotes)")
                         
                         # Pattern 2: src='s3_key'
-                        if f"src='{s3_key}'" in preview_html:
+                        elif f"src='{s3_key}'" in preview_html:
                             preview_html = preview_html.replace(f"src='{s3_key}'", f'src="{image_url}"')
                             replaced = True
-                            print(f"   ✅ Replaced S3 key (pattern 2): {s3_key}")
+                            print(f"      ✅ Replaced S3 key using pattern 2 (single quotes)")
                         
-                        # Pattern 3: Just the s3_key anywhere in src attribute
-                        if not replaced and s3_key in preview_html:
+                        # Pattern 3: Just the s3_key anywhere
+                        elif s3_key in preview_html:
                             preview_html = preview_html.replace(s3_key, image_url)
                             replaced = True
-                            print(f"   ✅ Replaced S3 key (pattern 3): {s3_key}")
+                            print(f"      ✅ Replaced S3 key using pattern 3 (direct replacement)")
                         
                         if not replaced:
-                            print(f"   ⚠️ Warning: S3 key not found in HTML: {s3_key}")
-                            print(f"   HTML preview (first 500 chars): {preview_html[:500]}")
+                            print(f"      ❌ ERROR: S3 key not found in HTML: {s3_key}")
+                            print(f"      HTML sample: {preview_html[:300]}...")
+                            # Try to find any img tags in the HTML
+                            import re
+                            img_tags = re.findall(r'<img[^>]+>', preview_html)
+                            if img_tags:
+                                print(f"      Found {len(img_tags)} img tag(s):")
+                                for i, tag in enumerate(img_tags[:3]):
+                                    print(f"         {i+1}. {tag[:150]}...")
+                            else:
+                                print(f"      ❌ No <img> tags found in HTML!")
                             
                     except Exception as url_error:
-                        print(f"   ⚠️ Failed to generate presigned URL for {s3_key}: {url_error}")
+                        print(f"      ❌ Failed to generate presigned URL for {s3_key}: {url_error}")
+                        traceback.print_exc()
         
         # Create complete HTML document for preview
         complete_html = f"""<!DOCTYPE html>
@@ -6635,7 +6649,7 @@ def save_preview(body, headers):
             Metadata={
                 'preview-id': preview_id,
                 'subject': subject[:100],  # Truncate to fit metadata limits
-                'timestamp': timestamp
+                'timestamp': str(timestamp)  # S3 metadata must be strings
             }
         )
         print(f"   ✅ Saved preview HTML to S3: {s3_key}")
@@ -6649,7 +6663,7 @@ def save_preview(body, headers):
             'attachment_count': len(attachments),
             's3_key': s3_key,
             'created_at': timestamp,
-            'expires_at': (datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(hours=24)).isoformat()  # Expire after 24 hours
+            'expires_at': timestamp + (24 * 60 * 60)  # Expire after 24 hours (seconds since epoch)
         }
         
         # Store in campaigns table with type='preview'
