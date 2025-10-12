@@ -4418,30 +4418,16 @@ def serve_web_ui(event):
             }}
             
             // Additional regex cleanup for any remaining artifacts
+            // IMPORTANT: Preserve blank lines by converting <p><br></p> to <p>&nbsp;</p>
             emailBody = emailBody
-                .replace(/<p><br><\\/p>/g, '<p></p>')  // Remove empty line breaks
-                .replace(/<p>\\s*<\\/p>/g, '')  // Remove completely empty paragraphs
-                .replace(/<p>\\s*<br>\\s*<\\/p>/g, '<p></p>')  // Remove paragraphs with only br
+                .replace(/<p>\\s*<br\\s*\\/?\\s*>\\s*<\\/p>/g, '<p>&nbsp;</p>')  // Preserve blank lines as &nbsp;
+                .replace(/<p>\\s*<\\/p>/g, '')  // Remove truly empty paragraphs (no content, no br)
                 .replace(/<br>\\s*<br>/g, '<br>')  // Remove double line breaks (reduce to single)
-                .replace(/(<\\/p>)\\s*(<p>)/g, '$1$2')  // Remove whitespace between paragraphs
                 .replace(/\\s+class=""/g, '')  // Remove empty class attributes
                 .replace(/\\s+data-[^=]*="[^"]*"/g, '')  // Remove any remaining data attributes
-                .replace(/\\n\\s*\\n/g, '\\n')  // Remove double newlines
                 .trim();
             
-            // Convert paragraph breaks to line breaks for single-line spacing
-            // This prevents email clients from adding extra spacing between lines
-            emailBody = emailBody
-                .replace(/<\\/p><p>/g, '<br>')  // Convert </p><p> to <br>
-                .replace(/^<p>/g, '')  // Remove opening <p> at start
-                .replace(/<\\/p>$/g, '');  // Remove closing </p> at end
-            
-            // If there are still multiple <p> tags (for formatted sections), wrap everything
-            if (!emailBody.startsWith('<p>')) {{
-                emailBody = '<p>' + emailBody + '</p>';
-            }}
-            
-            console.log('✅ Applied HTML cleanup and converted to single-line spacing');
+            console.log('✅ Applied HTML cleanup and preserved blank lines as <p>&nbsp;</p>');
             console.log(`Final email body preview: ${{emailBody.substring(0, 200)}}...`);
             
             // Get user name from form
@@ -4507,6 +4493,18 @@ Click OK to proceed or Cancel to abort.
             // Log final email body for debugging
             console.log(`📧 Final email body length: ${{emailBody.length}} characters`);
             console.log(`📧 Email body sample (first 500 chars): ${{emailBody.substring(0, 500)}}...`);
+            
+            // Show image tags in email body
+            const imgMatches = emailBody.match(/<img[^>]+>/g);
+            if (imgMatches) {{
+                console.log(`🖼️ Email body contains ${{imgMatches.length}} <img> tag(s):`);
+                imgMatches.forEach((tag, i) => {{
+                    console.log(`  ${{i + 1}}. ${{tag.substring(0, 120)}}...`);
+                }});
+            }} else {{
+                console.log(`⚠️ No <img> tags found in email body!`);
+            }}
+            
             console.log(`📎 Campaign attachments: ${{campaignAttachments.length}}`);
             if (campaignAttachments.length > 0) {{
                 console.log(`📎 Attachment details:`);
@@ -4988,12 +4986,15 @@ Click OK to proceed or Cancel to abort.
                 }}
                 
                 // Additional HTML cleanup
+                // IMPORTANT: Preserve blank lines as <p>&nbsp;</p>
                 emailBody = emailBody
-                    .replace(/<p><br><\\/p>/g, '<p></p>')
-                    .replace(/<p>\\s*<\\/p>/g, '')
-                    .replace(/\\s+class=""/g, '')
-                    .replace(/\\s+data-[^=]*="[^"]*"/g, '')
+                    .replace(/<p>\\s*<br\\s*\\/?\\s*>\\s*<\\/p>/g, '<p>&nbsp;</p>')  // Preserve blank lines
+                    .replace(/<p>\\s*<\\/p>/g, '')  // Remove truly empty paragraphs
+                    .replace(/\\s+class=""/g, '')  // Remove empty class attributes
+                    .replace(/\\s+data-[^=]*="[^"]*"/g, '')  // Remove any remaining data attributes
                     .trim();
+                
+                console.log(`👁️ PREVIEW: Final email body length: ${{emailBody.length}} characters`);
                 
                 button.textContent = 'Generating preview...';
                 
@@ -5024,6 +5025,25 @@ Click OK to proceed or Cancel to abort.
                 console.log(`   BCC: ${{bccList.length}} recipients`);
                 console.log(`   Body length: ${{emailBody.length}} characters`);
                 console.log(`   Attachments: ${{campaignAttachments.length}}`);
+                
+                // Show attachment details
+                if (campaignAttachments.length > 0) {{
+                    console.log(`   📎 Attachment details:`);
+                    campaignAttachments.forEach((att, i) => {{
+                        console.log(`      ${{i + 1}}. ${{att.filename}} (s3_key: ${{att.s3_key}}, inline: ${{att.inline}})`);
+                    }});
+                }}
+                
+                // Show sample of email body HTML with image tags
+                const imgMatches = emailBody.match(/<img[^>]+>/g);
+                if (imgMatches) {{
+                    console.log(`   🖼️ Email body contains ${{imgMatches.length}} <img> tag(s):`);
+                    imgMatches.forEach((tag, i) => {{
+                        console.log(`      ${{i + 1}}. ${{tag.substring(0, 100)}}...`);
+                    }});
+                }} else {{
+                    console.log(`   ⚠️ No <img> tags found in email body!`);
+                }}
                 
                 // Send preview to backend
                 const response = await fetch(`${{API_URL}}/preview`, {{
@@ -6454,18 +6474,18 @@ def save_preview(body, headers):
         import re
         preview_html = email_body
         
-        # Remove empty paragraphs that cause double spacing
+        # IMPORTANT: Preserve blank lines by keeping <p><br></p> tags
+        # These represent intentional blank lines from the user
+        # Convert them to <p>&nbsp;</p> for better email client compatibility
+        preview_html = re.sub(r'<p>\s*<br\s*/?>\s*</p>', '<p>&nbsp;</p>', preview_html)
+        
+        # Only remove truly empty paragraphs (no content at all)
         preview_html = re.sub(r'<p>\s*</p>', '', preview_html)
-        preview_html = re.sub(r'<p><br></p>', '', preview_html)
-        preview_html = re.sub(r'<p>\s*<br\s*/?>\s*</p>', '', preview_html)
         
-        # Convert multiple <br> tags to single <br>
-        preview_html = re.sub(r'(<br\s*/?>\s*){2,}', '<br>', preview_html)
+        # Convert multiple consecutive <br> tags to paragraphs
+        preview_html = re.sub(r'(<br\s*/?>\s*){2,}', '</p><p>&nbsp;</p><p>', preview_html)
         
-        # Convert </p><p> to </p><p style="margin-top:0"> for tighter spacing
-        preview_html = preview_html.replace('</p><p>', '</p><p style="margin-top:0">')
-        
-        print(f"   📝 Cleaned HTML for preview (removed empty paragraphs)")
+        print(f"   📝 Cleaned HTML for preview (preserved blank lines as <p>&nbsp;</p>)")
         
         # Replace S3 keys with actual image URLs for preview display
         # This converts "campaign-attachments/..." to full S3 URLs
