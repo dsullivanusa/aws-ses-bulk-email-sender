@@ -68,7 +68,7 @@ def load_cognito_config():
             print(f"🔴 403 ERROR: Lambda lacks S3 permissions for bucket '{ATTACHMENTS_BUCKET}'")
         return None  # Cognito not configured or disabled
 
-COGNITO_CONFIG = load_cognito_config()
+##COGNITO_CONFIG = load_cognito_config()
 
 def lambda_handler(event, context):
     """Bulk Email API with Web UI"""
@@ -1582,7 +1582,7 @@ def serve_web_ui(event):
             </div>
             <div class="form-group">
                 <label>📨 Subject:</label>
-                <input type="text" id="subject" placeholder="Hello {first_name}">
+                <input type="text" id="subject" placeholder="Hello {{first_name}}">
             </div>
             <div class="form-group">
                 <label>📄 Email Body:</label>
@@ -1592,7 +1592,7 @@ def serve_web_ui(event):
                     • <strong>Inline Images:</strong> Paste/embed images - they're auto-converted to work in emails<br>
                     • <strong>Resize Images:</strong> Click any image to see resize handles - drag to resize<br>
                     • <strong>Formatting:</strong> Use toolbar for bold, colors, lists, alignment, etc.<br>
-                    • <strong>Placeholders:</strong> Use {first_name}, {email}, etc. for personalization
+                    • <strong>Placeholders:</strong> Use {{first_name}}, {{email}}, etc. for personalization
                 </div>
                 <div id="body" style="min-height: 200px; background: white;"></div>
                 <div style="display: flex; gap: 10px; margin-top: 8px;">
@@ -1680,7 +1680,7 @@ def serve_web_ui(event):
     </div>
     
     <script>
-        const API_URL = '{api_url}';
+        const API_URL = 'API_URL_PLACEHOLDER';
         
         // ============================================
         // TOAST NOTIFICATION SYSTEM
@@ -1766,7 +1766,7 @@ def serve_web_ui(event):
             
             quillEditor = new Quill('#body', {
                 theme: 'snow',
-                placeholder: 'Dear {first_name} {last_name},\\n\\nYour message here...',
+                placeholder: 'Dear {{first_name}} {{last_name}},\\n\\nYour message here...',
                 modules: {
                     toolbar: [
                         [{ 'header': [1, 2, 3, false] }],
@@ -2000,7 +2000,7 @@ def serve_web_ui(event):
                 'Paste your HTML content below:\\n\\n' +
                 '✅ Supports: HTML formatting, styles, tables, links\\n' +
                 '✅ Images: Copy/paste images work (auto-converted to inline)\\n' +
-                '✅ Placeholders: Use {first_name}, {email}, etc.\\n\\n' +
+                '✅ Placeholders: Use {{first_name}}, {{email}}, etc.\\n\\n' +
                 'Your HTML:'
             );
             
@@ -5591,7 +5591,10 @@ Click OK to proceed or Cancel to abort.
         };
     </script>
 </body>
-</html>""".format(api_url=api_url)
+</html>"""
+    
+    # Replace the API URL placeholder with actual URL
+    html_content = html_content.replace('API_URL_PLACEHOLDER', api_url)
     
     return {
         'statusCode': 200,
