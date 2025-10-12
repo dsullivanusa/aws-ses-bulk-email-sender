@@ -4484,20 +4484,20 @@ def serve_web_ui(event):
             // Add Quill CSS styles to email body so Quill classes work in recipient emails
             const quillCSS = `<style type="text/css">
     /* Quill Editor Styles for Email Compatibility */
-    .ql-align-center { text-align: center; }
-    .ql-align-right { text-align: right; }
-    .ql-align-left { text-align: left; }
-    .ql-align-justify { text-align: justify; }
-    .ql-indent-1 { padding-left: 3em; }
-    .ql-indent-2 { padding-left: 6em; }
-    .ql-indent-3 { padding-left: 9em; }
-    .ql-size-small { font-size: 0.75em; }
-    .ql-size-large { font-size: 1.5em; }
-    .ql-size-huge { font-size: 2.5em; }
-    .ql-font-serif { font-family: Georgia, Times New Roman, serif; }
-    .ql-font-monospace { font-family: Monaco, Courier New, monospace; }
+    .ql-align-center {{ text-align: center; }}
+    .ql-align-right {{ text-align: right; }}
+    .ql-align-left {{ text-align: left; }}
+    .ql-align-justify {{ text-align: justify; }}
+    .ql-indent-1 {{ padding-left: 3em; }}
+    .ql-indent-2 {{ padding-left: 6em; }}
+    .ql-indent-3 {{ padding-left: 9em; }}
+    .ql-size-small {{ font-size: 0.75em; }}
+    .ql-size-large {{ font-size: 1.5em; }}
+    .ql-size-huge {{ font-size: 2.5em; }}
+    .ql-font-serif {{ font-family: Georgia, Times New Roman, serif; }}
+    .ql-font-monospace {{ font-family: Monaco, Courier New, monospace; }}
     /* Preserve user's custom classes - add more as needed */
-    p { line-height: 1.0; margin: 0; }
+    p {{ line-height: 1.0; margin: 0; }}
 </style>`;
             
             // Prepend CSS to email body
@@ -5138,20 +5138,20 @@ Click OK to proceed or Cancel to abort.
                 // Add Quill CSS styles so Quill classes work in preview
                 const quillCSS = `<style type="text/css">
     /* Quill Editor Styles for Email Compatibility */
-    .ql-align-center { text-align: center; }
-    .ql-align-right { text-align: right; }
-    .ql-align-left { text-align: left; }
-    .ql-align-justify { text-align: justify; }
-    .ql-indent-1 { padding-left: 3em; }
-    .ql-indent-2 { padding-left: 6em; }
-    .ql-indent-3 { padding-left: 9em; }
-    .ql-size-small { font-size: 0.75em; }
-    .ql-size-large { font-size: 1.5em; }
-    .ql-size-huge { font-size: 2.5em; }
-    .ql-font-serif { font-family: Georgia, Times New Roman, serif; }
-    .ql-font-monospace { font-family: Monaco, Courier New, monospace; }
+    .ql-align-center {{ text-align: center; }}
+    .ql-align-right {{ text-align: right; }}
+    .ql-align-left {{ text-align: left; }}
+    .ql-align-justify {{ text-align: justify; }}
+    .ql-indent-1 {{ padding-left: 3em; }}
+    .ql-indent-2 {{ padding-left: 6em; }}
+    .ql-indent-3 {{ padding-left: 9em; }}
+    .ql-size-small {{ font-size: 0.75em; }}
+    .ql-size-large {{ font-size: 1.5em; }}
+    .ql-size-huge {{ font-size: 2.5em; }}
+    .ql-font-serif {{ font-family: Georgia, Times New Roman, serif; }}
+    .ql-font-monospace {{ font-family: Monaco, Courier New, monospace; }}
     /* User custom classes preserved */
-    p { line-height: 1.0; margin: 0; }
+    p {{ line-height: 1.0; margin: 0; }}
 </style>`;
                 
                 // Prepend CSS to email body
