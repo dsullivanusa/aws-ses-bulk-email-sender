@@ -696,117 +696,6 @@ def get_aws_credentials_from_secrets_manager(secret_name, msg_idx=0):
         logger.error(f"[Message {msg_idx}] Error retrieving credentials from Secrets Manager: {str(e)}")
         raise
 
-def hide_ses_tracking_pixel(html_body):
-    """
-    Inject CSS to hide AWS SES tracking pixel (1x1 image)
-    AWS recommends: visibility:hidden; opacity:0; position:absolute; left:-9999px;
-    """
-    print("🔍 hide_ses_tracking_pixel() called")
-    logger.info("🔍 hide_ses_tracking_pixel() function called")
-    
-    if not html_body:
-        # Empty body, return as-is
-        print("⚠️  Email body is empty - skipping tracking pixel CSS injection")
-        logger.warning("Email body is empty - skipping tracking pixel CSS injection")
-        return html_body
-    
-    # CSS to hide tracking pixels (1x1 images)
-    # AWS Support recommends: visibility:hidden; opacity:0; position:absolute; left:-9999px;
-    tracking_pixel_css = """
-<style type="text/css">
-    /* Hide AWS SES tracking pixel (1x1 images) - AWS Support recommended */
-    img[width="1"][height="1"] {
-        visibility: hidden !important;
-        opacity: 0 !important;
-        display: none !important;
-        position: absolute !important;
-        left: -9999px !important;
-    }
-    img[width="1px"][height="1px"] {
-        visibility: hidden !important;
-        opacity: 0 !important;
-        display: none !important;
-        position: absolute !important;
-        left: -9999px !important;
-    }
-    /* Also hide any images with very small dimensions */
-    img[style*="width: 1px"][style*="height: 1px"],
-    img[style*="width:1px"][style*="height:1px"] {
-        visibility: hidden !important;
-        opacity: 0 !important;
-        display: none !important;
-        position: absolute !important;
-        left: -9999px !important;
-    }
-    /* Catch-all for any 1-pixel images */
-    img[width="1"], img[height="1"],
-    img[width="1px"], img[height="1px"] {
-        visibility: hidden !important;
-        opacity: 0 !important;
-        display: none !important;
-        position: absolute !important;
-        left: -9999px !important;
-    }
-    /* Normalize paragraph spacing for single-line spacing */
-    p {
-        margin: 0 !important;
-        padding: 0 !important;
-        margin-bottom: 0 !important;
-    }
-    /* Remove extra space from empty paragraphs */
-    p:empty {
-        margin: 0 !important;
-        line-height: 0 !important;
-        height: 0 !important;
-        display: none !important;
-    }
-    /* Ensure line height is normal */
-    body, p, div {
-        line-height: 1.4 !important;
-    }
-</style>"""
-    
-    # Try to insert CSS in <head> section
-    import re
-    
-    # Check if <head> exists
-    head_pattern = re.compile(r'<head[^>]*>', re.IGNORECASE)
-    head_match = head_pattern.search(html_body)
-    
-    if head_match:
-        # Insert after <head> tag
-        insert_pos = head_match.end()
-        html_body = html_body[:insert_pos] + tracking_pixel_css + html_body[insert_pos:]
-        print("✅ CSS injected after <head> tag")
-        logger.info("✅ Tracking pixel hiding CSS injected after <head> tag")
-    else:
-        # No <head> tag, try to insert after <html> tag
-        html_pattern = re.compile(r'<html[^>]*>', re.IGNORECASE)
-        html_match = html_pattern.search(html_body)
-        
-        if html_match:
-            insert_pos = html_match.end()
-            html_body = html_body[:insert_pos] + tracking_pixel_css + html_body[insert_pos:]
-            print("✅ CSS injected after <html> tag (no <head> found)")
-            logger.info("✅ Tracking pixel hiding CSS injected after <html> tag (no <head> found)")
-        else:
-            # HTML fragment without proper structure (common from Quill editor)
-            # Wrap in basic HTML structure and inject CSS
-            html_body = f'''<html>
-<head>
-{tracking_pixel_css}
-</head>
-<body>
-{html_body}
-</body>
-</html>'''
-            print("✅ CSS injected by wrapping HTML fragment in full HTML document")
-            logger.info("✅ Tracking pixel hiding CSS injected by wrapping HTML fragment in full HTML document")
-    
-    print(f"✅ hide_ses_tracking_pixel() completed - CSS injected ({len(tracking_pixel_css)} chars)")
-    logger.info(f"✅ hide_ses_tracking_pixel() completed - CSS successfully injected ({len(tracking_pixel_css)} characters)")
-    
-    return html_body
 
 def send_ses_email(campaign, contact, from_email, subject, body, msg_idx=0, cc_list=None, bcc_list=None):
     """Send email via AWS SES using IAM role or Secrets Manager credentials with attachment support"""
@@ -861,14 +750,13 @@ def send_ses_email(campaign, contact, from_email, subject, body, msg_idx=0, cc_l
             logger.warning(f"[Message {msg_idx}] Failed to scan HTML body for <img> tags: {str(img_err)}")
 
         # Prepare body and inline images found in the HTML body (data:, http(s) and s3 references)
-        body_with_hidden_pixel = hide_ses_tracking_pixel(body)
-        logger.debug(f"[Message {msg_idx}] Applied tracking pixel hiding CSS to email body")
-
+        # Note: Tracking pixel hiding CSS removed - not needed
+        
         pre_inline_parts = []
         pre_inline_cids = []
 
         try:
-            img_srcs = re.findall(r'<img[^>]+src=[\"\']([^\"\']+)[\"\']', body_with_hidden_pixel or '', flags=re.IGNORECASE)
+            img_srcs = re.findall(r'<img[^>]+src=[\"\']([^\"\']+)[\"\']', body or '', flags=re.IGNORECASE)
             for i_src, src in enumerate(img_srcs, 1):
                 try:
                     if not src or src.lower().startswith('cid:'):
@@ -893,7 +781,7 @@ def send_ses_email(campaign, contact, from_email, subject, body, msg_idx=0, cc_l
                                 img_part.add_header('Content-Disposition', 'inline')
                                 pre_inline_parts.append(img_part)
                                 pre_inline_cids.append({'cid': cid, 'filename': None, 's3_key': None})
-                                body_with_hidden_pixel = body_with_hidden_pixel.replace(src, f'cid:{cid}')
+                                body = body.replace(src, f'cid:{cid}')
                                 logger.info(f"[Message {msg_idx}] Inlined data URI as CID <{cid}>")
 
                     # HTTP/HTTPS URL
@@ -916,7 +804,7 @@ def send_ses_email(campaign, contact, from_email, subject, body, msg_idx=0, cc_l
                                 img_part.add_header('Content-Disposition', 'inline', filename=os.path.basename(src))
                                 pre_inline_parts.append(img_part)
                                 pre_inline_cids.append({'cid': cid, 'filename': os.path.basename(src), 's3_key': None})
-                                body_with_hidden_pixel = body_with_hidden_pixel.replace(src, f'cid:{cid}')
+                                body = body.replace(src, f'cid:{cid}')
                                 logger.info(f"[Message {msg_idx}] Downloaded and inlined HTTP image as CID <{cid}>")
                         except Exception as http_err:
                             logger.warning(f"[Message {msg_idx}] Failed to download image {src}: {str(http_err)}")
@@ -959,7 +847,7 @@ def send_ses_email(campaign, contact, from_email, subject, body, msg_idx=0, cc_l
                                         img_part.add_header('Content-Disposition', 'inline', filename=os.path.basename(s3_key_candidate))
                                         pre_inline_parts.append(img_part)
                                         pre_inline_cids.append({'cid': cid, 'filename': os.path.basename(s3_key_candidate), 's3_key': s3_key_candidate})
-                                        body_with_hidden_pixel = body_with_hidden_pixel.replace(src, f'cid:{cid}')
+                                        body = body.replace(src, f'cid:{cid}')
                                         logger.info(f"[Message {msg_idx}] Inlined S3 image {s3_key_candidate} as CID <{cid}>")
                                 except Exception as s3_err:
                                     logger.warning(f"[Message {msg_idx}] Could not retrieve S3 object {s3_key_candidate}: {str(s3_err)}")
@@ -984,12 +872,12 @@ def send_ses_email(campaign, contact, from_email, subject, body, msg_idx=0, cc_l
                 destination['CcAddresses'] = cc_list
             if bcc_list:
                 destination['BccAddresses'] = bcc_list
-            response = ses_client.send_email(
+            response =             ses_client.send_email(
                 Source=from_email,
                 Destination=destination,
                 Message={
                     'Subject': {'Data': subject},
-                    'Body': {'Html': {'Data': body_with_hidden_pixel}}
+                    'Body': {'Html': {'Data': body}}
                 }
             )
             logger.info(f"[Message {msg_idx}] ✅ SES Response: {json.dumps(response, default=str)}")
@@ -997,9 +885,6 @@ def send_ses_email(campaign, contact, from_email, subject, body, msg_idx=0, cc_l
         
         # Build MIME message with attachments: use multipart/mixed with multipart/related for HTML+inline images
         logger.info(f"[Message {msg_idx}] Building MIME message with {len(attachments)} attachment(s) and {len(pre_inline_parts)} pre-inlined HTML image(s)")
-
-        # Ensure body reflects any pre-inlining replacements
-        body_with_hidden_pixel = body_with_hidden_pixel
 
         msg = MIMEMultipart('mixed')
         msg['From'] = from_email
@@ -1021,7 +906,7 @@ def send_ses_email(campaign, contact, from_email, subject, body, msg_idx=0, cc_l
         alternative = MIMEMultipart('alternative')
         try:
             html_part = MIMEBase('text', 'html')
-            html_bytes = (body_with_hidden_pixel or '').encode('utf-8')
+            html_bytes = (body or '').encode('utf-8')
             html_part.set_payload(html_bytes)
             encoders.encode_base64(html_part)
             # Ensure the charset is visible in the Content-Type header
@@ -1030,7 +915,7 @@ def send_ses_email(campaign, contact, from_email, subject, body, msg_idx=0, cc_l
             html_part.add_header('Content-Disposition', 'inline')
         except Exception:
             # Fallback: if anything goes wrong, use MIMEText
-            html_part = MIMEText(body_with_hidden_pixel, 'html', 'utf-8')
+            html_part = MIMEText(body, 'html', 'utf-8')
 
         alternative.attach(html_part)
         related.attach(alternative)
@@ -1120,7 +1005,7 @@ def send_ses_email(campaign, contact, from_email, subject, body, msg_idx=0, cc_l
 
         # Attempt to rewrite HTML body references to S3 keys or filenames to cid: references
         try:
-            new_body = body_with_hidden_pixel  # Use body with hidden pixel CSS
+            new_body = body  # Use email body directly
             replacements_made = 0
             
             print(f"🖼️ [Message {msg_idx}] Attempting to replace {len(inline_cids)} image reference(s) with CID in HTML body")
@@ -1178,25 +1063,50 @@ def send_ses_email(campaign, contact, from_email, subject, body, msg_idx=0, cc_l
                         print(f"   ❌ Pattern {idx + 1} not found: '{old_pattern[:60]}...'")
                 
                 if not pattern_found:
-                    print(f"⚠️ [Message {msg_idx}] WARNING: No pattern matched for {filename}!")
+                    print(f"⚠️ [Message {msg_idx}] WARNING: No pattern matched for {filename} (s3_key: {s3_key})!")
                     print(f"   This image will appear as attachment, not inline!")
+                    
                     # Show what's actually in the HTML for this image
                     import re
+                    
+                    # Show full HTML body for debugging
+                    print(f"   📝 Full HTML body (first 1000 chars):")
+                    print(f"   {new_body[:1000]}...")
+                    print(f"   📝 Full HTML body (last 500 chars):")
+                    print(f"   ...{new_body[-500:]}")
                     
                     # Search for any img tags
                     all_img_tags = re.findall(r'<img[^>]+>', new_body, re.IGNORECASE)
                     if all_img_tags:
-                        print(f"   Found {len(all_img_tags)} img tag(s) in HTML body:")
+                        print(f"   🖼️ Found {len(all_img_tags)} img tag(s) in HTML body:")
                         for i, tag in enumerate(all_img_tags):
-                            print(f"     Img {i+1}: {tag[:200]}...")
+                            print(f"     Img {i+1}: {tag[:250]}")
                     else:
-                        print(f"   No <img> tags found in HTML body at all!")
+                        print(f"   ❌ No <img> tags found in HTML body at all!")
+                        print(f"   ⚠️ PROBLEM: The email body has no <img> tags!")
+                        print(f"   ⚠️ This means images were lost during frontend processing or transmission")
                     
                     # Check if body still has data: URIs
                     if 'data:image' in new_body:
                         print(f"   ⚠️ HTML body still contains 'data:image' URIs - frontend replacement failed!")
                         data_uri_count = new_body.count('data:image')
                         print(f"   Found {data_uri_count} data:image URI(s) in body")
+                    
+                    # Check if S3 key appears anywhere
+                    if s3_key and s3_key in new_body:
+                        print(f"   ✅ S3 key DOES appear in body: {s3_key}")
+                        # Find where it appears
+                        idx_pos = new_body.find(s3_key)
+                        context = new_body[max(0, idx_pos-100):idx_pos+100]
+                        print(f"   Context around S3 key: ...{context}...")
+                    elif s3_key:
+                        print(f"   ❌ S3 key NOT found in body: {s3_key}")
+                    
+                    # Check if filename appears anywhere  
+                    if filename and filename in new_body:
+                        print(f"   ✅ Filename DOES appear in body: {filename}")
+                    elif filename:
+                        print(f"   ❌ Filename NOT found in body: {filename}")
                     
                     # Show a larger sample of the body
                     print(f"   HTML body sample (first 1000 chars):")
@@ -1218,7 +1128,7 @@ def send_ses_email(campaign, contact, from_email, subject, body, msg_idx=0, cc_l
                     for i, tag in enumerate(img_tags_after[:5]):
                         logger.info(f"[Message {msg_idx}]   <img> {i+1}: {tag[:100]}...")
 
-            if new_body != body_with_hidden_pixel:
+            if new_body != body:
                 # Replace the HTML part inside the alternative container explicitly
                 try:
                     try:

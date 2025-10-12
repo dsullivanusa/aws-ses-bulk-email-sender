@@ -3965,6 +3965,21 @@ def serve_web_ui(event):
             // Get content from Quill editor and clean it thoroughly
             let emailBody = quillEditor.root.innerHTML;
             
+            // DEBUG: Check initial HTML from Quill editor
+            console.log(`📝 Original Quill HTML length: ${{emailBody.length}} characters`);
+            const imgInOriginal = emailBody.match(/<img[^>]+>/g);
+            if (imgInOriginal) {{
+                console.log(`🖼️ Original Quill HTML contains ${{imgInOriginal.length}} <img> tag(s):`);
+                imgInOriginal.forEach((tag, i) => {{
+                    const srcMatch = tag.match(/src="([^"]+)"/);
+                    const srcType = srcMatch ? (srcMatch[1].startsWith('data:') ? 'data:' : 
+                                                srcMatch[1].startsWith('campaign-attachments/') ? 'S3 key' : 'other') : 'no src';
+                    console.log(`  ${{i + 1}}. type=${{srcType}}, tag=${{tag.substring(0, 100)}}...`);
+                }});
+            }} else {{
+                console.error(`❌ Original Quill HTML has NO <img> tags!`);
+            }}
+            
             // Create a temporary div to parse and clean the HTML
             const tempDiv = document.createElement('div');
             tempDiv.innerHTML = emailBody;
@@ -4423,10 +4438,21 @@ def serve_web_ui(event):
                 emailBody = emailBody.replace(/\\s+data-s3-key="[^"]*"/g, '');
                 emailBody = emailBody.replace(/\\s+data-inline="[^"]*"/g, '');
                 console.log('✅ Removed data-s3-key attributes from final HTML');
+                
+                // Verify img tags still exist after cleanup
+                const imgAfterCleanup = emailBody.match(/<img[^>]+>/g);
+                if (imgAfterCleanup) {{
+                    console.log(`✅ After data-attr cleanup: ${{imgAfterCleanup.length}} <img> tag(s) still present`);
+                }} else {{
+                    console.error(`❌ After data-attr cleanup: <img> tags were LOST!`);
+                }}
+            }} else {{
+                console.log('ℹ️ No images with S3 keys to replace');
             }}
             
             // Additional regex cleanup for any remaining artifacts
             // IMPORTANT: Preserve blank lines by converting <p><br></p> to <p>&nbsp;</p>
+            const bodyBeforeRegexCleanup = emailBody;
             emailBody = emailBody
                 .replace(/<p>\\s*<br\\s*\\/?\\s*>\\s*<\\/p>/g, '<p>&nbsp;</p>')  // Preserve blank lines as &nbsp;
                 .replace(/<p>\\s*<\\/p>/g, '')  // Remove truly empty paragraphs (no content, no br)
@@ -4437,6 +4463,16 @@ def serve_web_ui(event):
             
             console.log('✅ Applied HTML cleanup and preserved blank lines as <p>&nbsp;</p>');
             console.log(`Final email body preview: ${{emailBody.substring(0, 200)}}...`);
+            
+            // Verify img tags survived the regex cleanup
+            const imgAfterRegexCleanup = emailBody.match(/<img[^>]+>/g);
+            if (bodyBeforeRegexCleanup.includes('<img') && !imgAfterRegexCleanup) {{
+                console.error(`❌ CRITICAL: <img> tags were REMOVED during regex cleanup!`);
+                console.error(`   Before cleanup: ${{bodyBeforeRegexCleanup.substring(0, 300)}}...`);
+                console.error(`   After cleanup: ${{emailBody.substring(0, 300)}}...`);
+            }} else if (imgAfterRegexCleanup) {{
+                console.log(`✅ After regex cleanup: ${{imgAfterRegexCleanup.length}} <img> tag(s) still present`);
+            }}
             
             // Get user name from form
             const userName = document.getElementById('userName').value.trim() || 'Web User';
@@ -4557,6 +4593,15 @@ Click OK to proceed or Cancel to abort.
                 target_contacts_count: campaign.target_contacts?.length || 0
             }});
             
+            // DEBUG: Verify img tags are in campaign.body before serialization
+            const imgInCampaignBody = campaign.body.match(/<img[^>]+>/g);
+            if (imgInCampaignBody) {{
+                console.log(`🔍 BEFORE JSON: campaign.body has ${{imgInCampaignBody.length}} <img> tag(s)`);
+            }} else {{
+                console.error(`❌ BEFORE JSON: campaign.body has NO <img> tags!`);
+                console.error(`   Body content: ${{campaign.body.substring(0, 300)}}...`);
+            }}
+            
             // Try to serialize campaign to JSON - catch errors early
             let campaignJSON;
             try {{
@@ -4565,6 +4610,13 @@ Click OK to proceed or Cancel to abort.
                 console.log(`   Size: ${{(campaignJSON.length / 1024).toFixed(2)}} KB`);
                 console.log(`   Body size: ${{(campaign.body?.length || 0 / 1024).toFixed(2)}} KB`);
                 console.log(`   Attachments: ${{campaign.attachments?.length || 0}}`);
+                
+                // DEBUG: Check if img tags survived JSON serialization
+                if (campaignJSON.includes('<img')) {{
+                    console.log(`🔍 AFTER JSON: Serialized data contains <img> tags ✅`);
+                }} else {{
+                    console.error(`❌ AFTER JSON: Serialized data has NO <img> tags!`);
+                }}
                 
                 // Warn if body is very large
                 if (campaignJSON.length > 5000000) {{ // 5MB
