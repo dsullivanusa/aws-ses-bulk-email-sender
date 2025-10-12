@@ -16,24 +16,9 @@ from decimal import Decimal
 
 # Initialize clients
 dynamodb = boto3.resource('dynamodb', region_name='us-gov-west-1')
-
-# Initialize DynamoDB tables with error handling
-def get_dynamodb_tables():
-    """Initialize DynamoDB tables with proper error handling"""
-    try:
-        contacts_table = dynamodb.Table('EmailContacts')
-        campaigns_table = dynamodb.Table('EmailCampaigns')
-        email_config_table = dynamodb.Table('EmailConfig')
-        return contacts_table, campaigns_table, email_config_table
-    except Exception as e:
-        print(f"🔴 DynamoDB initialization error: {str(e)}")
-        if '403' in str(e) or 'AccessDenied' in str(e):
-            print(f"🔴 403 ERROR: Lambda lacks DynamoDB permissions")
-        raise e
-
-# Get table references (will be initialized on first use)
-contacts_table, campaigns_table, email_config_table = get_dynamodb_tables()
-
+contacts_table = dynamodb.Table('EmailContacts')
+campaigns_table = dynamodb.Table('EmailCampaigns')
+email_config_table = dynamodb.Table('EmailConfig')
 secrets_client = boto3.client('secretsmanager', region_name='us-gov-west-1')
 sqs_client = boto3.client('sqs', region_name='us-gov-west-1')
 
@@ -61,11 +46,7 @@ def load_cognito_config():
         obj = s3.get_object(Bucket=ATTACHMENTS_BUCKET, Key='cognito_config.json')
         config = json.loads(obj['Body'].read().decode('utf-8'))
         return config if config.get('enabled', False) else None
-    except Exception as e:
-        # Log the actual error instead of hiding it
-        print(f"⚠️ Cognito config load error: {str(e)}")
-        if '403' in str(e) or 'AccessDenied' in str(e):
-            print(f"🔴 403 ERROR: Lambda lacks S3 permissions for bucket '{ATTACHMENTS_BUCKET}'")
+    except:
         return None  # Cognito not configured or disabled
 
 COGNITO_CONFIG = load_cognito_config()
@@ -149,17 +130,6 @@ def lambda_handler(event, context):
             
     except Exception as e:
         print(f"❌ Lambda handler exception: {str(e)}")
-        print(f"❌ Exception type: {type(e).__name__}")
-        
-        # Check for specific 403/permission errors
-        error_str = str(e)
-        if '403' in error_str or 'AccessDenied' in error_str:
-            print(f"🔴 403 PERMISSION ERROR DETECTED!")
-            if 'dynamodb' in error_str.lower():
-                print(f"🔴 DynamoDB permission issue - check IAM role for DynamoDB access")
-            if 's3' in error_str.lower():
-                print(f"🔴 S3 permission issue - check IAM role for S3 bucket access")
-        
         import traceback
         traceback.print_exc()
         return {'statusCode': 500, 'headers': headers, 'body': json.dumps({'error': str(e)})}
@@ -173,7 +143,7 @@ def serve_web_ui(event):
         api_id = event.get('requestContext', {}).get('apiId', 'UNKNOWN')
         api_url = f"https://{api_id}.execute-api.us-gov-west-1.amazonaws.com/prod"
     
-    html_content = """<!DOCTYPE html>
+    html_content = f"""<!DOCTYPE html>
 <html>
 <head>
     <meta charset="UTF-8">
@@ -195,7 +165,7 @@ def serve_web_ui(event):
     
     <style>
         /* Modern CSS Variables for Consistent Theming */
-        :root {
+        :root {{
             --primary-color: #6366f1;
             --primary-dark: #4f46e5;
             --primary-light: #a5b4fc;
@@ -221,21 +191,21 @@ def serve_web_ui(event):
             --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
             --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
             --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
-        }
+        }}
         
         /* Reset and Base Styles */
-        * { box-sizing: border-box; }
-        body { 
+        * {{ box-sizing: border-box; }}
+        body {{ 
             font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; 
             margin: 0; 
             background: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%);
             min-height: 100vh;
             color: var(--gray-800);
             line-height: 1.6;
-        }
+        }}
         
         /* Container and Layout */
-        .container { 
+        .container {{ 
             max-width: 1200px; 
             margin: 20px auto; 
             background: white; 
@@ -244,16 +214,16 @@ def serve_web_ui(event):
             box-shadow: var(--shadow-xl);
             backdrop-filter: blur(10px);
             border: 1px solid rgba(255, 255, 255, 0.2);
-        }
+        }}
         
         /* Header Styling */
-        .header { 
+        .header {{ 
             text-align: center; 
             margin-bottom: 40px; 
             padding-bottom: 30px;
             border-bottom: 2px solid var(--gray-100);
-        }
-        .header h1 { 
+        }}
+        .header h1 {{ 
             color: var(--gray-900); 
             margin: 0; 
             font-size: 2.8rem; 
@@ -262,16 +232,16 @@ def serve_web_ui(event):
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
             background-clip: text;
-        }
-        .header .subtitle { 
+        }}
+        .header .subtitle {{ 
             color: var(--gray-600); 
             font-size: 1.2rem; 
             margin-top: 15px; 
             font-weight: 500;
-        }
+        }}
         
         /* Modern Tab System */
-        .tabs { 
+        .tabs {{ 
             display: flex; 
             margin-bottom: 40px; 
             background: var(--gray-50); 
@@ -280,8 +250,8 @@ def serve_web_ui(event):
             gap: 4px;
             position: relative;
             z-index: 5;
-        }
-        .tab { 
+        }}
+        .tab {{ 
             flex: 1; 
             padding: 16px 24px; 
             background: white;
@@ -298,22 +268,22 @@ def serve_web_ui(event):
             user-select: none;
             border: 2px solid #3b82f6;
             box-shadow: 0 2px 4px rgba(59, 130, 246, 0.1);
-        }
-        .tab:hover { 
+        }}
+        .tab:hover {{ 
             background: linear-gradient(135deg, #dbeafe, #bfdbfe); 
             color: #1e40af;
             transform: translateY(-1px);
             border-color: #2563eb;
             box-shadow: 0 4px 8px rgba(59, 130, 246, 0.2);
-        }
-        .tab.active { 
+        }}
+        .tab.active {{ 
             background: linear-gradient(135deg, #1e40af, #1e3a8a); 
             color: white; 
             box-shadow: 0 6px 12px rgba(30, 64, 175, 0.4);
             transform: translateY(-2px);
             border-color: #1e3a8a;
-        }
-        .tab.active::before {
+        }}
+        .tab.active::before {{
             content: '';
             position: absolute;
             top: 0;
@@ -322,33 +292,33 @@ def serve_web_ui(event):
             bottom: 0;
             background: linear-gradient(135deg, rgba(255,255,255,0.2), rgba(255,255,255,0.1));
             border-radius: 8px;
-        }
+        }}
         
         /* Tab Content */
-        .tab-content { 
+        .tab-content {{ 
             display: none; 
             animation: fadeIn 0.3s ease-in-out;
-        }
-        .tab-content.active { 
+        }}
+        .tab-content.active {{ 
             display: block; 
-        }
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(10px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
+        }}
+        @keyframes fadeIn {{
+            from {{ opacity: 0; transform: translateY(10px); }}
+            to {{ opacity: 1; transform: translateY(0); }}
+        }}
         
         /* Form Styling */
-        .form-group { 
+        .form-group {{ 
             margin: 24px 0; 
-        }
-        label { 
+        }}
+        label {{ 
             display: block; 
             margin-bottom: 8px; 
             font-weight: 600; 
             color: var(--gray-700);
             font-size: 0.95rem;
-        }
-        input, textarea, select { 
+        }}
+        input, textarea, select {{ 
             width: 100%; 
             padding: 14px 16px; 
             margin-bottom: 16px; 
@@ -358,39 +328,39 @@ def serve_web_ui(event):
             transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
             background: white;
             color: var(--gray-800);
-        }
-        input:focus, textarea:focus, select:focus { 
+        }}
+        input:focus, textarea:focus, select:focus {{ 
             outline: none; 
             border-color: var(--primary-color); 
             box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
             transform: translateY(-1px);
-        }
-        input:hover, textarea:hover, select:hover {
+        }}
+        input:hover, textarea:hover, select:hover {{
             border-color: var(--gray-300);
-        }
+        }}
         /* Checkbox styling */
-        input[type="checkbox"] {
+        input[type="checkbox"] {{
             width: 18px;
             height: 18px;
             cursor: pointer;
             accent-color: var(--primary-color);
-        }
-        input[type="checkbox"]:checked + span {
+        }}
+        input[type="checkbox"]:checked + span {{
             font-weight: 600;
             color: var(--primary-color);
-        }
-        .filterCheckbox:checked {
+        }}
+        .filterCheckbox:checked {{
             transform: scale(1.1);
-        }
-        small {
+        }}
+        small {{
             color: var(--gray-500);
             font-size: 0.875rem;
             margin-top: 4px;
             display: block;
-        }
+        }}
         
         /* Modern Button System */
-        button { 
+        button {{ 
             padding: 14px 28px; 
             background: linear-gradient(135deg, var(--primary-color), var(--primary-dark)); 
             color: white; 
@@ -404,8 +374,8 @@ def serve_web_ui(event):
             position: relative;
             overflow: hidden;
             box-shadow: var(--shadow-md);
-        }
-        button::before {
+        }}
+        button::before {{
             content: '';
             position: absolute;
             top: 0;
@@ -414,65 +384,65 @@ def serve_web_ui(event):
             height: 100%;
             background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
             transition: left 0.5s;
-        }
-        button:hover::before {
+        }}
+        button:hover::before {{
             left: 100%;
-        }
-        button:hover { 
+        }}
+        button:hover {{ 
             transform: translateY(-2px); 
             box-shadow: var(--shadow-xl);
-        }
-        button:active {
+        }}
+        button:active {{
             transform: translateY(0);
-        }
+        }}
         
-        .btn-success { 
+        .btn-success {{ 
             background: linear-gradient(135deg, var(--success-color), #059669); 
-        }
-        .btn-success:hover { 
+        }}
+        .btn-success:hover {{ 
             box-shadow: 0 10px 25px rgba(16, 185, 129, 0.4); 
-        }
-        .btn-danger { 
+        }}
+        .btn-danger {{ 
             background: linear-gradient(135deg, var(--danger-color), #dc2626); 
-        }
-        .btn-danger:hover { 
+        }}
+        .btn-danger:hover {{ 
             box-shadow: 0 10px 25px rgba(239, 68, 68, 0.4); 
-        }
-        .btn-primary { 
+        }}
+        .btn-primary {{ 
             background: linear-gradient(135deg, var(--primary-color), #1d4ed8); 
             color: white;
             border: none;
             border-radius: var(--border-radius);
             cursor: pointer;
             transition: all 0.3s ease;
-        }
-        .btn-primary:hover { 
+        }}
+        .btn-primary:hover {{ 
             box-shadow: 0 10px 25px rgba(59, 130, 246, 0.4); 
-        }
-        .btn-info { 
+        }}
+        .btn-info {{ 
             background: linear-gradient(135deg, var(--info-color), #2563eb); 
-        }
-        .btn-info:hover { 
+        }}
+        .btn-info:hover {{ 
             box-shadow: 0 10px 25px rgba(59, 130, 246, 0.4); 
-        }
-        .btn-warning { 
+        }}
+        .btn-warning {{ 
             background: linear-gradient(135deg, var(--warning-color), #d97706); 
-        }
-        .btn-warning:hover { 
+        }}
+        .btn-warning:hover {{ 
             box-shadow: 0 10px 25px rgba(245, 158, 11, 0.4); 
-        }
+        }}
         
         /* Table Action Buttons - Consistent Sizing */
-        table button {
+        table button {{
             padding: 8px 16px;
             margin: 4px 2px;
             font-size: 14px;
             min-width: 70px;
             display: inline-block;
-        }
+        }}
         
         /* Table Styling */
-        table { 
+        table {{ 
             width: 100%; 
             border-collapse: collapse; 
             margin: 30px 0; 
@@ -480,47 +450,47 @@ def serve_web_ui(event):
             overflow: hidden; 
             box-shadow: var(--shadow-lg);
             background: white;
-        }
-        th, td { 
+        }}
+        th, td {{ 
             padding: 16px 20px; 
             text-align: left; 
-        }
-        th { 
+        }}
+        th {{ 
             background: linear-gradient(135deg, var(--gray-800), var(--gray-900)); 
             color: white; 
             font-weight: 600;
             font-size: 0.9rem;
             text-transform: uppercase;
             letter-spacing: 0.5px;
-        }
-        td { 
+        }}
+        td {{ 
             border-bottom: 1px solid var(--gray-100); 
             color: var(--gray-700);
-        }
-        tr:hover { 
+        }}
+        tr:hover {{ 
             background: var(--gray-50); 
             transform: scale(1.01);
             transition: all 0.2s ease;
-        }
-        tr:last-child td {
+        }}
+        tr:last-child td {{
             border-bottom: none;
-        }
+        }}
         
         /* Result and Card Styling */
-        .result { 
+        .result {{ 
             margin: 30px 0; 
             padding: 24px; 
             background: linear-gradient(135deg, var(--gray-50), white); 
             border-radius: var(--border-radius); 
             border-left: 4px solid var(--primary-color);
             box-shadow: var(--shadow-md);
-        }
-        .result h3 {
+        }}
+        .result h3 {{
             margin-top: 0;
             color: var(--gray-800);
             font-weight: 600;
-        }
-        .result pre {
+        }}
+        .result pre {{
             background: var(--gray-100);
             padding: 16px;
             border-radius: 8px;
@@ -528,12 +498,12 @@ def serve_web_ui(event):
             font-family: 'Monaco', 'Menlo', monospace;
             font-size: 13px;
             color: var(--gray-700);
-        }
-        .hidden {
+        }}
+        .hidden {{
             display: none;
-        }
+        }}
         
-        .contact-count {
+        .contact-count {{
             margin-left: 10px;
             padding: 5px 10px;
             background: var(--primary-color);
@@ -541,94 +511,94 @@ def serve_web_ui(event):
             border-radius: 15px;
             font-size: 0.9em;
             font-weight: bold;
-        }
+        }}
         
         /* Quill Editor Styling */
-        .ql-editor {
+        .ql-editor {{
             min-height: 200px;
             font-size: 16px;
             line-height: 1.6;
-        }
-        .ql-toolbar {
+        }}
+        .ql-toolbar {{
             border-top: 1px solid #e5e7eb;
             border-left: 1px solid #e5e7eb;
             border-right: 1px solid #e5e7eb;
             border-radius: 8px 8px 0 0;
             background: #f9fafb;
-        }
-        .ql-container {
+        }}
+        .ql-container {{
             border-bottom: 1px solid #e5e7eb;
             border-left: 1px solid #e5e7eb;
             border-right: 1px solid #e5e7eb;
             border-radius: 0 0 8px 8px;
             background: white;
-        }
-        .ql-editor.ql-blank::before {
+        }}
+        .ql-editor.ql-blank::before {{
             color: #9ca3af;
             font-style: normal;
-        }
+        }}
         
         /* Image Resize Module Styling */
-        .ql-editor img {
+        .ql-editor img {{
             cursor: pointer;
             max-width: 100%;
             height: auto !important;  /* Allow height changes */
             max-height: none !important;  /* Remove max-height restriction */
-        }
-        .ql-editor img:hover {
+        }}
+        .ql-editor img:hover {{
             outline: 2px solid #3b82f6;
-        }
+        }}
         /* Resize handle styles */
-        .image-resize-handle {
+        .image-resize-handle {{
             background: white !important;
             border: 2px solid #3b82f6 !important;
             box-shadow: 0 2px 4px rgba(0,0,0,0.2) !important;
             width: 12px !important;
             height: 12px !important;
             cursor: nwse-resize !important;
-        }
-        .image-resize-overlay {
+        }}
+        .image-resize-overlay {{
             border: 2px dashed #3b82f6 !important;
-        }
+        }}
         /* Ensure image container doesn't restrict height */
-        .ql-editor .image-resizing {
+        .ql-editor .image-resizing {{
             max-height: none !important;
-        }
+        }}
         
-        .card { 
+        .card {{ 
             background: white; 
             border-radius: var(--border-radius); 
             padding: 30px; 
             margin: 24px 0; 
             box-shadow: var(--shadow-lg);
             border: 1px solid var(--gray-100);
-        }
+        }}
         
         /* Responsive Design */
-        @media (max-width: 768px) {
-            .container {
+        @media (max-width: 768px) {{
+            .container {{
                 margin: 10px;
                 padding: 20px;
                 border-radius: 16px;
-            }
-            .header h1 {
+            }}
+            .header h1 {{
                 font-size: 2.2rem;
-            }
-            .tabs {
+            }}
+            .tabs {{
                 flex-direction: column;
                 gap: 8px;
-            }
-            .tab {
+            }}
+            .tab {{
                 padding: 12px 16px;
-            }
-            button {
+            }}
+            button {{
                 width: 100%;
                 margin: 8px 0;
-            }
-        }
+            }}
+        }}
         
         /* Searching Indicator */
-        .searching-indicator {
+        .searching-indicator {{
             display: inline-block;
             margin-left: 12px;
             padding: 6px 12px;
@@ -639,25 +609,25 @@ def serve_web_ui(event):
             font-weight: 600;
             transition: opacity 0.3s ease-in-out;
             box-shadow: 0 2px 8px rgba(59, 130, 246, 0.3);
-        }
-        .searching-indicator.show {
+        }}
+        .searching-indicator.show {{
             opacity: 1 !important;
             animation: pulse 1.5s ease-in-out infinite;
-        }
-        .searching-indicator.hide {
+        }}
+        .searching-indicator.hide {{
             opacity: 0 !important;
-        }
-        @keyframes pulse {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.6; }
-        }
+        }}
+        @keyframes pulse {{
+            0%, 100% {{ opacity: 1; }}
+            50% {{ opacity: 0.6; }}
+        }}
         
         /* Loading and Animation States */
-        .loading {
+        .loading {{
             opacity: 0.7;
             pointer-events: none;
-        }
-        .loading::after {
+        }}
+        .loading::after {{
             content: '';
             position: absolute;
             top: 50%;
@@ -669,41 +639,41 @@ def serve_web_ui(event):
             border-top: 2px solid var(--primary-color);
             border-radius: 50%;
             animation: spin 1s linear infinite;
-        }
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
+        }}
+        @keyframes spin {{
+            0% {{ transform: rotate(0deg); }}
+            100% {{ transform: rotate(360deg); }}
+        }}
         
         /* Editable Table Cells */
-        .editable-cell {
+        .editable-cell {{
             cursor: text;
             padding: 8px;
             min-height: 20px;
             transition: background-color 0.2s;
             border: 1px solid transparent;
-        }
-        .editable-cell:hover {
+        }}
+        .editable-cell:hover {{
             background: #f0f9ff !important;
             border: 1px solid #bae6fd;
-        }
-        .editable-cell:focus {
+        }}
+        .editable-cell:focus {{
             outline: 2px solid #3b82f6;
             outline-offset: -2px;
             background: #fff3cd !important;
-        }
-        .editable-cell:empty:before {
+        }}
+        .editable-cell:empty:before {{
             content: attr(placeholder);
             color: #9ca3af;
-        }
-        .yes-no-cell {
+        }}
+        .yes-no-cell {{
             text-align: center;
-        }
-        #contactsTable {
+        }}
+        #contactsTable {{
             border-collapse: separate;
             border-spacing: 0;
-        }
-        #contactsTable th {
+        }}
+        #contactsTable th {{
             position: sticky;
             top: 0;
             background: linear-gradient(135deg, #1e40af, #1e3a8a);
@@ -718,56 +688,56 @@ def serve_web_ui(event):
             border-right: 1px solid #1e3a8a;
             text-shadow: 0 1px 2px rgba(0,0,0,0.3);
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        }
-        #contactsTable td {
+        }}
+        #contactsTable td {{
             border-bottom: 1px solid #e5e7eb;
             border-right: 1px solid #f3f4f6;
             padding: 8px 10px;
             background: white;
-        }
-        #contactsTable tr:hover td {
+        }}
+        #contactsTable tr:hover td {{
             background: #eff6ff;
-        }
+        }}
         
         /* Filter Type Button Styling */
-        .filter-type-btn {
+        .filter-type-btn {{
             transition: all 0.2s ease;
             box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
-        }
-        .filter-type-btn:hover {
+        }}
+        .filter-type-btn:hover {{
             transform: translateY(-1px);
             box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-        }
-        .filter-type-btn:active {
+        }}
+        .filter-type-btn:active {{
             transform: translateY(0);
-        }
+        }}
         
         /* Available Value Button Styling */
-        .available-value-btn:hover {
+        .available-value-btn:hover {{
             transform: translateY(-1px);
             box-shadow: 0 2px 4px rgba(99, 102, 241, 0.2);
-        }
+        }}
         
         /* Filter Tags Animation */
-        @keyframes slideIn {
-            from {
+        @keyframes slideIn {{
+            from {{
                 opacity: 0;
                 transform: translateX(-10px);
-            }
-            to {
+            }}
+            to {{
                 opacity: 1;
                 transform: translateX(0);
-            }
-        }
+            }}
+        }}
         
-        #selectedValuesTags > div {
+        #selectedValuesTags > div {{
             animation: slideIn 0.3s ease;
-        }
+        }}
         
         /* ============================================
            TOAST NOTIFICATION SYSTEM
            ============================================ */
-        #toastContainer {
+        #toastContainer {{
             position: fixed;
             top: 20px;
             right: 20px;
@@ -776,9 +746,9 @@ def serve_web_ui(event):
             flex-direction: column;
             gap: 10px;
             max-width: 400px;
-        }
+        }}
         
-        .toast {
+        .toast {{
             padding: 16px 20px;
             border-radius: 12px;
             box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15), 0 0 1px rgba(0, 0, 0, 0.05);
@@ -793,9 +763,9 @@ def serve_web_ui(event):
             min-width: 300px;
             position: relative;
             overflow: hidden;
-        }
+        }}
         
-        .toast::before {
+        .toast::before {{
             content: '';
             position: absolute;
             left: 0;
@@ -803,34 +773,34 @@ def serve_web_ui(event):
             bottom: 0;
             width: 4px;
             background: currentColor;
-        }
+        }}
         
-        .toast-success {
+        .toast-success {{
             background: linear-gradient(135deg, #10b981, #059669);
-        }
+        }}
         
-        .toast-error {
+        .toast-error {{
             background: linear-gradient(135deg, #ef4444, #dc2626);
-        }
+        }}
         
-        .toast-warning {
+        .toast-warning {{
             background: linear-gradient(135deg, #f59e0b, #d97706);
-        }
+        }}
         
-        .toast-info {
+        .toast-info {{
             background: linear-gradient(135deg, #3b82f6, #2563eb);
-        }
+        }}
         
-        .toast i {
+        .toast i {{
             font-size: 20px;
             flex-shrink: 0;
-        }
+        }}
         
-        .toast-message {
+        .toast-message {{
             flex: 1;
-        }
+        }}
         
-        .toast-close {
+        .toast-close {{
             background: rgba(255, 255, 255, 0.2);
             border: none;
             border-radius: 50%;
@@ -844,81 +814,81 @@ def serve_web_ui(event):
             font-size: 16px;
             transition: background 0.2s;
             flex-shrink: 0;
-        }
+        }}
         
-        .toast-close:hover {
+        .toast-close:hover {{
             background: rgba(255, 255, 255, 0.3);
-        }
+        }}
         
-        @keyframes toastSlideIn {
-            from {
+        @keyframes toastSlideIn {{
+            from {{
                 transform: translateX(400px);
                 opacity: 0;
-            }
-            to {
+            }}
+            to {{
                 transform: translateX(0);
                 opacity: 1;
-            }
-        }
+            }}
+        }}
         
-        .toast.removing {
+        .toast.removing {{
             animation: toastSlideOut 0.3s ease forwards;
-        }
+        }}
         
-        @keyframes toastSlideOut {
-            to {
+        @keyframes toastSlideOut {{
+            to {{
                 transform: translateX(400px);
                 opacity: 0;
-            }
-        }
+            }}
+        }}
         
         /* ============================================
            SKELETON LOADING STATES
            ============================================ */
-        .skeleton {
+        .skeleton {{
             background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
             background-size: 200% 100%;
             animation: skeletonLoading 1.5s ease-in-out infinite;
             border-radius: 4px;
-        }
+        }}
         
-        @keyframes skeletonLoading {
-            0% {
+        @keyframes skeletonLoading {{
+            0% {{
                 background-position: 200% 0;
-            }
-            100% {
+            }}
+            100% {{
                 background-position: -200% 0;
-            }
-        }
+            }}
+        }}
         
-        .skeleton-text {
+        .skeleton-text {{
             height: 16px;
             margin-bottom: 8px;
             border-radius: 4px;
-        }
+        }}
         
-        .skeleton-button {
+        .skeleton-button {{
             height: 40px;
             width: 120px;
             border-radius: 8px;
-        }
+        }}
         
-        .skeleton-row {
+        .skeleton-row {{
             height: 48px;
             margin-bottom: 4px;
             border-radius: 6px;
-        }
+        }}
         
         /* ============================================
            ENHANCED BUTTON ANIMATIONS
            ============================================ */
-        button {
+        button {{
             position: relative;
             overflow: hidden;
             transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-        }
+        }}
         
-        button::before {
+        button::before {{
             content: '';
             position: absolute;
             top: 50%;
@@ -929,29 +899,29 @@ def serve_web_ui(event):
             background: rgba(255, 255, 255, 0.3);
             transform: translate(-50%, -50%);
             transition: width 0.6s, height 0.6s;
-        }
+        }}
         
-        button:active::before {
+        button:active::before {{
             width: 300px;
             height: 300px;
-        }
+        }}
         
-        button:hover {
+        button:hover {{
             transform: translateY(-2px);
             box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
-        }
+        }}
         
-        button:active {
+        button:active {{
             transform: translateY(0);
-        }
+        }}
         
         /* Loading spinner for buttons */
-        .btn-loading {
+        .btn-loading {{
             pointer-events: none;
             position: relative;
-        }
+        }}
         
-        .btn-loading::after {
+        .btn-loading::after {{
             content: '';
             position: absolute;
             width: 16px;
@@ -964,67 +934,67 @@ def serve_web_ui(event):
             border-top-color: white;
             border-radius: 50%;
             animation: spin 0.6s linear infinite;
-        }
+        }}
         
-        @keyframes spin {
-            to {
+        @keyframes spin {{
+            to {{
                 transform: rotate(360deg);
-            }
-        }
+            }}
+        }}
         
         /* ============================================
            SMOOTH TRANSITIONS
            ============================================ */
-        * {
+        * {{
             transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease;
-        }
+        }}
         
-        .fade-in {
+        .fade-in {{
             animation: fadeIn 0.4s ease;
-        }
+        }}
         
-        @keyframes fadeIn {
-            from {
+        @keyframes fadeIn {{
+            from {{
                 opacity: 0;
                 transform: translateY(10px);
-            }
-            to {
+            }}
+            to {{
                 opacity: 1;
                 transform: translateY(0);
-            }
-        }
+            }}
+        }}
         
         /* Enhanced table row hover */
-        table tbody tr {
+        table tbody tr {{
             transition: all 0.2s ease;
-        }
+        }}
         
-        table tbody tr:hover {
+        table tbody tr:hover {{
             transform: scale(1.01);
             box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
-        }
+        }}
         
         /* Smooth scroll */
-        html {
+        html {{
             scroll-behavior: smooth;
-        }
+        }}
         
         /* Focus states for accessibility */
         button:focus,
         input:focus,
         select:focus,
-        textarea:focus {
+        textarea:focus {{
             outline: 2px solid var(--primary-color);
             outline-offset: 2px;
-        }
+        }}
         
         /* Progress bar animation */
-        .progress-bar {
+        .progress-bar {{
             position: relative;
             overflow: hidden;
-        }
+        }}
         
-        .progress-bar::after {
+        .progress-bar::after {{
             content: '';
             position: absolute;
             top: 0;
@@ -1037,21 +1007,21 @@ def serve_web_ui(event):
                 transparent
             );
             animation: shimmer 2s infinite;
-        }
+        }}
         
-        @keyframes shimmer {
-            0% {
+        @keyframes shimmer {{
+            0% {{
                 transform: translateX(-100%);
-            }
-            100% {
+            }}
+            100% {{
                 transform: translateX(100%);
-            }
-        }
+            }}
+        }}
         
         /* ============================================
            MODAL STYLES
            ============================================ */
-        .modal {
+        .modal {{
             position: fixed;
             top: 0;
             left: 0;
@@ -1064,54 +1034,54 @@ def serve_web_ui(event):
             justify-content: center;
             z-index: 10000;
             animation: modalFadeIn 0.3s ease;
-        }
+        }}
         
-        @keyframes modalFadeIn {
-            from {
+        @keyframes modalFadeIn {{
+            from {{
                 opacity: 0;
-            }
-            to {
+            }}
+            to {{
                 opacity: 1;
-            }
-        }
+            }}
+        }}
         
-        .modal-content {
+        .modal-content {{
             background: white;
             border-radius: 16px;
             box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
             max-height: 90vh;
             overflow-y: auto;
             animation: modalSlideUp 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55);
-        }
+        }}
         
-        @keyframes modalSlideUp {
-            from {
+        @keyframes modalSlideUp {{
+            from {{
                 transform: translateY(50px);
                 opacity: 0;
-            }
-            to {
+            }}
+            to {{
                 transform: translateY(0);
                 opacity: 1;
-            }
-        }
+            }}
+        }}
         
-        .modal-header {
+        .modal-header {{
             display: flex;
             justify-content: space-between;
             align-items: center;
             padding: 24px 30px;
             border-bottom: 2px solid #e5e7eb;
             background: linear-gradient(135deg, #f9fafb, #f3f4f6);
-        }
+        }}
         
-        .modal-header h2 {
+        .modal-header h2 {{
             margin: 0;
             color: #1f2937;
             font-size: 24px;
             font-weight: 700;
-        }
+        }}
         
-        .modal-close {
+        .modal-close {{
             background: none;
             border: none;
             font-size: 32px;
@@ -1126,38 +1096,38 @@ def serve_web_ui(event):
             transition: all 0.2s;
             line-height: 1;
             padding: 0;
-        }
+        }}
         
-        .modal-close:hover {
+        .modal-close:hover {{
             background: #f3f4f6;
             color: #1f2937;
             transform: rotate(90deg);
-        }
+        }}
         
-        .modal-body {
+        .modal-body {{
             padding: 30px;
-        }
+        }}
         
         /* Modal table styles */
-        .modal-content table tbody tr {
+        .modal-content table tbody tr {{
             border-bottom: 1px solid #f3f4f6;
-        }
+        }}
         
-        .modal-content table tbody tr:hover {
+        .modal-content table tbody tr:hover {{
             background: #f9fafb;
             transform: none;
             box-shadow: none;
-        }
+        }}
         
-        .modal-content table tbody td {
+        .modal-content table tbody td {{
             padding: 12px;
             font-size: 13px;
             color: #374151;
-        }
+        }}
         
-        .modal-content table tbody tr:nth-child(even) {
+        .modal-content table tbody tr:nth-child(even) {{
             background: #fafafa;
-        }
+        }}
     </style>
 </head>
 <body>
@@ -1569,7 +1539,7 @@ def serve_web_ui(event):
             </div>
             <div class="form-group">
                 <label>📨 Subject:</label>
-                <input type="text" id="subject" placeholder="Hello {first_name}">
+                <input type="text" id="subject" placeholder="Hello {{{{first_name}}}}">
             </div>
             <div class="form-group">
                 <label>📄 Email Body:</label>
@@ -1579,7 +1549,7 @@ def serve_web_ui(event):
                     • <strong>Inline Images:</strong> Paste/embed images - they're auto-converted to work in emails<br>
                     • <strong>Resize Images:</strong> Click any image to see resize handles - drag to resize<br>
                     • <strong>Formatting:</strong> Use toolbar for bold, colors, lists, alignment, etc.<br>
-                    • <strong>Placeholders:</strong> Use {first_name}, {email}, etc. for personalization
+                    • <strong>Placeholders:</strong> Use {{{{first_name}}}}, {{{{email}}}}, etc. for personalization
                 </div>
                 <div id="body" style="min-height: 200px; background: white;"></div>
                 <div style="display: flex; gap: 10px; margin-top: 8px;">
@@ -1667,129 +1637,129 @@ def serve_web_ui(event):
     </div>
     
     <script>
-        const API_URL = '{{api_url}}';
+        const API_URL = '{api_url}';
         
         // ============================================
         // TOAST NOTIFICATION SYSTEM
         // ============================================
-        const Toast = {
-            show: function(message, type = 'info', duration = 4000) {
+        const Toast = {{
+            show: function(message, type = 'info', duration = 4000) {{
                 const container = document.getElementById('toastContainer');
                 const toast = document.createElement('div');
-                toast.className = `toast toast-${type}`;
+                toast.className = `toast toast-${{type}}`;
                 
-                const icons = {
+                const icons = {{
                     success: '<i class="fas fa-check-circle"></i>',
                     error: '<i class="fas fa-exclamation-circle"></i>',
                     warning: '<i class="fas fa-exclamation-triangle"></i>',
                     info: '<i class="fas fa-info-circle"></i>'
-                };
+                }};
                 
                 toast.innerHTML = `
-                    ${icons[type] || icons.info}
-                    <div class="toast-message">${message}</div>
+                    ${{icons[type] || icons.info}}
+                    <div class="toast-message">${{message}}</div>
                     <button class="toast-close" onclick="Toast.close(this.parentElement)">×</button>
                 `;
                 
                 container.appendChild(toast);
                 
                 // Auto remove after duration
-                if (duration > 0) {
-                    setTimeout(() => {
+                if (duration > 0) {{
+                    setTimeout(() => {{
                         Toast.close(toast);
-                    }, duration);
-                }
+                    }}, duration);
+                }}
                 
                 return toast;
-            },
+            }},
             
-            success: function(message, duration = 4000) {
+            success: function(message, duration = 4000) {{
                 return this.show(message, 'success', duration);
-            },
+            }},
             
-            error: function(message, duration = 5000) {
+            error: function(message, duration = 5000) {{
                 return this.show(message, 'error', duration);
-            },
+            }},
             
-            warning: function(message, duration = 4500) {
+            warning: function(message, duration = 4500) {{
                 return this.show(message, 'warning', duration);
-            },
+            }},
             
-            info: function(message, duration = 4000) {
+            info: function(message, duration = 4000) {{
                 return this.show(message, 'info', duration);
-            },
+            }},
             
-            close: function(toast) {
+            close: function(toast) {{
                 toast.classList.add('removing');
-                setTimeout(() => {
+                setTimeout(() => {{
                     toast.remove();
-                }, 300);
-            }
-        };
+                }}, 300);
+            }}
+        }};
         
         // ============================================
         // LOADING SKELETON HELPER
         // ============================================
-        function showSkeleton(containerId, count = 5) {
+        function showSkeleton(containerId, count = 5) {{
             const container = document.getElementById(containerId);
             if (!container) return;
             
             container.innerHTML = '';
-            for (let i = 0; i < count; i++) {
+            for (let i = 0; i < count; i++) {{
                 const skeleton = document.createElement('div');
                 skeleton.className = 'skeleton skeleton-row';
                 container.appendChild(skeleton);
-            }
-        }
+            }}
+        }}
         
         // Initialize Quill Rich Text Editor
         let quillEditor;
-        document.addEventListener('DOMContentLoaded', function() {
+        document.addEventListener('DOMContentLoaded', function() {{
             // Register Image Resize module if available
-            if (typeof ImageResize !== 'undefined') {
+            if (typeof ImageResize !== 'undefined') {{
                 Quill.register('modules/imageResize', ImageResize.default);
                 console.log('✅ Quill Image Resize module registered');
-            }
+            }}
             
-            quillEditor = new Quill('#body', {
+            quillEditor = new Quill('#body', {{
                 theme: 'snow',
-                placeholder: 'Dear {first_name} {last_name},\\n\\nYour message here...',
-                modules: {
+                placeholder: 'Dear {{{{first_name}}}} {{{{last_name}}}},\\n\\nYour message here...',
+                modules: {{
                     toolbar: [
-                        [{ 'header': [1, 2, 3, false] }],
+                        [{{ 'header': [1, 2, 3, false] }}],
                         ['bold', 'italic', 'underline', 'strike'],
-                        [{ 'color': [] }, { 'background': [] }],
-                        [{ 'list': 'ordered'}, { 'list': 'bullet' }],
-                        [{ 'align': [] }],
+                        [{{ 'color': [] }}, {{ 'background': [] }}],
+                        [{{ 'list': 'ordered'}}, {{ 'list': 'bullet' }}],
+                        [{{ 'align': [] }}],
                         ['link', 'image'],
                         ['clean']
                     ],
-                    imageResize: {
-                        displayStyles: {
+                    imageResize: {{
+                        displayStyles: {{
                             backgroundColor: 'black',
                             border: 'none',
                             color: 'white'
-                        },
+                        }},
                         modules: ['Resize', 'DisplaySize', 'Toolbar'],
-                        handleStyles: {
+                        handleStyles: {{
                             backgroundColor: 'white',
                             border: '2px solid #3b82f6',
                             width: '10px',
                             height: '10px'
-                        },
-                        overlayStyles: {
+                        }},
+                        overlayStyles: {{
                             border: '2px dashed #3b82f6'
-                        }
-                    }
-                }
-            });
+                        }}
+                    }}
+                }}
+            }});
             
             console.log('✅ Quill editor initialized with image resize support');
-        });
+        }});
         
         // Initialize the application
         
-        function showTab(tabName, clickedElement) {
+        function showTab(tabName, clickedElement) {{
             // Remove active class from all tabs
             document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
             
@@ -1803,76 +1773,76 @@ def serve_web_ui(event):
             document.getElementById(tabName).classList.add('active');
             
             // Auto-load data when switching to specific tabs
-            if (tabName === 'contacts' && paginationState.displayedContacts.length === 0) {
+            if (tabName === 'contacts' && paginationState.displayedContacts.length === 0) {{
                 // Auto-load contacts when first switching to Contacts tab
                 console.log('Auto-loading contacts...');
                 loadContacts();
-            }
-        }
+            }}
+        }}
         
         
-        async function saveConfig() {
+        async function saveConfig() {{
             const button = event.target;
             const originalText = button.textContent;
             
-            try {
+            try {{
                 // Show loading state
                 button.textContent = 'Saving...';
                 button.classList.add('loading');
                 button.disabled = true;
                 
-                const config = {
+                const config = {{
                     email_service: 'ses',
                     aws_region: document.getElementById('awsRegion').value,
                     from_email: document.getElementById('fromEmail').value
-                };
+                }};
                 
                 console.log('Saving config:', config);
                 console.log('API URL:', API_URL);
                 
-                const response = await fetch(`${API_URL}/config`, {
+                const response = await fetch(`${{API_URL}}/config`, {{
                     method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
+                    headers: {{'Content-Type': 'application/json'}},
                     body: JSON.stringify(config)
-                });
+                }});
                 
                 console.log('Save response status:', response.status);
             
             const result = await response.json();
                 
-                if (result.success) {
+                if (result.success) {{
                     button.textContent = 'Saved!';
                     button.style.background = 'linear-gradient(135deg, var(--success-color), #059669)';
                     Toast.success('Configuration saved successfully!');
-                    setTimeout(() => {
+                    setTimeout(() => {{
                         button.textContent = originalText;
                         button.style.background = '';
-                    }, 2000);
-                } else {
+                    }}, 2000);
+                }} else {{
                     throw new Error(result.error);
-                }
+                }}
                 
-            } catch (error) {
+            }} catch (error) {{
                 console.error('Save config error:', error);
                 button.textContent = 'Error';
                 button.style.background = 'linear-gradient(135deg, var(--danger-color), #dc2626)';
-                Toast.error(`Failed to save configuration: ${error.message}`);
-                setTimeout(() => {
+                Toast.error(`Failed to save configuration: ${{error.message}}`);
+                setTimeout(() => {{
                     button.textContent = originalText;
                     button.style.background = '';
-                }, 2000);
+                }}, 2000);
                 
                 // More specific error messages
-                if (error.message.includes('Failed to fetch') || error.message.includes('fetch')) {
+                if (error.message.includes('Failed to fetch') || error.message.includes('fetch')) {{
                     alert('Network Error: Cannot connect to the API. Check if the Lambda function is deployed and the API Gateway URL is correct.\\n\\nAPI URL: ' + API_URL);
-                } else {
+                }} else {{
                     alert('Error: ' + error.message);
-                }
-            } finally {
+                }}
+            }} finally {{
                 button.classList.remove('loading');
                 button.disabled = false;
-            }
-        }
+            }}
+        }}
         
         let allContacts = [];
         let allGroups = [];
@@ -1880,65 +1850,65 @@ def serve_web_ui(event):
         console.log('User session ID:', userSessionId);
         
         // Pagination state
-        let paginationState = {
+        let paginationState = {{
             currentPage: 1,
             pageSize: 25,
             paginationKeys: [null], // Stack of LastEvaluatedKeys for each page
             hasNextPage: false,
             displayedContacts: []
-        };
+        }};
         
         
-        function showFormStatus(message, type = 'warning') {
+        function showFormStatus(message, type = 'warning') {{
             const statusDiv = document.getElementById('formStatus');
-            if (statusDiv) {
+            if (statusDiv) {{
                 statusDiv.textContent = message;
                 statusDiv.style.display = 'block';
                 
                 // Set color based on type
-                if (type === 'error') {
+                if (type === 'error') {{
                     statusDiv.style.background = '#f8d7da';
                     statusDiv.style.borderColor = '#f5c6cb';
                     statusDiv.style.color = '#721c24';
-                } else if (type === 'success') {
+                }} else if (type === 'success') {{
                     statusDiv.style.background = '#d4edda';
                     statusDiv.style.borderColor = '#c3e6cb';
                     statusDiv.style.color = '#155724';
-                }
+                }}
                 
                 // Auto-hide after 5 seconds
-                setTimeout(() => {
+                setTimeout(() => {{
                     statusDiv.style.display = 'none';
-                }, 5000);
-            }
-        }
+                }}, 5000);
+            }}
+        }}
         
-        function checkFormAvailability() {
+        function checkFormAvailability() {{
             const campaignName = document.getElementById('campaignName');
             const subject = document.getElementById('subject');
             const body = document.getElementById('body');
             
-            if (!campaignName || !subject || !body) {
+            if (!campaignName || !subject || !body) {{
                 console.error('Form elements not found');
                 showFormStatus('Form elements not found. Please refresh the page.', 'error');
                 return false;
-            }
+            }}
             
             // Check if form is disabled or readonly
-            if (campaignName.disabled || subject.disabled || body.disabled) {
+            if (campaignName.disabled || subject.disabled || body.disabled) {{
                 console.warn('Form is currently disabled');
                 showFormStatus('Form is currently being used by another user. Please wait and try again.', 'warning');
                 return false;
-            }
+            }}
             
             return true;
-        }
+        }}
         
-        function clearCampaignForm() {
-            if (!checkFormAvailability()) {
+        function clearCampaignForm() {{
+            if (!checkFormAvailability()) {{
                 alert('Form is currently unavailable. Please refresh the page.');
                 return;
-            }
+            }}
             
             // Clear form fields (with null checks)
             const campaignName = document.getElementById('campaignName');
@@ -1948,9 +1918,9 @@ def serve_web_ui(event):
             if (subject) subject.value = '';
             
             // Clear Quill editor
-            if (quillEditor) {
+            if (quillEditor) {{
                 quillEditor.setContents([]);
-            }
+            }}
             
             // Clear campaign filters
             clearAllCampaignFilters();
@@ -1973,35 +1943,35 @@ def serve_web_ui(event):
             if (campaignTo) campaignTo.value = '';
             
             console.log('Campaign form cleared');
-        };
+        }};
         
         // Helper to parse comma-separated email lists into arrays
-        function parseEmails(input) {
+        function parseEmails(input) {{
             if (!input) return [];
             return input.split(',').map(s => s.trim()).filter(s => s.length > 0);
-        }
+        }}
         
         // Paste raw HTML into Quill editor
-        function pasteRawHTML() {
+        function pasteRawHTML() {{
             const htmlContent = prompt(
                 'Paste your HTML content below:\\n\\n' +
                 '✅ Supports: HTML formatting, styles, tables, links\\n' +
                 '✅ Images: Copy/paste images work (auto-converted to inline)\\n' +
-                '✅ Placeholders: Use {first_name}, {email}, etc.\\n\\n' +
+                '✅ Placeholders: Use {{{{first_name}}}}, {{{{email}}}}, etc.\\n\\n' +
                 'Your HTML:'
             );
             
-            if (htmlContent === null) {
+            if (htmlContent === null) {{
                 // User cancelled
                 return;
-            }
+            }}
             
-            if (!htmlContent.trim()) {
+            if (!htmlContent.trim()) {{
                 alert('No HTML content provided');
                 return;
-            }
+            }}
             
-            try {
+            try {{
                 console.log('Pasting raw HTML into Quill editor');
                 console.log('HTML length:', htmlContent.length);
                 
@@ -2012,68 +1982,68 @@ def serve_web_ui(event):
                 console.log('✅ HTML pasted successfully');
                 
                 // Show success message
-                setTimeout(() => {
+                setTimeout(() => {{
                     alert(
                         '✅ HTML Content Pasted Successfully!\\n\\n' +
                         'Your HTML has been imported into the editor.\\n\\n' +
                         'Note: Quill preserves formatting but may simplify some complex styles.\\n\\n' +
                         'You can now edit the content or send the campaign.'
                     );
-                }, 100);
+                }}, 100);
                 
-            } catch (error) {
+            }} catch (error) {{
                 console.error('Error pasting HTML:', error);
                 alert('Failed to paste HTML: ' + error.message);
-            }
-        }
+            }}
+        }}
         
-        async function loadContacts(resetPagination = true) {
+        async function loadContacts(resetPagination = true) {{
             console.log('loadContacts called, resetPagination:', resetPagination);
             const button = event?.target || document.querySelector('button[onclick="loadContacts()"]');
             const originalText = button?.textContent || '🔄 Load Contacts';
             
-            if (resetPagination) {
+            if (resetPagination) {{
                 // Reset pagination to first page
-                paginationState = {
+                paginationState = {{
                     currentPage: 1,
                     pageSize: 25,  // Fixed page size (page size dropdown removed)
                     paginationKeys: [null],
                     hasNextPage: false,
                     displayedContacts: []
-                };
-            }
+                }};
+            }}
             
-            try {
-                if (button) {
+            try {{
+                if (button) {{
                     button.textContent = '⏳ Loading...';
                     button.disabled = true;
-                }
+                }}
                 
                 // Show skeleton loading state
                 const tbody = document.querySelector('#contactsTable tbody');
-                if (tbody) {
+                if (tbody) {{
                     tbody.innerHTML = '';
-                    for (let i = 0; i < paginationState.pageSize; i++) {
+                    for (let i = 0; i < paginationState.pageSize; i++) {{
                         tbody.innerHTML += '<tr><td colspan="20" class="skeleton skeleton-row"></td></tr>';
-                    }
-                }
+                    }}
+                }}
                 
                 // Get the pagination key for the current page
                 const paginationKey = paginationState.paginationKeys[paginationState.currentPage - 1];
                 
                 // Build URL with pagination parameters
-                let url = `${API_URL}/contacts?limit=${paginationState.pageSize}`;
-                if (paginationKey) {
-                    url += `&lastKey=${encodeURIComponent(JSON.stringify(paginationKey))}`;
-                }
+                let url = `${{API_URL}}/contacts?limit=${{paginationState.pageSize}}`;
+                if (paginationKey) {{
+                    url += `&lastKey=${{encodeURIComponent(JSON.stringify(paginationKey))}}`;
+                }}
                 
                 console.log('Fetching contacts from:', url);
                 const response = await fetch(url);
                 console.log('Contacts response status:', response.status);
                 
-                if (!response.ok) {
-                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-                }
+                if (!response.ok) {{
+                    throw new Error(`HTTP ${{response.status}}: ${{response.statusText}}`);
+                }}
                 
                 const result = await response.json();
                 console.log('Contacts result:', result);
@@ -2082,9 +2052,9 @@ def serve_web_ui(event):
                 paginationState.hasNextPage = result.lastEvaluatedKey ? true : false;
                 
                 // Store the lastEvaluatedKey for the next page
-                if (result.lastEvaluatedKey && paginationState.paginationKeys.length === paginationState.currentPage) {
+                if (result.lastEvaluatedKey && paginationState.paginationKeys.length === paginationState.currentPage) {{
                     paginationState.paginationKeys.push(result.lastEvaluatedKey);
-                }
+                }}
                 
                 console.log('Loaded contacts count:', paginationState.displayedContacts.length);
                 console.log('Has next page:', paginationState.hasNextPage);
@@ -2092,34 +2062,34 @@ def serve_web_ui(event):
                 displayContacts(paginationState.displayedContacts);
                 updatePaginationControls();
                 
-                if (button) {
+                if (button) {{
                     button.textContent = '✅ Loaded';
-                    setTimeout(() => {
+                    setTimeout(() => {{
                         button.textContent = originalText;
-                    }, 1500);
-                }
+                    }}, 1500);
+                }}
                 
-            } catch (error) {
+            }} catch (error) {{
                 console.error('Error loading contacts:', error);
                 const tbody = document.getElementById('contactsBody');
                 tbody.innerHTML = '<tr><td colspan="3" style="text-align: center; color: var(--danger-color); padding: 40px;">Error loading contacts: ' + error.message + '</td></tr>';
                 
-                if (button) {
+                if (button) {{
                     button.textContent = 'Error';
-                    setTimeout(() => {
+                    setTimeout(() => {{
                         button.textContent = originalText;
-                    }, 2000);
-                }
-            } finally {
-                if (button) {
+                    }}, 2000);
+                }}
+            }} finally {{
+                if (button) {{
                     button.disabled = false;
-                }
-            }
-        }
+                }}
+            }}
+        }}
         
-        function updatePaginationControls() {
+        function updatePaginationControls() {{
             // Update page info
-            document.getElementById('pageInfo').textContent = `Page ${paginationState.currentPage}`;
+            document.getElementById('pageInfo').textContent = `Page ${{paginationState.currentPage}}`;
             
             // Update prev button
             const prevBtn = document.getElementById('prevPageBtn');
@@ -2132,61 +2102,61 @@ def serve_web_ui(event):
             nextBtn.disabled = !paginationState.hasNextPage;
             nextBtn.style.background = !paginationState.hasNextPage ? '#9ca3af' : '#3b82f6';
             nextBtn.style.cursor = !paginationState.hasNextPage ? 'not-allowed' : 'pointer';
-        }
+        }}
         
-        async function nextPage() {
+        async function nextPage() {{
             if (!paginationState.hasNextPage) return;
             
             paginationState.currentPage++;
             await loadContacts(false);
-        }
+        }}
         
-        async function previousPage() {
+        async function previousPage() {{
             if (paginationState.currentPage === 1) return;
             
             paginationState.currentPage--;
             await loadContacts(false);
-        }
+        }}
         
         // changePageSize function removed - page size dropdown removed from UI (fixed at 25 contacts per page)
         
-        async function loadAllContacts() {
+        async function loadAllContacts() {{
             await loadContacts();
             document.getElementById('filterType').value = '';
             document.getElementById('filterValueContainer').style.display = 'none';
             document.getElementById('nameSearch').value = '';
             applyContactFilter();
-        }
+        }}
         
-        async function loadGroupsFromDB() {
-            try {
+        async function loadGroupsFromDB() {{
+            try {{
                 console.log('Loading groups from DynamoDB...');
-                console.log('API URL:', `${API_URL}/groups`);
-                const response = await fetch(`${API_URL}/groups`);
+                console.log('API URL:', `${{API_URL}}/groups`);
+                const response = await fetch(`${{API_URL}}/groups`);
                 
-                if (response.ok) {
+                if (response.ok) {{
                     const result = await response.json();
                     allGroups = result.groups || [];
                     console.log('Loaded groups from API:', allGroups);
                     console.log('Number of groups found:', allGroups.length);
-                } else {
+                }} else {{
                     console.error('Error loading groups. Status:', response.status);
                     console.error('Response:', await response.text());
                     alert('Warning: Could not load groups from database. Status: ' + response.status);
-                }
-            } catch (error) {
+                }}
+            }} catch (error) {{
                 console.error('Error loading groups:', error);
                 alert('Error loading groups: ' + error.message + '\\n\\nMake sure the /groups endpoint is configured in API Gateway.');
-            }
-        }
+            }}
+        }}
         
-        async function loadContactsWithFilter() {
+        async function loadContactsWithFilter() {{
             // Legacy function - now just loads all contacts and applies filter
             await loadContacts();
             await applyContactFilter();
-        }
+        }}
         
-        async function applyContactFilter() {
+        async function applyContactFilter() {{
             console.log('Applying contact filter from DynamoDB...', selectedFilterValues);
             
             // Clear the contacts table
@@ -2200,35 +2170,35 @@ def serve_web_ui(event):
             // Check if any filters are selected
             const hasFilters = Object.keys(selectedFilterValues).length > 0;
             
-            if (hasFilters) {
-                try {
+            if (hasFilters) {{
+                try {{
                     // Build query parameters for backend
                     const filters = Object.entries(selectedFilterValues)
                         .filter(([key, values]) => values && values.length > 0)
-                        .map(([field, values]) => ({
+                        .map(([field, values]) => ({{
                             field: field,
                             values: values
-                        }));
+                        }}));
                     
                     console.log('Querying DynamoDB with filters:', filters);
                     
                     // Call backend API with filters
-                    const response = await fetch(`${API_URL}/contacts/filter`, {
+                    const response = await fetch(`${{API_URL}}/contacts/filter`, {{
                         method: 'POST',
-                        headers: {
+                        headers: {{
                             'Content-Type': 'application/json'
-                        },
-                        body: JSON.stringify({ filters: filters })
-                    });
+                        }},
+                        body: JSON.stringify({{ filters: filters }})
+                    }});
                     
-                    if (!response.ok) {
-                        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-                    }
+                    if (!response.ok) {{
+                        throw new Error(`HTTP ${{response.status}}: ${{response.statusText}}`);
+                    }}
                     
                     const result = await response.json();
                     const filteredContacts = result.contacts || [];
                     
-                    console.log(`Received ${filteredContacts.length} contacts from DynamoDB query`);
+                    console.log(`Received ${{filteredContacts.length}} contacts from DynamoDB query`);
                     
                     // Update allContacts with filtered results
                     allContacts = filteredContacts;
@@ -2240,7 +2210,7 @@ def serve_web_ui(event):
                     const filterCount = Object.values(selectedFilterValues).reduce((sum, vals) => sum + vals.length, 0);
                     const statusMsg = document.createElement('small');
                     statusMsg.style.cssText = 'color: #059669; font-weight: 600;';
-                    statusMsg.textContent = `Showing ${filteredContacts.length} contact(s) from DynamoDB (${filterCount} filter(s) applied)`;
+                    statusMsg.textContent = `Showing ${{filteredContacts.length}} contact(s) from DynamoDB (${{filterCount}} filter(s) applied)`;
                     
                     const tagsContainer = document.getElementById('selectedValuesTags');
                     const existingStatus = tagsContainer.querySelector('.filter-status');
@@ -2249,97 +2219,97 @@ def serve_web_ui(event):
                     statusMsg.className = 'filter-status';
                     tagsContainer.appendChild(statusMsg);
                     
-                } catch (error) {
+                }} catch (error) {{
                     console.error('Error querying DynamoDB with filters:', error);
                     tbody.innerHTML = '<tr><td colspan="20" style="text-align: center; padding: 40px; color: #ef4444; font-size: 14px;">❌ Error loading filtered contacts: ' + error.message + '</td></tr>';
-                }
-            } else {
+                }}
+            }} else {{
                 // No filters selected - load all contacts
                 console.log('No filters selected - loading all contacts from DynamoDB');
                 await loadContacts();
-            }
+            }}
             
             // Reset pagination
-            if (typeof paginationState !== 'undefined') {
+            if (typeof paginationState !== 'undefined') {{
                 paginationState.currentPage = 1;
                 paginationState.lastKeys = [null];
-            }
-        }
+            }}
+        }}
         
         
         // Debounce search to avoid too many API calls while typing
         let searchTimeout;
-        function debouncedSearch() {
+        function debouncedSearch() {{
             clearTimeout(searchTimeout);
             const searchTerm = document.getElementById('nameSearch').value.trim();
             const searchResults = document.getElementById('searchResults');
             
-            if (!searchTerm) {
+            if (!searchTerm) {{
                 // If empty, clear immediately and hide indicator
                 hideSearchingIndicator();
                 searchContactsByName();
                 return;
-            }
+            }}
             
             // Show "Typing..." while user is still typing
-            if (searchTerm.length >= 2) {
+            if (searchTerm.length >= 2) {{
                 searchResults.textContent = 'Typing...';
                 searchResults.style.color = '#9ca3af';
-            }
+            }}
             
             // Wait 500ms after user stops typing, then search
-            searchTimeout = setTimeout(() => {
+            searchTimeout = setTimeout(() => {{
                 searchContactsByName();
-            }, 500);
-        }
+            }}, 500);
+        }}
         
-        function updateFilterCount() {
+        function updateFilterCount() {{
             // Legacy function - filter count is now displayed in the tags area
             // This is kept for compatibility with old code
-        }
+        }}
         
-        async function searchContactsByName() {
+        async function searchContactsByName() {{
             const searchTerm = document.getElementById('nameSearch').value.trim();
             const searchResults = document.getElementById('searchResults');
             const searchingIndicator = document.getElementById('searchingIndicator');
             
-            if (!searchTerm) {
+            if (!searchTerm) {{
                 // Empty search - apply current filter or show all
                 searchResults.textContent = '';
                 hideSearchingIndicator();
                 applyContactFilter();
                 return;
-            }
+            }}
             
-            if (searchTerm.length < 2) {
+            if (searchTerm.length < 2) {{
                 searchResults.textContent = 'Enter at least 2 characters to search';
                 hideSearchingIndicator();
                 return;
-            }
+            }}
             
-            try {
-                console.log(`Searching DynamoDB for: "${searchTerm}"`);
+            try {{
+                console.log(`Searching DynamoDB for: "${{searchTerm}}"`);
                 
                 // Show searching indicator with fade-in
                 showSearchingIndicator();
                 searchResults.textContent = '';
                 
                 // Search DynamoDB via API
-                const response = await fetch(`${API_URL}/contacts/search`, {
+                const response = await fetch(`${{API_URL}}/contacts/search`, {{
                     method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ search_term: searchTerm })
-                });
+                    headers: {{'Content-Type': 'application/json'}},
+                    body: JSON.stringify({{ search_term: searchTerm }})
+                }});
                 
                 console.log('Search response status:', response.status);
                 console.log('Search response ok:', response.ok);
                 
-                if (response.ok) {
+                if (response.ok) {{
                     const result = await response.json();
                     console.log('Search result:', result);
                     const searchedContacts = result.contacts || [];
                     
-                    console.log(`✅ Found ${searchedContacts.length} contacts matching "${searchTerm}"`);
+                    console.log(`✅ Found ${{searchedContacts.length}} contacts matching "${{searchTerm}}"`);
                     
                     // Apply category filter on search results if active
                     const filterType = document.getElementById('filterType').value;
@@ -2347,119 +2317,119 @@ def serve_web_ui(event):
                     
                     let finalContacts = searchedContacts;
                     
-                    if (filterType && checkedBoxes.length > 0) {
+                    if (filterType && checkedBoxes.length > 0) {{
                         const selectedValues = Array.from(checkedBoxes).map(cb => cb.value);
-                        finalContacts = searchedContacts.filter(contact => {
+                        finalContacts = searchedContacts.filter(contact => {{
                             const contactValue = getFieldValue(contact, filterType);
                             return contactValue && selectedValues.includes(contactValue);
-                        });
-                        searchResults.textContent = `Found ${finalContacts.length} contact(s) matching "${searchTerm}" with selected filters`;
-                    } else {
-                        searchResults.textContent = `Found ${finalContacts.length} contact(s) matching "${searchTerm}"`;
-                    }
+                        }});
+                        searchResults.textContent = `Found ${{finalContacts.length}} contact(s) matching "${{searchTerm}}" with selected filters`;
+                    }} else {{
+                        searchResults.textContent = `Found ${{finalContacts.length}} contact(s) matching "${{searchTerm}}"`;
+                    }}
                     
                     searchResults.style.color = '#10b981';  // Green for success
                     displayContacts(finalContacts);
                     
                     // Hide searching indicator with fade-out
                     hideSearchingIndicator();
-                } else {
+                }} else {{
                     const errorText = await response.text();
                     console.error('❌ Search failed:', response.status, errorText);
-                    searchResults.textContent = `Search failed (HTTP ${response.status}). Check console for details.`;
+                    searchResults.textContent = `Search failed (HTTP ${{response.status}}). Check console for details.`;
                     searchResults.style.color = '#ef4444';  // Red for error
                     hideSearchingIndicator();
-                }
-            } catch (error) {
+                }}
+            }} catch (error) {{
                 console.error('Search error:', error);
                 searchResults.textContent = 'Search error: ' + error.message;
                 searchResults.style.color = '#ef4444';  // Red for error
                 hideSearchingIndicator();
-            }
-        }
+            }}
+        }}
         
-        function showSearchingIndicator() {
+        function showSearchingIndicator() {{
             const indicator = document.getElementById('searchingIndicator');
             indicator.classList.remove('hide');
             indicator.classList.add('show');
-        }
+        }}
         
-        function hideSearchingIndicator() {
+        function hideSearchingIndicator() {{
             const indicator = document.getElementById('searchingIndicator');
             indicator.classList.remove('show');
             indicator.classList.add('hide');
-        }
+        }}
         
-        function displayContacts(contacts) {
+        function displayContacts(contacts) {{
             const tbody = document.getElementById('contactsBody');
             tbody.innerHTML = '';
             
-            if (contacts && contacts.length > 0) {
-                contacts.forEach((contact, index) => {
+            if (contacts && contacts.length > 0) {{
+                contacts.forEach((contact, index) => {{
                 const row = tbody.insertRow();
                 row.setAttribute('data-email', contact.email);
                 row.setAttribute('data-contact-id', contact.contact_id || contact.email);
                 row.innerHTML = `
-                    <td style="background: #dbeafe; font-weight: 600; color: #1e40af; border-right: 2px solid #60a5fa;">${contact.email || ''}</td>
-                    <td contenteditable="true" data-field="first_name" class="editable-cell">${contact.first_name || ''}</td>
-                    <td contenteditable="true" data-field="last_name" class="editable-cell">${contact.last_name || ''}</td>
-                    <td contenteditable="true" data-field="title" class="editable-cell">${contact.title || ''}</td>
-                    <td contenteditable="true" data-field="entity_type" class="editable-cell">${contact.entity_type || ''}</td>
-                    <td contenteditable="true" data-field="state" class="editable-cell">${contact.state || ''}</td>
-                    <td contenteditable="true" data-field="agency_name" class="editable-cell">${contact.agency_name || ''}</td>
-                    <td contenteditable="true" data-field="sector" class="editable-cell">${contact.sector || ''}</td>
-                    <td contenteditable="true" data-field="subsection" class="editable-cell">${contact.subsection || ''}</td>
-                    <td contenteditable="true" data-field="phone" class="editable-cell">${contact.phone || ''}</td>
-                    <td contenteditable="true" data-field="ms_isac_member" class="editable-cell yes-no-cell">${contact.ms_isac_member || ''}</td>
-                    <td contenteditable="true" data-field="soc_call" class="editable-cell yes-no-cell">${contact.soc_call || ''}</td>
-                    <td contenteditable="true" data-field="fusion_center" class="editable-cell yes-no-cell">${contact.fusion_center || ''}</td>
-                    <td contenteditable="true" data-field="k12" class="editable-cell yes-no-cell">${contact.k12 || ''}</td>
-                    <td contenteditable="true" data-field="water_wastewater" class="editable-cell yes-no-cell">${contact.water_wastewater || ''}</td>
-                    <td contenteditable="true" data-field="weekly_rollup" class="editable-cell yes-no-cell">${contact.weekly_rollup || ''}</td>
-                    <td contenteditable="true" data-field="alternate_email" class="editable-cell">${contact.alternate_email || ''}</td>
-                    <td contenteditable="true" data-field="region" class="editable-cell">${contact.region || ''}</td>
+                    <td style="background: #dbeafe; font-weight: 600; color: #1e40af; border-right: 2px solid #60a5fa;">${{contact.email || ''}}</td>
+                    <td contenteditable="true" data-field="first_name" class="editable-cell">${{contact.first_name || ''}}</td>
+                    <td contenteditable="true" data-field="last_name" class="editable-cell">${{contact.last_name || ''}}</td>
+                    <td contenteditable="true" data-field="title" class="editable-cell">${{contact.title || ''}}</td>
+                    <td contenteditable="true" data-field="entity_type" class="editable-cell">${{contact.entity_type || ''}}</td>
+                    <td contenteditable="true" data-field="state" class="editable-cell">${{contact.state || ''}}</td>
+                    <td contenteditable="true" data-field="agency_name" class="editable-cell">${{contact.agency_name || ''}}</td>
+                    <td contenteditable="true" data-field="sector" class="editable-cell">${{contact.sector || ''}}</td>
+                    <td contenteditable="true" data-field="subsection" class="editable-cell">${{contact.subsection || ''}}</td>
+                    <td contenteditable="true" data-field="phone" class="editable-cell">${{contact.phone || ''}}</td>
+                    <td contenteditable="true" data-field="ms_isac_member" class="editable-cell yes-no-cell">${{contact.ms_isac_member || ''}}</td>
+                    <td contenteditable="true" data-field="soc_call" class="editable-cell yes-no-cell">${{contact.soc_call || ''}}</td>
+                    <td contenteditable="true" data-field="fusion_center" class="editable-cell yes-no-cell">${{contact.fusion_center || ''}}</td>
+                    <td contenteditable="true" data-field="k12" class="editable-cell yes-no-cell">${{contact.k12 || ''}}</td>
+                    <td contenteditable="true" data-field="water_wastewater" class="editable-cell yes-no-cell">${{contact.water_wastewater || ''}}</td>
+                    <td contenteditable="true" data-field="weekly_rollup" class="editable-cell yes-no-cell">${{contact.weekly_rollup || ''}}</td>
+                    <td contenteditable="true" data-field="alternate_email" class="editable-cell">${{contact.alternate_email || ''}}</td>
+                    <td contenteditable="true" data-field="region" class="editable-cell">${{contact.region || ''}}</td>
                     <td style="position: sticky; right: 0; background: #f8fafc; border-left: 2px solid #cbd5e1; box-shadow: -2px 0 4px rgba(0,0,0,0.05);">
-                        <button onclick="saveContactRow('${contact.email}')" class="btn-success" style="padding: 6px 12px; font-size: 12px; font-weight: 600; margin-right: 5px;">💾 Save</button>
-                        <button onclick="deleteContactRow('${contact.contact_id || contact.email}')" class="btn-danger" style="padding: 6px 12px; font-size: 12px; font-weight: 600; background: #ef4444;">🗑️ Delete</button>
+                        <button onclick="saveContactRow('${{contact.email}}')" class="btn-success" style="padding: 6px 12px; font-size: 12px; font-weight: 600; margin-right: 5px;">💾 Save</button>
+                        <button onclick="deleteContactRow('${{contact.contact_id || contact.email}}')" class="btn-danger" style="padding: 6px 12px; font-size: 12px; font-weight: 600; background: #ef4444;">🗑️ Delete</button>
                     </td>
                 `;
                 
                 // Add blur event to cells to detect changes
                 const editableCells = row.querySelectorAll('.editable-cell');
-                editableCells.forEach(cell => {
-                    cell.addEventListener('focus', function() {
+                editableCells.forEach(cell => {{
+                    cell.addEventListener('focus', function() {{
                         this.setAttribute('data-original', this.textContent);
                         this.style.background = '#fff3cd';
-                    });
-                    cell.addEventListener('blur', function() {
-                        if (this.textContent !== this.getAttribute('data-original')) {
+                    }});
+                    cell.addEventListener('blur', function() {{
+                        if (this.textContent !== this.getAttribute('data-original')) {{
                             this.style.background = '#fef3c7'; // Changed indicator
                             row.style.background = '#fffbeb';
-                        } else {
+                        }} else {{
                             this.style.background = '';
-                        }
-                    });
-                });
-            });
-            } else {
+                        }}
+                    }});
+                }});
+            }});
+            }} else {{
                 tbody.innerHTML = '<tr><td colspan="19" style="text-align: center; color: var(--gray-500); padding: 40px;">No contacts found. Add some contacts to get started!</td></tr>';
-            }
+            }}
             
             // Update record count
             const recordCount = document.getElementById('recordCount');
             const startRecord = ((paginationState.currentPage - 1) * paginationState.pageSize) + 1;
             const endRecord = startRecord + contacts.length - 1;
-            recordCount.textContent = `Showing records ${startRecord} - ${endRecord}`;
-        }
+            recordCount.textContent = `Showing records ${{startRecord}} - ${{endRecord}}`;
+        }}
         
-        function addEmptyRow() {
+        function addEmptyRow() {{
             const tbody = document.getElementById('contactsBody');
             
             // Check if there's already a new row being added
-            if (document.querySelector('tr.new-contact-row')) {
+            if (document.querySelector('tr.new-contact-row')) {{
                 alert('Please complete or cancel the current new contact before adding another');
                 return;
-            }
+            }}
             
             // Insert new row at the top
             const row = tbody.insertRow(0);
@@ -2495,63 +2465,63 @@ def serve_web_ui(event):
             
             // Clear placeholder text on focus
             const emailCell = row.querySelector('td[data-field="email"]');
-            emailCell.addEventListener('focus', function() {
-                if (this.textContent.trim() === 'email@example.com' || this.querySelector('span')) {
+            emailCell.addEventListener('focus', function() {{
+                if (this.textContent.trim() === 'email@example.com' || this.querySelector('span')) {{
                     this.textContent = '';
                     this.style.color = '#1e40af';
-                }
-            });
+                }}
+            }});
             
             // Focus on email field
             setTimeout(() => emailCell.focus(), 100);
             
             console.log('✅ New empty row added');
-        }
+        }}
         
-        function cancelNewContact() {
+        function cancelNewContact() {{
             const newRow = document.querySelector('tr.new-contact-row');
-            if (newRow) {
+            if (newRow) {{
                 newRow.remove();
                 console.log('❌ New contact cancelled');
-            }
-        }
+            }}
+        }}
         
-        async function saveNewContact() {
-            try {
+        async function saveNewContact() {{
+            try {{
                 const row = document.querySelector('tr.new-contact-row');
-                if (!row) {
+                if (!row) {{
                     alert('New contact row not found');
                     return;
-                }
+                }}
                 
                 // Get all cells
                 const cells = row.querySelectorAll('.editable-cell');
                 
                 // Build contact object
-                const contactData = {};
+                const contactData = {{}};
                 let emailFound = false;
                 
-                cells.forEach(cell => {
+                cells.forEach(cell => {{
                     const field = cell.getAttribute('data-field');
                     let value = cell.textContent.trim();
                     
                     // Skip placeholder text
-                    if (field === 'email' && (value === 'email@example.com' || !value)) {
+                    if (field === 'email' && (value === 'email@example.com' || !value)) {{
                         value = '';
-                    }
+                    }}
                     
-                    if (field === 'email' && value) {
+                    if (field === 'email' && value) {{
                         emailFound = true;
-                    }
+                    }}
                     
                     contactData[field] = value;
-                });
+                }});
                 
                 // Validate email
-                if (!emailFound || !contactData.email) {
+                if (!emailFound || !contactData.email) {{
                     alert('Email is required!');
                     return;
-                }
+                }}
                 
                 console.log('Creating new contact:', contactData);
                 
@@ -2562,15 +2532,15 @@ def serve_web_ui(event):
                 saveBtn.disabled = true;
                 
                 // Send POST request to create contact
-                const response = await fetch(`${API_URL}/contacts`, {
+                const response = await fetch(`${{API_URL}}/contacts`, {{
                     method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
+                    headers: {{'Content-Type': 'application/json'}},
                     body: JSON.stringify(contactData)
-                });
+                }});
                 
                 const result = await response.json();
                 
-                if (result.success) {
+                if (result.success) {{
                     console.log('✅ New contact created');
                     
                     // Remove the new row
@@ -2581,25 +2551,25 @@ def serve_web_ui(event):
                     
                     // Reload contacts to show the new one
                     await loadContacts(false);
-                } else {
+                }} else {{
                     throw new Error(result.error || 'Save failed');
-                }
+                }}
                 
-            } catch (error) {
+            }} catch (error) {{
                 console.error('❌ Error creating contact:', error);
                 alert('Error creating contact: ' + error.message);
                 
                 const row = document.querySelector('tr.new-contact-row');
-                if (row) {
+                if (row) {{
                     const saveBtn = row.querySelector('.btn-success');
                     saveBtn.textContent = '💾 Save';
                     saveBtn.disabled = false;
-                }
-            }
-        }
+                }}
+            }}
+        }}
         
-        function showDeleteConfirmation() {
-            return new Promise((resolve) => {
+        function showDeleteConfirmation() {{
+            return new Promise((resolve) => {{
                 // Create modal overlay
                 const overlay = document.createElement('div');
                 overlay.style.cssText = `
@@ -2677,95 +2647,95 @@ def serve_web_ui(event):
                 confirmBtn.onmouseout = () => confirmBtn.style.background = '#ef4444';
                 
                 // Handle button clicks
-                cancelBtn.onclick = () => {
+                cancelBtn.onclick = () => {{
                     overlay.style.animation = 'fadeOut 0.2s ease-in-out';
-                    setTimeout(() => {
+                    setTimeout(() => {{
                         document.body.removeChild(overlay);
                         resolve(false);
-                    }, 200);
-                };
+                    }}, 200);
+                }};
                 
-                confirmBtn.onclick = () => {
+                confirmBtn.onclick = () => {{
                     overlay.style.animation = 'fadeOut 0.2s ease-in-out';
-                    setTimeout(() => {
+                    setTimeout(() => {{
                         document.body.removeChild(overlay);
                         resolve(true);
-                    }, 200);
-                };
+                    }}, 200);
+                }};
                 
                 // Add animations
                 const style = document.createElement('style');
                 style.textContent = `
-                    @keyframes fadeIn {
-                        from { opacity: 0; }
-                        to { opacity: 1; }
-                    }
-                    @keyframes fadeOut {
-                        from { opacity: 1; }
-                        to { opacity: 0; }
-                    }
-                    @keyframes slideIn {
-                        from { transform: translateY(-20px); opacity: 0; }
-                        to { transform: translateY(0); opacity: 1; }
-                    }
+                    @keyframes fadeIn {{
+                        from {{ opacity: 0; }}
+                        to {{ opacity: 1; }}
+                    }}
+                    @keyframes fadeOut {{
+                        from {{ opacity: 1; }}
+                        to {{ opacity: 0; }}
+                    }}
+                    @keyframes slideIn {{
+                        from {{ transform: translateY(-20px); opacity: 0; }}
+                        to {{ transform: translateY(0); opacity: 1; }}
+                    }}
                 `;
                 document.head.appendChild(style);
-            });
-        }
+            }});
+        }}
         
-        async function deleteContactRow(contactId) {
-            try {
+        async function deleteContactRow(contactId) {{
+            try {{
                 // Custom confirmation using modal
                 const confirmed = await showDeleteConfirmation();
-                if (!confirmed) {
+                if (!confirmed) {{
                     return;
-                }
+                }}
                 
                 console.log('Deleting contact:', contactId);
                 
-                const response = await fetch(`${API_URL}/contacts?contact_id=${encodeURIComponent(contactId)}`, {
+                const response = await fetch(`${{API_URL}}/contacts?contact_id=${{encodeURIComponent(contactId)}}`, {{
                     method: 'DELETE',
-                    headers: {
+                    headers: {{
                         'Content-Type': 'application/json'
-                    }
-                });
+                    }}
+                }});
                 
                 console.log('Delete response status:', response.status);
                 
-                if (response.ok) {
+                if (response.ok) {{
                     // Show success toast that auto-fades (no OK button needed)
                     Toast.success('✅ Contact deleted successfully', 3000);
                     
                     // Remove the row from the table
-                    const row = document.querySelector(`tr[data-contact-id="${contactId}"]`);
-                    if (row) {
+                    const row = document.querySelector(`tr[data-contact-id="${{contactId}}"]`);
+                    if (row) {{
                         row.remove();
-                    }
+                    }}
                     
                     // Update the record count
                     const recordCount = document.getElementById('recordCount');
-                    if (recordCount) {
+                    if (recordCount) {{
                         const currentCount = parseInt(recordCount.textContent.match(/\\d+/)[0] || 0);
-                        recordCount.textContent = `${currentCount - 1} records`;
-                    }
-                } else {
+                        recordCount.textContent = `${{currentCount - 1}} records`;
+                    }}
+                }} else {{
                     const errorData = await response.json();
-                    Toast.error(`Failed to delete contact: ${errorData.error || 'Unknown error'}`);
-                }
-            } catch (error) {
+                    Toast.error(`Failed to delete contact: ${{errorData.error || 'Unknown error'}}`);
+                }}
+            }} catch (error) {{
                 console.error('Error deleting contact:', error);
                 Toast.error('Failed to delete contact. Please try again.');
-            }
-        }
+            }}
+        }}
         
-        async function saveContactRow(email) {
-            try {
+        async function saveContactRow(email) {{
+            try {{
                 // Find the row with this email
-                const row = document.querySelector(`tr[data-email="${email}"]`);
-                if (!row) {
+                const row = document.querySelector(`tr[data-email="${{email}}"]`);
+                if (!row) {{
                     Toast.error('Row not found');
                     return;
-                }
+                }}
                 
                 // Get contact_id from row attribute
                 const contactId = row.getAttribute('data-contact-id');
@@ -2774,16 +2744,16 @@ def serve_web_ui(event):
                 const cells = row.querySelectorAll('.editable-cell');
                 
                 // Build updated contact object
-                const contactData = {
+                const contactData = {{
                     email: email,
                     contact_id: contactId  // Use actual contact_id from DynamoDB
-                };
+                }};
                 
-                cells.forEach(cell => {
+                cells.forEach(cell => {{
                     const field = cell.getAttribute('data-field');
                     const value = cell.textContent.trim();
                     contactData[field] = value;
-                });
+                }});
                 
                 console.log('Saving contact:', contactData);
                 
@@ -2794,69 +2764,69 @@ def serve_web_ui(event):
                 button.disabled = true;
                 
                 // Send PUT request to update contact
-                const response = await fetch(`${API_URL}/contacts`, {
+                const response = await fetch(`${{API_URL}}/contacts`, {{
                     method: 'PUT',
-                    headers: {'Content-Type': 'application/json'},
+                    headers: {{'Content-Type': 'application/json'}},
                     body: JSON.stringify(contactData)
-                });
+                }});
                 
                 const result = await response.json();
                 
-                if (result.success) {
+                if (result.success) {{
                     button.textContent = '✅ Saved';
                     row.style.background = '#d1fae5'; // Success green
                     Toast.success('Contact updated successfully!', 3000);
                     
                     // Reset cell backgrounds
-                    cells.forEach(cell => {
+                    cells.forEach(cell => {{
                         cell.style.background = '';
-                    });
+                    }});
                     
-                    setTimeout(() => {
+                    setTimeout(() => {{
                         button.textContent = originalText;
                         row.style.background = '';
-                    }, 2000);
+                    }}, 2000);
                     
                     console.log('Contact saved successfully');
-                } else {
+                }} else {{
                     throw new Error(result.error || 'Save failed');
-                }
+                }}
                 
-            } catch (error) {
+            }} catch (error) {{
                 console.error('Error saving contact:', error);
                 alert('Error saving contact: ' + error.message);
                 
-                const row = document.querySelector(`tr[data-email="${email}"]`);
-                if (row) {
+                const row = document.querySelector(`tr[data-email="${{email}}"]`);
+                if (row) {{
                     const button = row.querySelector('button');
                     button.textContent = '❌ Error';
-                    setTimeout(() => {
+                    setTimeout(() => {{
                         button.textContent = '💾 Save';
-                    }, 2000);
-                }
-            } finally {
-                const row = document.querySelector(`tr[data-email="${email}"]`);
-                if (row) {
+                    }}, 2000);
+                }}
+            }} finally {{
+                const row = document.querySelector(`tr[data-email="${{email}}"]`);
+                if (row) {{
                     const button = row.querySelector('button');
                     button.disabled = false;
-                }
-            }
-        }
+                }}
+            }}
+        }}
         
-        function showAddContact() {
+        function showAddContact() {{
             document.getElementById('addContactForm').classList.remove('hidden');
-        }
+        }}
         
-        function hideAddContact() {
+        function hideAddContact() {{
             document.getElementById('addContactForm').classList.add('hidden');
-        }
+        }}
         
-        function editContact(email) {
+        function editContact(email) {{
             const contact = allContacts.find(c => c.email === email);
-            if (!contact) {
+            if (!contact) {{
                 alert('Contact not found');
                 return;
-            }
+            }}
             
             // Populate edit form with contact data
             document.getElementById('editEmail').value = contact.email || '';
@@ -2880,15 +2850,15 @@ def serve_web_ui(event):
             
             // Show edit form
             document.getElementById('editContactForm').classList.remove('hidden');
-        }
+        }}
         
-        function hideEditContact() {
+        function hideEditContact() {{
             document.getElementById('editContactForm').classList.add('hidden');
-        }
+        }}
         
-        async function saveContactEdit() {
+        async function saveContactEdit() {{
             const email = document.getElementById('editEmail').value;
-            const contactData = {
+            const contactData = {{
                 email: email,
                 first_name: document.getElementById('editFirstName').value,
                 last_name: document.getElementById('editLastName').value,
@@ -2907,32 +2877,32 @@ def serve_web_ui(event):
                 weekly_rollup: document.getElementById('editWeeklyRollup').value,
                 alternate_email: document.getElementById('editAlternateEmail').value,
                 region: document.getElementById('editRegion').value
-            };
+            }};
             
-            try {
-                const response = await fetch(`${API_URL}/contacts`, {
+            try {{
+                const response = await fetch(`${{API_URL}}/contacts`, {{
                     method: 'PUT',
-                    headers: {'Content-Type': 'application/json'},
+                    headers: {{'Content-Type': 'application/json'}},
                     body: JSON.stringify(contactData)
-                });
+                }});
                 
                 const result = await response.json();
-                if (result.success) {
+                if (result.success) {{
                     hideEditContact();
                     loadContacts(); // Refresh the contacts list
                     // loadGroupsFromDB(); // Disabled - groups feature removed
                     alert('Contact updated successfully!');
-                } else {
+                }} else {{
                     alert('Error updating contact: ' + (result.error || 'Unknown error'));
-                }
-            } catch (error) {
+                }}
+            }} catch (error) {{
                 console.error('Error updating contact:', error);
                 alert('Error updating contact: ' + error.message);
-            }
-        }
+            }}
+        }}
         
-        async function addContact() {
-            const contact = {
+        async function addContact() {{
+            const contact = {{
                 email: document.getElementById('newEmail').value,
                 first_name: document.getElementById('newFirstName').value,
                 last_name: document.getElementById('newLastName').value,
@@ -2951,16 +2921,16 @@ def serve_web_ui(event):
                 weekly_rollup: document.getElementById('newWeeklyRollup').value,
                 alternate_email: document.getElementById('newAlternateEmail').value,
                 region: document.getElementById('newRegion').value
-            };
+            }};
             
-            const response = await fetch(`${API_URL}/contacts`, {
+            const response = await fetch(`${{API_URL}}/contacts`, {{
                 method: 'POST',
-                headers: {'Content-Type': 'application/json'},
+                headers: {{'Content-Type': 'application/json'}},
                 body: JSON.stringify(contact)
-            });
+            }});
             
             const result = await response.json();
-            if (result.success) {
+            if (result.success) {{
                 hideAddContact();
                 loadContacts();
                 // loadGroupsFromDB(); // Disabled - groups feature removed
@@ -2983,49 +2953,49 @@ def serve_web_ui(event):
                 document.getElementById('newWeeklyRollup').value = '';
                 document.getElementById('newAlternateEmail').value = '';
                 document.getElementById('newRegion').value = '';
-            }
-        }
+            }}
+        }}
         
-        async function viewContact(email) {
-            const response = await fetch(`${API_URL}/contacts`);
+        async function viewContact(email) {{
+            const response = await fetch(`${{API_URL}}/contacts`);
             const result = await response.json();
             const contact = result.contacts.find(c => c.email === email);
             
-            if (contact) {
+            if (contact) {{
                 alert(`Contact Details:\\n\\n` +
-                    `Email: ${contact.email}\\n` +
-                    `Name: ${contact.first_name} ${contact.last_name}\\n` +
-                    `Title: ${contact.title || 'N/A'}\\n` +
-                    `Entity Type: ${contact.entity_type || 'N/A'}\\n` +
-                    `State: ${contact.state || 'N/A'}\\n` +
-                    `Agency: ${contact.agency_name || 'N/A'}\\n` +
-                    `Sector: ${contact.sector || 'N/A'}\\n` +
-                    `Subsection: ${contact.subsection || 'N/A'}\\n` +
-                    `Phone: ${contact.phone || 'N/A'}\\n` +
-                    `MS-ISAC Member: ${contact.ms_isac_member || 'N/A'}\\n` +
-                    `SOC Call: ${contact.soc_call || 'N/A'}\\n` +
-                    `Fusion Center: ${contact.fusion_center || 'N/A'}\\n` +
-                    `K-12: ${contact.k12 || 'N/A'}\\n` +
-                    `Water/Wastewater: ${contact.water_wastewater || 'N/A'}\\n` +
-                    `Weekly Rollup: ${contact.weekly_rollup || 'N/A'}\\n` +
-                    `Alternate Email: ${contact.alternate_email || 'N/A'}\\n` +
-                    `Region: ${contact.region || 'N/A'}\\n` +
-                    `Group: ${contact.group || 'N/A'}`
+                    `Email: ${{contact.email}}\\n` +
+                    `Name: ${{contact.first_name}} ${{contact.last_name}}\\n` +
+                    `Title: ${{contact.title || 'N/A'}}\\n` +
+                    `Entity Type: ${{contact.entity_type || 'N/A'}}\\n` +
+                    `State: ${{contact.state || 'N/A'}}\\n` +
+                    `Agency: ${{contact.agency_name || 'N/A'}}\\n` +
+                    `Sector: ${{contact.sector || 'N/A'}}\\n` +
+                    `Subsection: ${{contact.subsection || 'N/A'}}\\n` +
+                    `Phone: ${{contact.phone || 'N/A'}}\\n` +
+                    `MS-ISAC Member: ${{contact.ms_isac_member || 'N/A'}}\\n` +
+                    `SOC Call: ${{contact.soc_call || 'N/A'}}\\n` +
+                    `Fusion Center: ${{contact.fusion_center || 'N/A'}}\\n` +
+                    `K-12: ${{contact.k12 || 'N/A'}}\\n` +
+                    `Water/Wastewater: ${{contact.water_wastewater || 'N/A'}}\\n` +
+                    `Weekly Rollup: ${{contact.weekly_rollup || 'N/A'}}\\n` +
+                    `Alternate Email: ${{contact.alternate_email || 'N/A'}}\\n` +
+                    `Region: ${{contact.region || 'N/A'}}\\n` +
+                    `Group: ${{contact.group || 'N/A'}}`
                 );
-            }
-        }
+            }}
+        }}
         
-        async function deleteContact(email) {
-            if (confirm('Delete contact?')) {
-                await fetch(`${API_URL}/contacts?email=${encodeURIComponent(email)}`, {method: 'DELETE'});
+        async function deleteContact(email) {{
+            if (confirm('Delete contact?')) {{
+                await fetch(`${{API_URL}}/contacts?email=${{encodeURIComponent(email)}}`, {{method: 'DELETE'}});
                 loadContacts();
-            }
-        }
+            }}
+        }}
         
         // Global variable to track CSV upload cancellation
         let csvUploadCancelled = false;
         
-        async function uploadCSV() {
+        async function uploadCSV() {{
             const file = document.getElementById('csvFile').files[0];
             if (!file) return;
             
@@ -3036,57 +3006,57 @@ def serve_web_ui(event):
             // Show progress bar
             document.getElementById('csvUploadProgress').classList.remove('hidden');
             
-            try {
+            try {{
             const text = await file.text();
             const lines = text.split('\\n').filter(line => line.trim());
                 
                 console.log('Total lines in CSV:', lines.length);
             
-            if (lines.length < 2) {
+            if (lines.length < 2) {{
                 alert('CSV file must have at least a header row and one data row');
                     hideCSVProgress();
                 return;
-            }
+            }}
             
                 // Better CSV parsing - handle quoted fields
-                function parseCSVLine(line) {
+                function parseCSVLine(line) {{
                     const result = [];
                     let current = '';
                     let inQuotes = false;
                     
-                    for (let i = 0; i < line.length; i++) {
+                    for (let i = 0; i < line.length; i++) {{
                         const char = line[i];
                         
-                        if (char === '"') {
+                        if (char === '"') {{
                             inQuotes = !inQuotes;
-                        } else if (char === ',' && !inQuotes) {
+                        }} else if (char === ',' && !inQuotes) {{
                             result.push(current.trim());
                             current = '';
-                        } else {
+                        }} else {{
                             current += char;
-                        }
-                    }
+                        }}
+                    }}
                     result.push(current.trim());
                     return result;
-                }
+                }}
                 
                 const headers = parseCSVLine(lines[0]).map(h => h.trim().toLowerCase());
                 console.log('CSV Headers:', headers);
                 
                 // Parse all contacts first
                 const allContacts = [];
-            for (let i = 1; i < lines.length; i++) {
+            for (let i = 1; i < lines.length; i++) {{
                     const values = parseCSVLine(lines[i]);
                 
-                    if (values.length !== headers.length) {
-                        console.warn(`Row ${i}: Column count mismatch. Got ${values.length}, expected ${headers.length}`);
+                    if (values.length !== headers.length) {{
+                        console.warn(`Row ${{i}}: Column count mismatch. Got ${{values.length}}, expected ${{headers.length}}`);
                         continue;
-                    }
+                    }}
                 
-                const contact = {};
-                headers.forEach((header, index) => {
+                const contact = {{}};
+                headers.forEach((header, index) => {{
                     // Map CSV headers to contact fields
-                    const fieldMap = {
+                    const fieldMap = {{
                         'email': 'email',
                         'email_address': 'email',
                             'email address': 'email',
@@ -3126,26 +3096,26 @@ def serve_web_ui(event):
                         'alt_email': 'alternate_email',
                         'region': 'region',
                         'group': 'group'
-                    };
+                    }};
                     
                     const fieldName = fieldMap[header];
-                    if (fieldName) {
+                    if (fieldName) {{
                         contact[fieldName] = values[index];
-                    }
-                });
+                    }}
+                }});
                 
-                if (contact.email) {
+                if (contact.email) {{
                         allContacts.push(contact);
-                    }
-                }
+                    }}
+                }}
                 
-                console.log(`Parsed ${allContacts.length} valid contacts from CSV`);
+                console.log(`Parsed ${{allContacts.length}} valid contacts from CSV`);
                 
-                if (allContacts.length === 0) {
+                if (allContacts.length === 0) {{
                     alert('No valid contacts found in CSV file');
                     hideCSVProgress();
                     return;
-                }
+                }}
                 
                 // Process in batches of 25 (DynamoDB batch limit)
                 const BATCH_SIZE = 25;
@@ -3156,142 +3126,142 @@ def serve_web_ui(event):
                 
                 updateCSVProgress(0, allContacts.length, 'Starting import...');
                 
-                for (let batchNum = 0; batchNum < totalBatches; batchNum++) {
+                for (let batchNum = 0; batchNum < totalBatches; batchNum++) {{
                     // Check if cancelled
-                    if (csvUploadCancelled) {
+                    if (csvUploadCancelled) {{
                         console.log('CSV upload cancelled by user');
-                        alert(`Import cancelled.\\nImported: ${imported} contacts\\nRemaining: ${allContacts.length - imported}`);
+                        alert(`Import cancelled.\\nImported: ${{imported}} contacts\\nRemaining: ${{allContacts.length - imported}}`);
                         hideCSVProgress();
                         return;
-                    }
+                    }}
                     
                     const start = batchNum * BATCH_SIZE;
                     const end = Math.min(start + BATCH_SIZE, allContacts.length);
                     const batch = allContacts.slice(start, end);
                     
-                    console.log(`Processing batch ${batchNum + 1}/${totalBatches}: contacts ${start + 1}-${end}`);
+                    console.log(`Processing batch ${{batchNum + 1}}/${{totalBatches}}: contacts ${{start + 1}}-${{end}}`);
                     
-                    try {
-                        const response = await fetch(`${API_URL}/contacts/batch`, {
+                    try {{
+                        const response = await fetch(`${{API_URL}}/contacts/batch`, {{
                             method: 'POST',
-                            headers: {'Content-Type': 'application/json'},
-                            body: JSON.stringify({ contacts: batch })
-                        });
+                            headers: {{'Content-Type': 'application/json'}},
+                            body: JSON.stringify({{ contacts: batch }})
+                        }});
                         
-                        if (response.ok) {
+                        if (response.ok) {{
                             const result = await response.json();
                             imported += result.imported || 0;
                             errors += result.unprocessed || 0;
                             
                             const percentage = Math.round((imported / allContacts.length) * 100);
                             updateCSVProgress(imported, allContacts.length, 
-                                `Batch ${batchNum + 1}/${totalBatches} - Imported: ${imported}, Errors: ${errors}`);
+                                `Batch ${{batchNum + 1}}/${{totalBatches}} - Imported: ${{imported}}, Errors: ${{errors}}`);
                             
-                            console.log(`✓ Batch ${batchNum + 1} complete: +${result.imported} imported, ${result.unprocessed} failed`);
-                        } else {
+                            console.log(`✓ Batch ${{batchNum + 1}} complete: +${{result.imported}} imported, ${{result.unprocessed}} failed`);
+                        }} else {{
                             const errorText = await response.text();
-                            console.error(`Batch ${batchNum + 1} failed:`, response.status, errorText);
+                            console.error(`Batch ${{batchNum + 1}} failed:`, response.status, errorText);
                             errors += batch.length;
                             
                             // Track failed batch details
-                            failedBatches.push({
+                            failedBatches.push({{
                                 batchNum: batchNum + 1,
                                 rowStart: start + 1,
                                 rowEnd: end,
                                 contacts: batch,
-                                error: `HTTP ${response.status}: ${errorText}`
-                            });
+                                error: `HTTP ${{response.status}}: ${{errorText}}`
+                            }});
                             
                             updateCSVProgress(imported, allContacts.length, 
-                                `Batch ${batchNum + 1}/${totalBatches} FAILED - Imported: ${imported}, Errors: ${errors}`);
-                        }
-                    } catch (e) {
-                        console.error(`Batch ${batchNum + 1} exception:`, e);
+                                `Batch ${{batchNum + 1}}/${{totalBatches}} FAILED - Imported: ${{imported}}, Errors: ${{errors}}`);
+                        }}
+                    }} catch (e) {{
+                        console.error(`Batch ${{batchNum + 1}} exception:`, e);
                         errors += batch.length;
                         
                         // Track failed batch details
-                        failedBatches.push({
+                        failedBatches.push({{
                             batchNum: batchNum + 1,
                             rowStart: start + 1,
                             rowEnd: end,
                             contacts: batch,
                             error: e.message
-                        });
+                        }});
                         
                         updateCSVProgress(imported, allContacts.length, 
-                            `Batch ${batchNum + 1}/${totalBatches} ERROR - Imported: ${imported}, Errors: ${errors}`);
-                    }
+                            `Batch ${{batchNum + 1}}/${{totalBatches}} ERROR - Imported: ${{imported}}, Errors: ${{errors}}`);
+                    }}
                     
                     // Small delay to avoid overwhelming the API
                     await new Promise(resolve => setTimeout(resolve, 100));
-                }
+                }}
                 
                 console.log('Batch CSV Upload Complete. Imported:', imported, 'Errors:', errors);
                 
                 // Log failed batches details
-                if (failedBatches.length > 0) {
+                if (failedBatches.length > 0) {{
                     console.log('\\n=== FAILED BATCHES DETAILS ===');
-                    failedBatches.forEach(fb => {
-                        console.log(`\\nBatch ${fb.batchNum} (Rows ${fb.rowStart}-${fb.rowEnd}):`);
-                        console.log(`  Error: ${fb.error}`);
+                    failedBatches.forEach(fb => {{
+                        console.log(`\\nBatch ${{fb.batchNum}} (Rows ${{fb.rowStart}}-${{fb.rowEnd}}):`);
+                        console.log(`  Error: ${{fb.error}}`);
                         console.log(`  Failed contacts:`, fb.contacts);
-                    });
+                    }});
                     console.log('\\n=== END FAILED BATCHES ===\\n');
                     
                     // Create downloadable CSV of failed rows
                     window.failedContacts = failedBatches.flatMap(fb => fb.contacts);
                     console.log('To download failed contacts, run: downloadFailedContacts()');
-                }
+                }}
                 
                 hideCSVProgress();
                 
-                let message = `CSV Import Complete!\\n\\nImported: ${imported} contacts\\nErrors: ${errors}\\n\\nProcessed ${totalBatches} batches of up to 25 contacts each.`;
+                let message = `CSV Import Complete!\\n\\nImported: ${{imported}} contacts\\nErrors: ${{errors}}\\n\\nProcessed ${{totalBatches}} batches of up to 25 contacts each.`;
                 
-                if (failedBatches.length > 0) {
-                    message += `\\n\\n⚠️ ${failedBatches.length} batches failed (${errors} contacts).`;
+                if (failedBatches.length > 0) {{
+                    message += `\\n\\n⚠️ ${{failedBatches.length}} batches failed (${{errors}} contacts).`;
                     message += `\\n\\nTo see failed rows:\\n1. Open Console (F12)\\n2. Look for "FAILED BATCHES DETAILS"\\n3. Run: downloadFailedContacts()`;
-                }
+                }}
                 
                 alert(message);
                 
             loadContacts();
                 // loadGroupsFromDB(); // Disabled - groups feature removed
                 
-            } catch (error) {
+            }} catch (error) {{
                 console.error('CSV upload error:', error);
                 hideCSVProgress();
                 alert('Error during CSV import: ' + error.message);
-            }
-        }
+            }}
+        }}
         
-        function updateCSVProgress(current, total, message) {
+        function updateCSVProgress(current, total, message) {{
             const percentage = Math.round((current / total) * 100);
             const progressBar = document.getElementById('csvProgressBar');
             const progressText = document.getElementById('csvProgressText');
             
             progressBar.style.width = percentage + '%';
             progressBar.textContent = percentage + '%';
-            progressText.textContent = message + ` (${current} / ${total})`;
-        }
+            progressText.textContent = message + ` (${{current}} / ${{total}})`;
+        }}
         
-        function hideCSVProgress() {
+        function hideCSVProgress() {{
             document.getElementById('csvUploadProgress').classList.add('hidden');
             document.getElementById('csvProgressBar').style.width = '0%';
             document.getElementById('csvProgressBar').textContent = '';
             document.getElementById('csvProgressText').textContent = '';
-        }
+        }}
         
-        function cancelCSVUpload() {
-            if (confirm('Are you sure you want to cancel the import? Progress will be saved up to this point.')) {
+        function cancelCSVUpload() {{
+            if (confirm('Are you sure you want to cancel the import? Progress will be saved up to this point.')) {{
                 csvUploadCancelled = true;
-            }
-        }
+            }}
+        }}
         
-        function downloadFailedContacts() {
-            if (!window.failedContacts || window.failedContacts.length === 0) {
+        function downloadFailedContacts() {{
+            if (!window.failedContacts || window.failedContacts.length === 0) {{
                 console.log('No failed contacts to download. Import completed successfully or no errors were tracked.');
                 return;
-            }
+            }}
             
             // Create CSV content
             const headers = ['email', 'first_name', 'last_name', 'title', 'entity_type', 'state', 'agency_name', 
@@ -3300,20 +3270,20 @@ def serve_web_ui(event):
             
             let csvContent = headers.join(',') + '\\n';
             
-            window.failedContacts.forEach(contact => {
-                const row = headers.map(header => {
+            window.failedContacts.forEach(contact => {{
+                const row = headers.map(header => {{
                     const value = contact[header] || '';
                     // Escape values that contain commas or quotes
-                    if (value.includes(',') || value.includes('"')) {
+                    if (value.includes(',') || value.includes('"')) {{
                         return '"' + value.replace(/"/g, '""') + '"';
-                    }
+                    }}
                     return value;
-                });
+                }});
                 csvContent += row.join(',') + '\\n';
-            });
+            }});
             
             // Create download link
-            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const blob = new Blob([csvContent], {{ type: 'text/csv;charset=utf-8;' }});
             const link = document.createElement('a');
             const url = URL.createObjectURL(blob);
             
@@ -3325,65 +3295,65 @@ def serve_web_ui(event):
             link.click();
             document.body.removeChild(link);
             
-            console.log(`Downloaded ${window.failedContacts.length} failed contacts to CSV file`);
-        }
+            console.log(`Downloaded ${{window.failedContacts.length}} failed contacts to CSV file`);
+        }}
         
         // Campaign Filter State
         let currentCampaignFilterType = null;
-        let selectedCampaignFilterValues = {};  // {filterType: [values]}
+        let selectedCampaignFilterValues = {{}};  // {{filterType: [values]}}
         let campaignFilteredContacts = null;  // null = no filter applied, [] = filter applied but no results, [...] = filtered contacts
         
-        async function selectCampaignFilterType(filterType) {
+        async function selectCampaignFilterType(filterType) {{
             console.log('Campaign filter type selected:', filterType, 'Current type:', currentCampaignFilterType);
             
             const countDisplay = document.getElementById('campaignContactCount');
             const countNumber = document.getElementById('campaignContactCountNumber');
             
             // Allow toggling off by clicking the same button (including "All")
-            if (currentCampaignFilterType === filterType) {
+            if (currentCampaignFilterType === filterType) {{
                 console.log('Toggling off current campaign filter type');
                 currentCampaignFilterType = null;
                 document.getElementById('campaignAvailableValuesArea').style.display = 'none';
                 countDisplay.style.display = 'none';
                 updateCampaignButtonStyles();
                 return;
-            }
+            }}
             
             currentCampaignFilterType = filterType;
             console.log('New current campaign filter type:', currentCampaignFilterType);
             updateCampaignButtonStyles();
             
             // If "All" is selected, get count from DynamoDB and display
-            if (filterType === '') {
+            if (filterType === '') {{
                 document.getElementById('campaignAvailableValuesArea').style.display = 'none';
                 
                 // Fetch all contacts count from DynamoDB
-                try {
+                try {{
                     console.log('Fetching all contacts count from DynamoDB...');
-                    const response = await fetch(`${API_URL}/contacts?limit=1`);
-                    if (!response.ok) {
-                        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-                    }
+                    const response = await fetch(`${{API_URL}}/contacts?limit=1`);
+                    if (!response.ok) {{
+                        throw new Error(`HTTP ${{response.status}}: ${{response.statusText}}`);
+                    }}
                     const data = await response.json();
                     
                     // Use the scan to get actual count
-                    const countResponse = await fetch(`${API_URL}/contacts?limit=10000`);
-                    if (!countResponse.ok) {
-                        throw new Error(`HTTP ${countResponse.status}: ${countResponse.statusText}`);
-                    }
+                    const countResponse = await fetch(`${{API_URL}}/contacts?limit=10000`);
+                    if (!countResponse.ok) {{
+                        throw new Error(`HTTP ${{countResponse.status}}: ${{countResponse.statusText}}`);
+                    }}
                     const countData = await countResponse.json();
                     const totalContacts = (countData.contacts || []).length;
                     
                     // Display the count
                     countNumber.textContent = totalContacts;
                     countDisplay.style.display = 'block';
-                    console.log(`Total contacts in DynamoDB: ${totalContacts}`);
-                } catch (error) {
+                    console.log(`Total contacts in DynamoDB: ${{totalContacts}}`);
+                }} catch (error) {{
                     console.error('Error fetching contacts count:', error);
                     countDisplay.style.display = 'none';
-                }
+                }}
                 return;
-            }
+            }}
             
             // Show loading state
             const availableValuesList = document.getElementById('campaignAvailableValuesList');
@@ -3391,14 +3361,14 @@ def serve_web_ui(event):
             availableValuesList.innerHTML = '<small style="color: #6b7280;">Loading values...</small>';
             document.getElementById('campaignAvailableValuesArea').style.display = 'block';
             
-            try {
+            try {{
                 // Call the backend /contacts/distinct endpoint
-                console.log(`Fetching distinct values for campaign: ${filterType}`);
-                const response = await fetch(`${API_URL}/contacts/distinct?field=${encodeURIComponent(filterType)}`);
+                console.log(`Fetching distinct values for campaign: ${{filterType}}`);
+                const response = await fetch(`${{API_URL}}/contacts/distinct?field=${{encodeURIComponent(filterType)}}`);
                 
-                if (!response.ok) {
-                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-                }
+                if (!response.ok) {{
+                    throw new Error(`HTTP ${{response.status}}: ${{response.statusText}}`);
+                }}
                 
                 const data = await response.json();
                 console.log('Distinct values received for campaign:', data);
@@ -3407,112 +3377,112 @@ def serve_web_ui(event):
                 
                 // Populate available values as clickable buttons
                 availableValuesList.innerHTML = '';
-                if (distinctValues.length === 0) {
+                if (distinctValues.length === 0) {{
                     availableValuesList.innerHTML = '<small style="color: #ef4444;">No values found for this field</small>';
                     availableCount.textContent = '0 values available';
-                } else {
-                    distinctValues.forEach(value => {
+                }} else {{
+                    distinctValues.forEach(value => {{
                         const btn = document.createElement('button');
                         btn.textContent = value;
                         btn.onclick = () => addCampaignFilterValue(filterType, value);
                         btn.style.cssText = 'padding: 6px 12px; background: #3b82f6; color: white; border: none; border-radius: 6px; font-size: 12px; cursor: pointer; transition: all 0.2s;';
-                        btn.onmouseover = () => { btn.style.background = '#2563eb'; };
-                        btn.onmouseout = () => { btn.style.background = '#3b82f6'; };
+                        btn.onmouseover = () => {{ btn.style.background = '#2563eb'; }};
+                        btn.onmouseout = () => {{ btn.style.background = '#3b82f6'; }};
                         availableValuesList.appendChild(btn);
-                    });
-                    availableCount.textContent = `${distinctValues.length} value(s) available`;
-                }
-            } catch (error) {
+                    }});
+                    availableCount.textContent = `${{distinctValues.length}} value(s) available`;
+                }}
+            }} catch (error) {{
                 console.error('Error loading campaign distinct values:', error);
-                availableValuesList.innerHTML = `<small style="color: #ef4444;">Error: ${error.message}</small>`;
+                availableValuesList.innerHTML = `<small style="color: #ef4444;">Error: ${{error.message}}</small>`;
                 availableCount.textContent = '';
-            }
-        }
+            }}
+        }}
         
-        function addCampaignFilterValue(filterType, value) {
-            if (!selectedCampaignFilterValues[filterType]) {
+        function addCampaignFilterValue(filterType, value) {{
+            if (!selectedCampaignFilterValues[filterType]) {{
                 selectedCampaignFilterValues[filterType] = [];
-            }
+            }}
             
-            if (!selectedCampaignFilterValues[filterType].includes(value)) {
+            if (!selectedCampaignFilterValues[filterType].includes(value)) {{
                 selectedCampaignFilterValues[filterType].push(value);
                 console.log('Added campaign filter value:', filterType, value);
                 updateCampaignSelectedValuesTags();
-            }
-        }
+            }}
+        }}
         
-        function removeCampaignFilterValue(filterType, value) {
-            if (selectedCampaignFilterValues[filterType]) {
+        function removeCampaignFilterValue(filterType, value) {{
+            if (selectedCampaignFilterValues[filterType]) {{
                 selectedCampaignFilterValues[filterType] = selectedCampaignFilterValues[filterType].filter(v => v !== value);
-                if (selectedCampaignFilterValues[filterType].length === 0) {
+                if (selectedCampaignFilterValues[filterType].length === 0) {{
                     delete selectedCampaignFilterValues[filterType];
-                }
+                }}
                 console.log('Removed campaign filter value:', filterType, value);
                 updateCampaignSelectedValuesTags();
-            }
-        }
+            }}
+        }}
         
-        function updateCampaignSelectedValuesTags() {
+        function updateCampaignSelectedValuesTags() {{
             const tagsContainer = document.getElementById('campaignSelectedValuesTags');
             tagsContainer.innerHTML = '';
             
             const hasFilters = Object.keys(selectedCampaignFilterValues).length > 0;
             
-            if (!hasFilters) {
+            if (!hasFilters) {{
                 tagsContainer.innerHTML = '<small style="color: #9ca3af; font-style: italic;">No filters selected - will send to all contacts</small>';
                 return;
-            }
+            }}
             
             // Display all selected filters as tags
-            for (const [filterType, values] of Object.entries(selectedCampaignFilterValues)) {
-                values.forEach(value => {
+            for (const [filterType, values] of Object.entries(selectedCampaignFilterValues)) {{
+                values.forEach(value => {{
                     const tag = document.createElement('div');
                     tag.style.cssText = 'display: inline-flex; align-items: center; padding: 6px 10px; background: linear-gradient(135deg, #3b82f6, #2563eb); color: white; border-radius: 6px; font-size: 12px; font-weight: 600;';
                     tag.innerHTML = `
-                        <span style="margin-right: 8px;">${filterType}: ${value}</span>
-                        <button onclick="removeCampaignFilterValue('${filterType}', '${value}')" style="background: rgba(255,255,255,0.3); border: none; border-radius: 50%; width: 18px; height: 18px; min-width: 18px; max-width: 18px; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 14px; line-height: 1; color: white; font-weight: bold; padding: 0; flex-shrink: 0;">×</button>
+                        <span style="margin-right: 8px;">${{filterType}}: ${{value}}</span>
+                        <button onclick="removeCampaignFilterValue('${{filterType}}', '${{value}}')" style="background: rgba(255,255,255,0.3); border: none; border-radius: 50%; width: 18px; height: 18px; min-width: 18px; max-width: 18px; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 14px; line-height: 1; color: white; font-weight: bold; padding: 0; flex-shrink: 0;">×</button>
                     `;
                     tagsContainer.appendChild(tag);
-                });
-            }
-        }
+                }});
+            }}
+        }}
         
-        async function applyCampaignFilter() {
+        async function applyCampaignFilter() {{
             console.log('Applying campaign filter...', selectedCampaignFilterValues);
             
             const countDisplay = document.getElementById('campaignContactCount');
             const countNumber = document.getElementById('campaignContactCountNumber');
             
             // If no filters selected, reset to null (means fetch all contacts when sending)
-            if (Object.keys(selectedCampaignFilterValues).length === 0) {
+            if (Object.keys(selectedCampaignFilterValues).length === 0) {{
                 campaignFilteredContacts = null;  // null means no filter, will fetch all contacts
                 countDisplay.style.display = 'none';
                 console.log('No filters selected. Campaign will send to all contacts in database.');
                 return;
-            }
+            }}
             
             // Build filters array for API
             const filters = Object.entries(selectedCampaignFilterValues)
-                .map(([field, values]) => ({
+                .map(([field, values]) => ({{
                     field: field,
                     values: values
-                }));
+                }}));
             
             console.log('Campaign filter request:', filters);
             
-            try {
+            try {{
                 // Call the backend /contacts/filter endpoint
-                const response = await fetch(`${API_URL}/contacts/filter`, {
+                const response = await fetch(`${{API_URL}}/contacts/filter`, {{
                     method: 'POST',
-                    headers: {
+                    headers: {{
                         'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({ filters: filters })
-                });
+                    }},
+                    body: JSON.stringify({{ filters: filters }})
+                }});
                 
-                if (!response.ok) {
-                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-                }
+                if (!response.ok) {{
+                    throw new Error(`HTTP ${{response.status}}: ${{response.statusText}}`);
+                }}
                 
                 const data = await response.json();
                 console.log('Campaign filtered contacts received:', data);
@@ -3523,83 +3493,83 @@ def serve_web_ui(event):
                 countNumber.textContent = campaignFilteredContacts.length;
                 countDisplay.style.display = 'block';
                 
-                if (campaignFilteredContacts.length === 0) {
+                if (campaignFilteredContacts.length === 0) {{
                     console.warn('No contacts match the selected filters.');
-                }
-            } catch (error) {
+                }}
+            }} catch (error) {{
                 console.error('Error applying campaign filter:', error);
-                alert(`Error loading filtered contacts: ${error.message}`);
-            }
-        }
+                alert(`Error loading filtered contacts: ${{error.message}}`);
+            }}
+        }}
         
-        function clearAllCampaignFilters() {
-            selectedCampaignFilterValues = {};
+        function clearAllCampaignFilters() {{
+            selectedCampaignFilterValues = {{}};
             currentCampaignFilterType = null;
             campaignFilteredContacts = null;  // null means no filter applied
             document.getElementById('campaignAvailableValuesArea').style.display = 'none';
             document.getElementById('campaignContactCount').style.display = 'none';
             updateCampaignSelectedValuesTags();
             updateCampaignButtonStyles();
-        }
+        }}
         
-        function updateCampaignButtonStyles() {
+        function updateCampaignButtonStyles() {{
             const buttons = document.querySelectorAll('.campaign-filter-type-btn');
-            buttons.forEach(btn => {
+            buttons.forEach(btn => {{
                 const filterValue = btn.getAttribute('data-filter');
-                if (filterValue === currentCampaignFilterType) {
+                if (filterValue === currentCampaignFilterType) {{
                     btn.style.background = 'linear-gradient(135deg, #3b82f6, #2563eb)';
                     btn.style.color = 'white';
                     btn.style.borderColor = '#2563eb';
                     btn.style.boxShadow = '0 2px 8px rgba(59, 130, 246, 0.3)';
-                } else {
+                }} else {{
                     btn.style.background = 'white';
                     btn.style.color = '#374151';
                     btn.style.borderColor = '#e5e7eb';
                     btn.style.boxShadow = 'none';
-                }
-            });
-        }
+                }}
+            }});
+        }}
         
         // ============================================
         // TARGET CONTACTS MODAL
         // ============================================
-        let targetContactsModalState = {
+        let targetContactsModalState = {{
             currentPage: 1,
             pageSize: 25,
             totalContacts: [],
             totalPages: 1
-        };
+        }};
         
-        async function openTargetContactsModal() {
+        async function openTargetContactsModal() {{
             const modal = document.getElementById('targetContactsModal');
             
             // Determine which contacts to show
             let contacts = [];
             
-            if (campaignFilteredContacts && Array.isArray(campaignFilteredContacts) && campaignFilteredContacts.length > 0) {
+            if (campaignFilteredContacts && Array.isArray(campaignFilteredContacts) && campaignFilteredContacts.length > 0) {{
                 // Use filtered contacts (already loaded)
                 contacts = campaignFilteredContacts;
-                console.log(`Using ${contacts.length} filtered contacts for modal`);
-            } else if (Object.keys(selectedCampaignFilterValues || {}).length > 0) {
+                console.log(`Using ${{contacts.length}} filtered contacts for modal`);
+            }} else if (Object.keys(selectedCampaignFilterValues || {{}}).length > 0) {{
                 // User selected filters but didn't apply them
                 Toast.warning('Please click "Apply Filter" first to see target contacts.');
                 return;
-            } else {
+            }} else {{
                 // No filters - load all contacts using pagination (handles 20k+ contacts)
                 Toast.info('Loading all contacts with pagination...', 2000);
-                try {
+                try {{
                     contacts = await fetchAllContactsPaginated();
-                    console.log(`Loaded ${contacts.length} contacts for modal using pagination`);
-                } catch (error) {
-                    Toast.error(`Failed to load contacts: ${error.message}`);
+                    console.log(`Loaded ${{contacts.length}} contacts for modal using pagination`);
+                }} catch (error) {{
+                    Toast.error(`Failed to load contacts: ${{error.message}}`);
                     return;
-                }
-            }
+                }}
+            }}
             
-            if (contacts.length === 0) {
+            if (contacts.length === 0) {{
                 Toast.warning('No target contacts found.');
                 return;
-            }
+            }}
             
             // Initialize modal state
             targetContactsModalState.totalContacts = contacts;
@@ -3615,26 +3585,26 @@ def serve_web_ui(event):
             // Show modal
             modal.style.display = 'flex';
             document.body.style.overflow = 'hidden'; // Prevent background scrolling
-        }
+        }}
         
-        function closeTargetContactsModal() {
+        function closeTargetContactsModal() {{
             const modal = document.getElementById('targetContactsModal');
             modal.style.display = 'none';
             document.body.style.overflow = ''; // Restore scrolling
-        }
+        }}
         
-        function loadTargetContactsPage(direction) {
-            if (direction === 'next' && targetContactsModalState.currentPage < targetContactsModalState.totalPages) {
+        function loadTargetContactsPage(direction) {{
+            if (direction === 'next' && targetContactsModalState.currentPage < targetContactsModalState.totalPages) {{
                 targetContactsModalState.currentPage++;
-            } else if (direction === 'prev' && targetContactsModalState.currentPage > 1) {
+            }} else if (direction === 'prev' && targetContactsModalState.currentPage > 1) {{
                 targetContactsModalState.currentPage--;
-            }
+            }}
             
             displayTargetContactsPage();
-        }
+        }}
         
-        function displayTargetContactsPage() {
-            const { currentPage, pageSize, totalContacts, totalPages } = targetContactsModalState;
+        function displayTargetContactsPage() {{
+            const {{ currentPage, pageSize, totalContacts, totalPages }} = targetContactsModalState;
             
             // Calculate start and end indices
             const startIdx = (currentPage - 1) * pageSize;
@@ -3645,30 +3615,30 @@ def serve_web_ui(event):
             const tbody = document.getElementById('targetContactsTableBody');
             tbody.innerHTML = '';
             
-            if (pageContacts.length === 0) {
+            if (pageContacts.length === 0) {{
                 tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; padding: 40px; color: #6b7280;">No contacts to display</td></tr>';
                 return;
-            }
+            }}
             
-            pageContacts.forEach((contact, index) => {
+            pageContacts.forEach((contact, index) => {{
                 const globalIndex = startIdx + index + 1;
                 const row = document.createElement('tr');
                 row.innerHTML = `
-                    <td style="font-weight: 600; color: #6b7280;">${globalIndex}</td>
-                    <td>${contact.first_name || contact.FirstName || '-'}</td>
-                    <td>${contact.last_name || contact.LastName || '-'}</td>
-                    <td style="color: #3b82f6; font-weight: 500;">${contact.email || '-'}</td>
-                    <td>${contact.agency_name || contact.AgencyName || '-'}</td>
-                    <td>${contact.state || contact.State || '-'}</td>
-                    <td>${contact.entity_type || contact.EntityType || '-'}</td>
+                    <td style="font-weight: 600; color: #6b7280;">${{globalIndex}}</td>
+                    <td>${{contact.first_name || contact.FirstName || '-'}}</td>
+                    <td>${{contact.last_name || contact.LastName || '-'}}</td>
+                    <td style="color: #3b82f6; font-weight: 500;">${{contact.email || '-'}}</td>
+                    <td>${{contact.agency_name || contact.AgencyName || '-'}}</td>
+                    <td>${{contact.state || contact.State || '-'}}</td>
+                    <td>${{contact.entity_type || contact.EntityType || '-'}}</td>
                 `;
                 tbody.appendChild(row);
-            });
+            }});
             
             // Update pagination info
             document.getElementById('modalCurrentPage').textContent = currentPage;
             document.getElementById('modalTotalPages').textContent = totalPages;
-            document.getElementById('modalShowingCount').textContent = `${startIdx + 1}-${endIdx}`;
+            document.getElementById('modalShowingCount').textContent = `${{startIdx + 1}}-${{endIdx}}`;
             
             // Update button states
             const prevBtn = document.getElementById('modalPrevBtn');
@@ -3681,21 +3651,21 @@ def serve_web_ui(event):
             nextBtn.disabled = currentPage === totalPages;
             nextBtn.style.opacity = currentPage === totalPages ? '0.5' : '1';
             nextBtn.style.cursor = currentPage === totalPages ? 'not-allowed' : 'pointer';
-        }
+        }}
         
         // Close modal when clicking outside of it
-        window.onclick = function(event) {
+        window.onclick = function(event) {{
             const modal = document.getElementById('targetContactsModal');
-            if (event.target === modal) {
+            if (event.target === modal) {{
                 closeTargetContactsModal();
-            }
-        }
+            }}
+        }}
         
         // Attachment handling
         let campaignAttachments = [];
         const MAX_ATTACHMENT_SIZE = 40 * 1024 * 1024; // 40 MB in bytes (AWS SES v2 limit)
         
-        async function handleAttachmentUpload() {
+        async function handleAttachmentUpload() {{
             const fileInput = document.getElementById('attachmentFiles');
             const files = Array.from(fileInput.files);
             
@@ -3703,101 +3673,101 @@ def serve_web_ui(event):
             
             // Calculate total size
             let totalSize = campaignAttachments.reduce((sum, att) => sum + att.size, 0);
-            for (const file of files) {
+            for (const file of files) {{
                 totalSize += file.size;
-            }
+            }}
             
-            if (totalSize > MAX_ATTACHMENT_SIZE) {
-                alert(`Total attachment size exceeds 40 MB limit.\\nCurrent total: ${(totalSize / 1024 / 1024).toFixed(2)} MB\\nPlease remove some files.`);
+            if (totalSize > MAX_ATTACHMENT_SIZE) {{
+                alert(`Total attachment size exceeds 40 MB limit.\\nCurrent total: ${{(totalSize / 1024 / 1024).toFixed(2)}} MB\\nPlease remove some files.`);
                 fileInput.value = ''; // Clear selection
                 return;
-            }
+            }}
             
             // Upload files to S3
-            for (const file of files) {
-                try {
-                    console.log(`Uploading attachment: ${file.name} (${(file.size / 1024).toFixed(1)} KB)`);
+            for (const file of files) {{
+                try {{
+                    console.log(`Uploading attachment: ${{file.name}} (${{(file.size / 1024).toFixed(1)}} KB)`);
                     const s3Key = await uploadAttachmentToS3(file);
                     
-                    campaignAttachments.push({
+                    campaignAttachments.push({{
                         filename: file.name,
                         size: file.size,
                         type: file.type,
                         s3_key: s3Key
-                    });
+                    }});
                     
-                    console.log(`✓ Uploaded: ${file.name} to S3 as ${s3Key}`);
-                } catch (error) {
-                    console.error(`Error uploading ${file.name}:`, error);
-                    let errorMsg = `Failed to upload ${file.name}: ${error.message}`;
+                    console.log(`✓ Uploaded: ${{file.name}} to S3 as ${{s3Key}}`);
+                }} catch (error) {{
+                    console.error(`Error uploading ${{file.name}}:`, error);
+                    let errorMsg = `Failed to upload ${{file.name}}: ${{error.message}}`;
                     
-                    if (error.message.includes('404')) {
+                    if (error.message.includes('404')) {{
                         errorMsg += '\\n\\nThe /upload-attachment endpoint is not configured.\\nPlease run: python add_attachment_endpoint.py';
-                    } else if (error.message.includes('403')) {
+                    }} else if (error.message.includes('403')) {{
                         errorMsg += '\\n\\nLambda function does not have S3 permissions.\\nCheck IAM role permissions for S3 bucket access.';
-                    } else if (error.message.includes('500')) {
+                    }} else if (error.message.includes('500')) {{
                         errorMsg += '\\n\\nServer error. Check Lambda CloudWatch logs for details.';
-                    }
+                    }}
                     
                     alert(errorMsg);
                     fileInput.value = ''; // Clear input on error
                     return; // Stop processing more files
-                }
-            }
+                }}
+            }}
             
             displayAttachments();
             fileInput.value = ''; // Clear input
-        }
+        }}
         
-        async function uploadAttachmentToS3(file) {
+        async function uploadAttachmentToS3(file) {{
             const timestamp = Date.now();
             const randomStr = Math.random().toString(36).substring(7);
-            const s3Key = `campaign-attachments/${timestamp}-${randomStr}-${file.name}`;
+            const s3Key = `campaign-attachments/${{timestamp}}-${{randomStr}}-${{file.name}}`;
             
             // Convert file to base64
             const base64Data = await fileToBase64(file);
             
             // Upload to S3 via Lambda
-            const response = await fetch(`${API_URL}/upload-attachment`, {
+            const response = await fetch(`${{API_URL}}/upload-attachment`, {{
                 method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({
+                headers: {{'Content-Type': 'application/json'}},
+                body: JSON.stringify({{
                     filename: file.name,
                     content_type: file.type,
                     s3_key: s3Key,
                     data: base64Data
-                })
-            });
+                }})
+            }});
             
-            if (!response.ok) {
-                throw new Error(`Upload failed: ${response.status}`);
-            }
+            if (!response.ok) {{
+                throw new Error(`Upload failed: ${{response.status}}`);
+            }}
             
             const result = await response.json();
             return result.s3_key;
-        }
+        }}
         
-        function fileToBase64(file) {
-            return new Promise((resolve, reject) => {
+        function fileToBase64(file) {{
+            return new Promise((resolve, reject) => {{
                 const reader = new FileReader();
-                reader.onload = () => {
+                reader.onload = () => {{
                     const base64 = reader.result.split(',')[1];
                     resolve(base64);
-                };
+                }};
                 reader.onerror = reject;
                 reader.readAsDataURL(file);
-            });
-        }
+            }});
+        }}
         
-        function displayAttachments() {
+        function displayAttachments() {{
             const container = document.getElementById('attachmentsList');
             const sizeDiv = document.getElementById('attachmentSize');
             
-            if (campaignAttachments.length === 0) {
+            if (campaignAttachments.length === 0) {{
                 container.innerHTML = '';
                 sizeDiv.textContent = '';
                 return;
-            }
+            }}
             
             const totalSize = campaignAttachments.reduce((sum, att) => sum + att.size, 0);
             const totalSizeMB = (totalSize / 1024 / 1024).toFixed(2);
@@ -3806,24 +3776,24 @@ def serve_web_ui(event):
                 <div style="display: flex; align-items: center; justify-content: space-between; padding: 8px; background: #f3f4f6; border-radius: 4px; margin-bottom: 8px;">
                     <div style="display: flex; align-items: center; gap: 10px;">
                         <div>
-                            <div style="font-weight: 500;">📎 ${att.filename}</div>
-                            <div style="font-size: 12px; color: #6b7280;">💾 ${(att.size / 1024).toFixed(1)} KB</div>
+                            <div style="font-weight: 500;">📎 ${{att.filename}}</div>
+                            <div style="font-size: 12px; color: #6b7280;">💾 ${{(att.size / 1024).toFixed(1)}} KB</div>
                         </div>
                     </div>
-                    <button onclick="removeAttachment(${index})" style="background: #ef4444; padding: 6px 12px; font-size: 14px;">🗑️ Remove</button>
+                    <button onclick="removeAttachment(${{index}})" style="background: #ef4444; padding: 6px 12px; font-size: 14px;">🗑️ Remove</button>
                 </div>
             `).join('');
             
-            sizeDiv.innerHTML = `<strong>📊 Total size:</strong> ${totalSizeMB} MB / 40 MB ${totalSize > MAX_ATTACHMENT_SIZE ? '<span style="color: #ef4444;">❌ Exceeds limit!</span>' : '<span style="color: #10b981;">✅ OK</span>'}`;
-        }
+            sizeDiv.innerHTML = `<strong>📊 Total size:</strong> ${{totalSizeMB}} MB / 40 MB ${{totalSize > MAX_ATTACHMENT_SIZE ? '<span style="color: #ef4444;">❌ Exceeds limit!</span>' : '<span style="color: #10b981;">✅ OK</span>'}}`;
+        }}
         
-        function removeAttachment(index) {
+        function removeAttachment(index) {{
             campaignAttachments.splice(index, 1);
             displayAttachments();
-        }
+        }}
         
         // Fetch all contacts using pagination to handle large datasets (20k+ contacts)
-        async function fetchAllContactsPaginated() {
+        async function fetchAllContactsPaginated() {{
             let allContacts = [];
             let lastKey = null;
             let pageCount = 0;
@@ -3831,23 +3801,23 @@ def serve_web_ui(event):
             
             console.log('Starting paginated contact fetch...');
             
-            do {
+            do {{
                 pageCount++;
                 const urlParams = new URLSearchParams();
                 urlParams.append('limit', pageSize);
                 
-                if (lastKey) {
+                if (lastKey) {{
                     urlParams.append('lastKey', JSON.stringify(lastKey));
-                }
+                }}
                 
-                const url = `${API_URL}/contacts?${urlParams.toString()}`;
-                console.log(`Fetching page ${pageCount} (batch size: ${pageSize})...`);
+                const url = `${{API_URL}}/contacts?${{urlParams.toString()}}`;
+                console.log(`Fetching page ${{pageCount}} (batch size: ${{pageSize}})...`);
                 
                 const response = await fetch(url);
                 
-                if (!response.ok) {
-                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-                }
+                if (!response.ok) {{
+                    throw new Error(`HTTP ${{response.status}}: ${{response.statusText}}`);
+                }}
                 
                 const data = await response.json();
                 const contacts = data.contacts || [];
@@ -3855,48 +3825,48 @@ def serve_web_ui(event):
                 allContacts = allContacts.concat(contacts);
                 lastKey = data.lastEvaluatedKey || null;
                 
-                console.log(`Page ${pageCount}: Fetched ${contacts.length} contacts. Total so far: ${allContacts.length}`);
+                console.log(`Page ${{pageCount}}: Fetched ${{contacts.length}} contacts. Total so far: ${{allContacts.length}}`);
                 
                 // Show progress to user
-                if (pageCount % 5 === 0 || !lastKey) {
-                    Toast.info(`Loading contacts... ${allContacts.length} loaded`, 1000);
-                }
+                if (pageCount % 5 === 0 || !lastKey) {{
+                    Toast.info(`Loading contacts... ${{allContacts.length}} loaded`, 1000);
+                }}
                 
-            } while (lastKey);  // Continue until no more pages
+            }} while (lastKey);  // Continue until no more pages
             
-            console.log(`✅ Pagination complete: Loaded ${allContacts.length} total contacts in ${pageCount} pages`);
-            Toast.success(`Loaded ${allContacts.length} contacts successfully!`, 2000);
+            console.log(`✅ Pagination complete: Loaded ${{allContacts.length}} total contacts in ${{pageCount}} pages`);
+            Toast.success(`Loaded ${{allContacts.length}} contacts successfully!`, 2000);
             
             return allContacts;
-        }
+        }}
         
-        async function sendCampaign(event) {
+        async function sendCampaign(event) {{
             // Check form availability first
-            if (!checkFormAvailability()) {
+            if (!checkFormAvailability()) {{
                 alert('Form is currently unavailable. Please refresh the page and try again.');
                 return;
-            }
+            }}
             
             const button = event?.target || document.querySelector('.btn-success');
             const originalText = button?.textContent || 'Send Campaign';
             
-            try {
+            try {{
                 // IMPORTANT: Deactivate any active image resize handles first
                 // This ensures images are in their final state before processing
                 const resizeOverlays = document.querySelectorAll('.image-resize-overlay, .ql-image-resize-overlay');
                 const resizeHandles = document.querySelectorAll('.image-resize-handle, .ql-image-resize-handle');
                 
-                if (resizeOverlays.length > 0 || resizeHandles.length > 0) {
-                    console.log(`🔧 Detected ${resizeOverlays.length + resizeHandles.length} active resize handle(s) - deactivating...`);
+                if (resizeOverlays.length > 0 || resizeHandles.length > 0) {{
+                    console.log(`🔧 Detected ${{resizeOverlays.length + resizeHandles.length}} active resize handle(s) - deactivating...`);
                     // Click elsewhere in the editor to deactivate resize handles
                     quillEditor.root.blur();
                     quillEditor.root.focus();
                     // Small delay to let resize module clean up
                     await new Promise(resolve => setTimeout(resolve, 100));
                     console.log(`   ✅ Resize handles deactivated`);
-                } else {
+                }} else {{
                     console.log(`✅ No active resize handles detected`);
-                }
+                }}
                 
                 // Show loading state
                 button.textContent = 'Sending Campaign...';
@@ -3907,13 +3877,13 @@ def serve_web_ui(event):
             let targetContacts = [];
             let filterDescription = 'All Contacts';
             
-            console.log('Campaign filter debug:', {
+            console.log('Campaign filter debug:', {{
                 campaignFilteredContacts: campaignFilteredContacts === null ? 'null (no filter)' : 
-                                         Array.isArray(campaignFilteredContacts) ? `array with ${campaignFilteredContacts.length} items` : 
+                                         Array.isArray(campaignFilteredContacts) ? `array with ${{campaignFilteredContacts.length}} items` : 
                                          'invalid',
-                selectedCampaignFilterValuesKeys: Object.keys(selectedCampaignFilterValues || {}).length,
+                selectedCampaignFilterValuesKeys: Object.keys(selectedCampaignFilterValues || {{}}).length,
                 selectedCampaignFilterValues: selectedCampaignFilterValues
-            });
+            }});
             
             // Check for To/CC/BCC early to allow To/CC/BCC-only campaigns
             const toValue = document.getElementById('campaignTo')?.value || '';
@@ -3922,93 +3892,93 @@ def serve_web_ui(event):
             const hasToOrCcOrBcc = toValue.trim().length > 0 || ccValue.trim().length > 0 || bccValue.trim().length > 0;
             
             // THREE STATES: null = no filter, [] = filter with no results, [...] = filtered contacts
-            if (campaignFilteredContacts === null) {
+            if (campaignFilteredContacts === null) {{
                 // No filters applied - check if To/CC/BCC exist
-                if (!hasToOrCcOrBcc) {
+                if (!hasToOrCcOrBcc) {{
                     // No contacts selected and no To/CC/BCC
                     throw new Error('⚠️ Cannot send campaign: No targets selected.\\n\\nNo emails will be sent because you have not selected any targets.\\n\\nPlease select targets by:\\n• Clicking "All" to send to all contacts, OR\\n• Applying a filter to select specific contacts, OR\\n• Adding email addresses to To/CC/BCC fields\\n\\nThen click "Apply Filter" (if using contacts) before sending.');
-                }
+                }}
                 // To/CC/BCC exist, allow campaign with empty contact list
                 targetContacts = [];
                 filterDescription = 'To/CC/BCC Recipients Only';
                 console.log('Sending to To/CC/BCC recipients only (no contacts from database)');
-            } else if (Array.isArray(campaignFilteredContacts) && campaignFilteredContacts.length > 0) {
+            }} else if (Array.isArray(campaignFilteredContacts) && campaignFilteredContacts.length > 0) {{
                 // User has applied a filter and has results
                 targetContacts = campaignFilteredContacts;
-                const filterTags = Object.entries(selectedCampaignFilterValues || {})
-                    .map(([field, values]) => `${field}: ${values.join(', ')}`)
+                const filterTags = Object.entries(selectedCampaignFilterValues || {{}})
+                    .map(([field, values]) => `${{field}}: ${{values.join(', ')}}`)
                     .join('; ');
                 filterDescription = filterTags || 'Filtered Contacts';
-                console.log(`Using ${targetContacts.length} filtered contacts: ${filterDescription}`);
-            } else if (Array.isArray(campaignFilteredContacts) && campaignFilteredContacts.length === 0) {
+                console.log(`Using ${{targetContacts.length}} filtered contacts: ${{filterDescription}}`);
+            }} else if (Array.isArray(campaignFilteredContacts) && campaignFilteredContacts.length === 0) {{
                 // Filter was applied but returned no results - check if To/CC/BCC exist
-                if (!hasToOrCcOrBcc) {
+                if (!hasToOrCcOrBcc) {{
                     // No contacts from filter and no To/CC/BCC
                     throw new Error('⚠️ Cannot send campaign: Your filter returned 0 contacts.\\n\\nNo emails will be sent because no targets are selected.\\n\\nPlease adjust your filter criteria, clear filters to send to all contacts, or add email addresses to To/CC/BCC fields.');
-                }
+                }}
                 // To/CC/BCC exist, allow campaign even with 0 filtered contacts
                 targetContacts = [];
                 filterDescription = 'To/CC/BCC Recipients Only (Filter returned 0 contacts)';
                 console.log('Filter returned 0 contacts, but sending to To/CC/BCC recipients');
-            } else if (Object.keys(selectedCampaignFilterValues || {}).length > 0) {
+            }} else if (Object.keys(selectedCampaignFilterValues || {{}}).length > 0) {{
                 // User has selected filter values but hasn't clicked "Apply Filter"
                 console.log('Filters selected but not applied. Attempting to apply filter automatically...');
                 
-                try {
+                try {{
                     await applyCampaignFilter();
                     
                     // Check the result after applying
-                    if (campaignFilteredContacts && Array.isArray(campaignFilteredContacts) && campaignFilteredContacts.length > 0) {
+                    if (campaignFilteredContacts && Array.isArray(campaignFilteredContacts) && campaignFilteredContacts.length > 0) {{
                         targetContacts = campaignFilteredContacts;
                         const filterTags = Object.entries(selectedCampaignFilterValues)
-                            .map(([field, values]) => `${field}: ${values.join(', ')}`)
+                            .map(([field, values]) => `${{field}}: ${{values.join(', ')}}`)
                             .join('; ');
                         filterDescription = filterTags;
-                        console.log(`Auto-applied filter: ${targetContacts.length} contacts found`);
-                    } else {
+                        console.log(`Auto-applied filter: ${{targetContacts.length}} contacts found`);
+                    }} else {{
                         throw new Error('⚠️ Cannot send campaign: No contacts match the selected filter criteria.\\n\\nNo emails will be sent because no targets are selected.\\n\\nPlease adjust your filter or clear it to send to all contacts.');
-                    }
-                } catch (filterError) {
+                    }}
+                }} catch (filterError) {{
                     console.error('Auto-apply filter failed:', filterError);
                     throw new Error('Please click "Apply Filter" button to see which contacts match your criteria, or clear the filter to send to all contacts.');
-                }
-            } else {
+                }}
+            }} else {{
                 // Fallback: shouldn't get here, but fetch all contacts as safety
                 console.warn('Unexpected state - falling back to fetch all contacts with pagination');
-                try {
+                try {{
                     targetContacts = await fetchAllContactsPaginated();
                     filterDescription = 'All Contacts';
-                    console.log(`Fallback: Loaded ${targetContacts.length} contacts from database`);
-                } catch (loadError) {
+                    console.log(`Fallback: Loaded ${{targetContacts.length}} contacts from database`);
+                }} catch (loadError) {{
                     console.error('Failed to load contacts:', loadError);
-                    throw new Error(`Failed to load contacts: ${loadError.message}`);
-                }
-            }
+                    throw new Error(`Failed to load contacts: ${{loadError.message}}`);
+                }}
+            }}
             
             // Note: Validation for targetContacts is done later after To/CC/BCC are parsed
             // to allow To/CC/BCC-only campaigns
-            console.log(`Target contacts from filter: ${targetContacts.length} (${filterDescription})`);
-            if (targetContacts.length > 0) {
+            console.log(`Target contacts from filter: ${{targetContacts.length}} (${{filterDescription}})`);
+            if (targetContacts.length > 0) {{
                 console.log('Sample target contacts:', targetContacts.slice(0, 3));
-            }
+            }}
             
             // Get content from Quill editor and clean it thoroughly
             let emailBody = quillEditor.root.innerHTML;
             
             // DEBUG: Check initial HTML from Quill editor
-            console.log(`📝 Original Quill HTML length: ${emailBody.length} characters`);
+            console.log(`📝 Original Quill HTML length: ${{emailBody.length}} characters`);
             const imgInOriginal = emailBody.match(/<img[^>]+>/g);
-            if (imgInOriginal) {
-                console.log(`🖼️ Original Quill HTML contains ${imgInOriginal.length} <img> tag(s):`);
-                imgInOriginal.forEach((tag, i) => {
+            if (imgInOriginal) {{
+                console.log(`🖼️ Original Quill HTML contains ${{imgInOriginal.length}} <img> tag(s):`);
+                imgInOriginal.forEach((tag, i) => {{
                     const srcMatch = tag.match(/src="([^"]+)"/);
                     const srcType = srcMatch ? (srcMatch[1].startsWith('data:') ? 'data:' : 
                                                 srcMatch[1].startsWith('campaign-attachments/') ? 'S3 key' : 'other') : 'no src';
-                    console.log(`  ${i + 1}. type=${srcType}, tag=${tag.substring(0, 100)}...`);
-                });
-            } else {
+                    console.log(`  ${{i + 1}}. type=${{srcType}}, tag=${{tag.substring(0, 100)}}...`);
+                }});
+            }} else {{
                 console.error(`❌ Original Quill HTML has NO <img> tags!`);
-            }
+            }}
             
             // Create a temporary div to parse and clean the HTML
             const tempDiv = document.createElement('div');
@@ -4021,12 +3991,12 @@ def serve_web_ui(event):
             const editorImages = quillEditor.root.querySelectorAll('img');
             const imageComputedStyles = new Map();
             
-            editorImages.forEach((editorImg, idx) => {
+            editorImages.forEach((editorImg, idx) => {{
                 // Get the COMPUTED styles (actual rendered styles) from the live editor
                 const computedStyle = window.getComputedStyle(editorImg);
                 
                 // Capture exact size and position as rendered
-                const lockedStyles = {
+                const lockedStyles = {{
                     width: computedStyle.width,           // Exact rendered width
                     height: computedStyle.height,         // Exact rendered height
                     display: computedStyle.display,       // Display mode
@@ -4040,20 +4010,20 @@ def serve_web_ui(event):
                     textAlign: computedStyle.textAlign,   // Parent text alignment
                     maxWidth: computedStyle.maxWidth,
                     maxHeight: computedStyle.maxHeight
-                };
+                }};
                 
                 // Store by src attribute for matching later
                 const src = editorImg.getAttribute('src');
-                if (src) {
+                if (src) {{
                     imageComputedStyles.set(src.substring(0, 100), lockedStyles); // Use first 100 chars as key
-                    console.log(`🔒 Locked image ${idx + 1} size/position:`, {
+                    console.log(`🔒 Locked image ${{idx + 1}} size/position:`, {{
                         width: lockedStyles.width,
                         height: lockedStyles.height,
                         display: lockedStyles.display,
                         float: lockedStyles.float
-                    });
-                }
-            });
+                    }});
+                }}
+            }});
             
             // Step 2: Now process the HTML in tempDiv
             // Unwrap images from resize containers FIRST (before any cleanup)
@@ -4061,160 +4031,160 @@ def serve_web_ui(event):
             const allImageElements = tempDiv.querySelectorAll('img');
             let unwrappedCount = 0;
             
-            allImageElements.forEach((img, idx) => {
+            allImageElements.forEach((img, idx) => {{
                 // FIRST: Apply locked styles from the live editor to ensure exact match
                 const imgSrc = img.getAttribute('src');
-                if (imgSrc && imageComputedStyles.has(imgSrc.substring(0, 100))) {
+                if (imgSrc && imageComputedStyles.has(imgSrc.substring(0, 100))) {{
                     const lockedStyles = imageComputedStyles.get(imgSrc.substring(0, 100));
                     
                     // Build complete style string with all locked attributes
                     let styleString = '';
                     
                     // Essential sizing (use exact rendered values)
-                    if (lockedStyles.width && lockedStyles.width !== 'auto') {
-                        styleString += `width: ${lockedStyles.width}; `;
-                    }
-                    if (lockedStyles.height && lockedStyles.height !== 'auto') {
-                        styleString += `height: ${lockedStyles.height}; `;
-                    }
+                    if (lockedStyles.width && lockedStyles.width !== 'auto') {{
+                        styleString += `width: ${{lockedStyles.width}}; `;
+                    }}
+                    if (lockedStyles.height && lockedStyles.height !== 'auto') {{
+                        styleString += `height: ${{lockedStyles.height}}; `;
+                    }}
                     
                     // Display mode
-                    if (lockedStyles.display && lockedStyles.display !== 'inline') {
-                        styleString += `display: ${lockedStyles.display}; `;
-                    }
+                    if (lockedStyles.display && lockedStyles.display !== 'inline') {{
+                        styleString += `display: ${{lockedStyles.display}}; `;
+                    }}
                     
                     // Positioning and spacing
-                    if (lockedStyles.float && lockedStyles.float !== 'none') {
-                        styleString += `float: ${lockedStyles.float}; `;
-                    }
-                    if (lockedStyles.verticalAlign && lockedStyles.verticalAlign !== 'baseline') {
-                        styleString += `vertical-align: ${lockedStyles.verticalAlign}; `;
-                    }
+                    if (lockedStyles.float && lockedStyles.float !== 'none') {{
+                        styleString += `float: ${{lockedStyles.float}}; `;
+                    }}
+                    if (lockedStyles.verticalAlign && lockedStyles.verticalAlign !== 'baseline') {{
+                        styleString += `vertical-align: ${{lockedStyles.verticalAlign}}; `;
+                    }}
                     
                     // Margins (for positioning)
                     // Only add non-zero margins
-                    if (lockedStyles.marginTop && lockedStyles.marginTop !== '0px') {
-                        styleString += `margin-top: ${lockedStyles.marginTop}; `;
-                    }
-                    if (lockedStyles.marginBottom && lockedStyles.marginBottom !== '0px') {
-                        styleString += `margin-bottom: ${lockedStyles.marginBottom}; `;
-                    }
-                    if (lockedStyles.marginLeft && lockedStyles.marginLeft !== '0px') {
-                        styleString += `margin-left: ${lockedStyles.marginLeft}; `;
-                    }
-                    if (lockedStyles.marginRight && lockedStyles.marginRight !== '0px') {
-                        styleString += `margin-right: ${lockedStyles.marginRight}; `;
-                    }
+                    if (lockedStyles.marginTop && lockedStyles.marginTop !== '0px') {{
+                        styleString += `margin-top: ${{lockedStyles.marginTop}}; `;
+                    }}
+                    if (lockedStyles.marginBottom && lockedStyles.marginBottom !== '0px') {{
+                        styleString += `margin-bottom: ${{lockedStyles.marginBottom}}; `;
+                    }}
+                    if (lockedStyles.marginLeft && lockedStyles.marginLeft !== '0px') {{
+                        styleString += `margin-left: ${{lockedStyles.marginLeft}}; `;
+                    }}
+                    if (lockedStyles.marginRight && lockedStyles.marginRight !== '0px') {{
+                        styleString += `margin-right: ${{lockedStyles.marginRight}}; `;
+                    }}
                     
                     // Max width/height constraints
-                    if (lockedStyles.maxWidth && lockedStyles.maxWidth !== 'none') {
-                        styleString += `max-width: ${lockedStyles.maxWidth}; `;
-                    }
-                    if (lockedStyles.maxHeight && lockedStyles.maxHeight !== 'none') {
-                        styleString += `max-height: ${lockedStyles.maxHeight}; `;
-                    }
+                    if (lockedStyles.maxWidth && lockedStyles.maxWidth !== 'none') {{
+                        styleString += `max-width: ${{lockedStyles.maxWidth}}; `;
+                    }}
+                    if (lockedStyles.maxHeight && lockedStyles.maxHeight !== 'none') {{
+                        styleString += `max-height: ${{lockedStyles.maxHeight}}; `;
+                    }}
                     
                     // Apply the locked styles
-                    if (styleString.trim()) {
+                    if (styleString.trim()) {{
                         img.setAttribute('style', styleString.trim());
-                        console.log(`  ✅ Applied locked styles to image ${idx + 1}`);
-                    }
-                }
+                        console.log(`  ✅ Applied locked styles to image ${{idx + 1}}`);
+                    }}
+                }}
                 
                 // SECOND: Check if image is wrapped in a resize container and unwrap it
                 const parent = img.parentElement;
-                if (parent && parent !== tempDiv && parent.tagName.toLowerCase() !== 'p') {
+                if (parent && parent !== tempDiv && parent.tagName.toLowerCase() !== 'p') {{
                     // Check if this is a resize wrapper (typically has only the image and maybe text nodes)
-                    const meaningfulChildren = Array.from(parent.childNodes).filter(n => {
+                    const meaningfulChildren = Array.from(parent.childNodes).filter(n => {{
                         if (n.nodeType === Node.ELEMENT_NODE) return true;
                         if (n.nodeType === Node.TEXT_NODE && n.textContent.trim() !== '') return true;
                         return false;
-                    });
+                    }});
                     
                     // If parent only contains this image (and nothing else meaningful), unwrap it
-                    if (meaningfulChildren.length === 1 && meaningfulChildren[0] === img) {
+                    if (meaningfulChildren.length === 1 && meaningfulChildren[0] === img) {{
                         const grandParent = parent.parentElement;
-                        if (grandParent) {
+                        if (grandParent) {{
                             // Copy any alignment from parent's context
                             const parentStyle = parent.getAttribute('style');
-                            if (parentStyle && parentStyle.includes('text-align')) {
+                            if (parentStyle && parentStyle.includes('text-align')) {{
                                 const textAlignMatch = parentStyle.match(/text-align:\\s*([^;]+)/);
-                                if (textAlignMatch) {
+                                if (textAlignMatch) {{
                                     // Wrap in a div with text-align for email client compatibility
                                     const alignDiv = document.createElement('div');
-                                    alignDiv.setAttribute('style', `text-align: ${textAlignMatch[1].trim()}`);
+                                    alignDiv.setAttribute('style', `text-align: ${{textAlignMatch[1].trim()}}`);
                                     grandParent.insertBefore(alignDiv, parent);
                                     alignDiv.appendChild(img);
                                     parent.remove();
-                                    console.log(`  📍 Preserved alignment: ${textAlignMatch[1]}`);
+                                    console.log(`  📍 Preserved alignment: ${{textAlignMatch[1]}}`);
                                     unwrappedCount++;
                                     return; // Skip normal unwrap since we created alignment div
-                                }
-                            }
+                                }}
+                            }}
                             
                             // Normal unwrap: insert image before wrapper, then remove wrapper
                             grandParent.insertBefore(img, parent);
                             parent.remove();
                             unwrappedCount++;
-                        }
-                    }
-                }
-            });
+                        }}
+                    }}
+                }}
+            }});
             
-            if (unwrappedCount > 0) {
-                console.log(`✂️ Unwrapped ${unwrappedCount} image(s) from resize containers`);
-            }
-            console.log(`🔒 Locked ${imageComputedStyles.size} image(s) to exact editor size/position`);
+            if (unwrappedCount > 0) {{
+                console.log(`✂️ Unwrapped ${{unwrappedCount}} image(s) from resize containers`);
+            }}
+            console.log(`🔒 Locked ${{imageComputedStyles.size}} image(s) to exact editor size/position`);
             
             // THIRD: Preserve paragraph-level alignment for images (centered, right-aligned, etc.)
-            tempDiv.querySelectorAll('p, div').forEach(container => {
+            tempDiv.querySelectorAll('p, div').forEach(container => {{
                 // Check if this container has text-align style
                 const containerStyle = container.getAttribute('style');
                 if (containerStyle && (containerStyle.includes('text-align: center') || 
                                        containerStyle.includes('text-align: right') ||
                                        containerStyle.includes('text-align:center') ||
-                                       containerStyle.includes('text-align:right'))) {
+                                       containerStyle.includes('text-align:right'))) {{
                     // Check if container has an image
                     const imgInside = container.querySelector('img');
-                    if (imgInside) {
+                    if (imgInside) {{
                         // Extract text-align value
                         const alignMatch = containerStyle.match(/text-align:\\s*(center|right|left)/);
-                        if (alignMatch) {
+                        if (alignMatch) {{
                             const alignment = alignMatch[1];
                             // Make sure the container style is preserved
                             let cleanedStyle = containerStyle.replace(/\\s+/g, ' ').trim();
-                            if (!cleanedStyle.includes('text-align')) {
-                                cleanedStyle += `; text-align: ${alignment}`;
-                            }
+                            if (!cleanedStyle.includes('text-align')) {{
+                                cleanedStyle += `; text-align: ${{alignment}}`;
+                            }}
                             container.setAttribute('style', cleanedStyle);
-                            console.log(`  📍 Preserved container alignment: ${alignment} for image`);
-                        }
-                    }
-                }
-            });
+                            console.log(`  📍 Preserved container alignment: ${{alignment}} for image`);
+                        }}
+                    }}
+                }}
+            }});
             
             // Remove Quill's clipboard container element (often contains unwanted HTML at bottom)
             const clipboardElements = tempDiv.querySelectorAll('.ql-clipboard, [id*="ql-clipboard"], [class*="ql-clipboard"]');
             clipboardElements.forEach(el => el.remove());
-            console.log(`Removed ${clipboardElements.length} Quill clipboard containers`);
+            console.log(`Removed ${{clipboardElements.length}} Quill clipboard containers`);
             
             // Remove any hidden or display:none elements that Quill might add
             const hiddenElements = tempDiv.querySelectorAll('[style*="display: none"], [style*="display:none"]');
             hiddenElements.forEach(el => el.remove());
-            console.log(`Removed ${hiddenElements.length} hidden elements`);
+            console.log(`Removed ${{hiddenElements.length}} hidden elements`);
             
             // Remove Quill-specific attributes but PRESERVE all CSS classes
             const allElements = tempDiv.querySelectorAll('*');
-            allElements.forEach(element => {
+            allElements.forEach(element => {{
                 // PRESERVE all class attributes (Quill classes and user custom classes)
                 // Remove data-* attributes EXCEPT data-s3-key and data-inline (needed for image processing)
-                Array.from(element.attributes).forEach(attr => {
+                Array.from(element.attributes).forEach(attr => {{
                     if (attr.name.startsWith('data-') && 
                         attr.name !== 'data-s3-key' && 
-                        attr.name !== 'data-inline') {
+                        attr.name !== 'data-inline') {{
                         element.removeAttribute(attr.name);
-                    }
-                });
+                    }}
+                }});
                 // Remove contenteditable attributes
                 element.removeAttribute('contenteditable');
                 // Remove spellcheck attributes
@@ -4223,30 +4193,30 @@ def serve_web_ui(event):
                 element.removeAttribute('autocorrect');
                 // Remove autocapitalize attributes
                 element.removeAttribute('autocapitalize');
-            });
+            }});
             console.log('✅ Cleaned Quill attributes (preserved ALL CSS classes)');
             
             // DEBUG: Check what images exist before upload attempt
             const allImages = tempDiv.querySelectorAll('img');
-            console.log(`🔍 Total images in tempDiv after cleanup: ${allImages.length}`);
-            allImages.forEach((img, i) => {
+            console.log(`🔍 Total images in tempDiv after cleanup: ${{allImages.length}}`);
+            allImages.forEach((img, i) => {{
                 const src = img.getAttribute('src');
                 const dataS3Key = img.getAttribute('data-s3-key');
-                console.log(`  Image ${i + 1}: src type=${src ? src.substring(0, 20) : 'NO SRC'}..., has data-s3-key=${!!dataS3Key}`);
-            });
+                console.log(`  Image ${{i + 1}}: src type=${{src ? src.substring(0, 20) : 'NO SRC'}}..., has data-s3-key=${{!!dataS3Key}}`);
+            }});
             
             // IMPORTANT: Convert embedded images (base64 data URIs) to attachments
             // This allows inline images in the email body
             const allImgTags = tempDiv.querySelectorAll('img[src^="data:"], img[src^="blob:"]');
-            console.log(`🔍 Images with data:/blob: URIs to upload: ${allImgTags.length}`);
+            console.log(`🔍 Images with data:/blob: URIs to upload: ${{allImgTags.length}}`);
             
-            if (allImgTags.length > 0) {
-                console.log(`🖼️ Found ${allImgTags.length} embedded image(s) in email body`);
+            if (allImgTags.length > 0) {{
+                console.log(`🖼️ Found ${{allImgTags.length}} embedded image(s) in email body`);
                 
                 // Check if upload endpoint is available first
                 const ENABLE_INLINE_IMAGES = true;  // Set to false to disable automatic uploads
                 
-                if (!ENABLE_INLINE_IMAGES) {
+                if (!ENABLE_INLINE_IMAGES) {{
                     // Remove embedded images and show error
                     allImgTags.forEach(img => img.remove());
                     throw new Error(
@@ -4254,72 +4224,72 @@ def serve_web_ui(event):
                         `Please use the "📎 Add Attachments" button to attach images instead.\\n\\n` +
                         `To enable inline images, run: python add_attachment_endpoint.py`
                     );
-                }
+                }}
                 
-                console.log(`Converting ${allImgTags.length} embedded image(s) to inline attachments...`);
+                console.log(`Converting ${{allImgTags.length}} embedded image(s) to inline attachments...`);
                 
                 // Show progress to user
-                button.textContent = `Uploading ${allImgTags.length} embedded image(s)...`;
+                button.textContent = `Uploading ${{allImgTags.length}} embedded image(s)...`;
                 
-                for (let index = 0; index < allImgTags.length; index++) {
+                for (let index = 0; index < allImgTags.length; index++) {{
                     // Update progress
-                    button.textContent = `Uploading embedded image ${index + 1}/${allImgTags.length}...`;
+                    button.textContent = `Uploading embedded image ${{index + 1}}/${{allImgTags.length}}...`;
                     const img = allImgTags[index];
                     const dataUri = img.src;
-                    const altText = img.alt || img.title || `InlineImage${index + 1}`;
+                    const altText = img.alt || img.title || `InlineImage${{index + 1}}`;
                     
-                    try {
-                        console.log(`Processing embedded image ${index + 1}/${allImgTags.length}`);
+                    try {{
+                        console.log(`Processing embedded image ${{index + 1}}/${{allImgTags.length}}`);
                         
                         // Extract base64 data from data URI
                         const matches = dataUri.match(/^data:([^;]+);base64,(.+)$/);
-                        if (!matches) {
-                            console.warn(`Skipping invalid data URI for image ${index}`);
+                        if (!matches) {{
+                            console.warn(`Skipping invalid data URI for image ${{index}}`);
                             continue;
-                        }
+                        }}
                         
                         const mimeType = matches[1];
                         const base64Data = matches[2];
                         
-                        console.log(`  MIME type: ${mimeType}`);
-                        console.log(`  Base64 length: ${base64Data.length} chars`);
+                        console.log(`  MIME type: ${{mimeType}}`);
+                        console.log(`  Base64 length: ${{base64Data.length}} chars`);
                         
                         // Determine file extension from MIME type
                         const extension = mimeType.split('/')[1] || 'png';
-                        const filename = `${altText.replace(/[^a-zA-Z0-9]/g, '_')}_${Date.now()}_${index}.${extension}`;
+                        const filename = `${{altText.replace(/[^a-zA-Z0-9]/g, '_')}}_${{Date.now()}}_${{index}}.${{extension}}`;
                         
                         // Generate S3 key for this image
                         const timestamp = Date.now();
                         const randomStr = Math.random().toString(36).substring(7);
-                        const s3Key = `campaign-attachments/${timestamp}-${randomStr}-${filename}`;
+                        const s3Key = `campaign-attachments/${{timestamp}}-${{randomStr}}-${{filename}}`;
                         
-                        console.log(`  Generated filename: ${filename}`);
-                        console.log(`  S3 key: ${s3Key}`);
-                        console.log(`  Uploading to ${API_URL}/upload-attachment...`);
+                        console.log(`  Generated filename: ${{filename}}`);
+                        console.log(`  S3 key: ${{s3Key}}`);
+                        console.log(`  Uploading to ${{API_URL}}/upload-attachment...`);
                         
                         // Upload to S3 via backend (using same format as regular attachments)
-                        const uploadResponse = await fetch(`${API_URL}/upload-attachment`, {
+                        const uploadResponse = await fetch(`${{API_URL}}/upload-attachment`, {{
                             method: 'POST',
-                            headers: {'Content-Type': 'application/json'},
-                            body: JSON.stringify({
+                            headers: {{'Content-Type': 'application/json'}},
+                            body: JSON.stringify({{
                                 filename: filename,
                                 content_type: mimeType,
                                 s3_key: s3Key,
                                 data: base64Data  // Already extracted above
-                            })
-                        });
+                            }})
+                        }});
                         
-                        console.log(`  Upload response status: ${uploadResponse.status} ${uploadResponse.statusText}`);
+                        console.log(`  Upload response status: ${{uploadResponse.status}} ${{uploadResponse.statusText}}`);
                         
                         // Get response text first to handle HTML error responses
                         const responseText = await uploadResponse.text();
                         
-                        if (!uploadResponse.ok) {
-                            console.error(`❌ Upload failed with status ${uploadResponse.status}: ${uploadResponse.statusText}`);
-                            console.error(`Response body (first 500 chars): ${responseText.substring(0, 500)}`);
+                        if (!uploadResponse.ok) {{
+                            console.error(`❌ Upload failed with status ${{uploadResponse.status}}: ${{uploadResponse.statusText}}`);
+                            console.error(`Response body (first 500 chars): ${{responseText.substring(0, 500)}}`);
                             
                             // Handle specific error codes
-                            if (uploadResponse.status === 403) {
+                            if (uploadResponse.status === 403) {{
                                 throw new Error(
                                     `Upload Failed: 403 Forbidden\\n\\n` +
                                     `The /upload-attachment endpoint is blocked by API Gateway.\\n\\n` +
@@ -4330,40 +4300,40 @@ def serve_web_ui(event):
                                     `   python deploy_api_gateway.py\\n\\n` +
                                     `3. OR check API Gateway resource policy for restrictions`
                                 );
-                            } else if (uploadResponse.status === 404) {
+                            }} else if (uploadResponse.status === 404) {{
                                 throw new Error(
                                     `Upload Failed: 404 Not Found\\n\\n` +
                                     `The /upload-attachment endpoint does not exist.\\n\\n` +
                                     `Run: python add_attachment_endpoint.py`
                                 );
-                            } else {
-                                throw new Error(`Upload failed (${uploadResponse.status}): ${uploadResponse.statusText}`);
-                            }
-                        }
+                            }} else {{
+                                throw new Error(`Upload failed (${{uploadResponse.status}}): ${{uploadResponse.statusText}}`);
+                            }}
+                        }}
                         
                         // Try to parse as JSON
                         let uploadResult;
-                        try {
+                        try {{
                             uploadResult = JSON.parse(responseText);
-                        } catch (parseError) {
+                        }} catch (parseError) {{
                             console.error('Failed to parse upload response as JSON:', responseText.substring(0, 500));
                             throw new Error(`Upload endpoint returned invalid response (expected JSON, got HTML). Check Lambda logs.`);
-                        }
+                        }}
                         
-                        if (uploadResult.error) {
+                        if (uploadResult.error) {{
                             throw new Error(uploadResult.error);
-                        }
+                        }}
                         
-                        console.log(`✅ Uploaded embedded image: ${uploadResult.s3_key}`);
+                        console.log(`✅ Uploaded embedded image: ${{uploadResult.s3_key}}`);
                         
                         // Add to campaign attachments with inline flag
-                        campaignAttachments.push({
+                        campaignAttachments.push({{
                             filename: uploadResult.filename,
                             s3_key: uploadResult.s3_key,
                             size: uploadResult.size,
                             type: uploadResult.type,
                             inline: true  // Mark as inline image
-                        });
+                        }});
                         
                         // Store S3 key as data attribute for reference, but KEEP the data URI for display
                         // The browser needs the data: URI to display the image in the editor
@@ -4372,46 +4342,46 @@ def serve_web_ui(event):
                         img.setAttribute('data-inline', 'true');
                         // Keep img.src as data URI so image still displays in editor
                         
-                    } catch (uploadError) {
-                        console.error(`Failed to upload embedded image ${index}:`, uploadError);
+                    }} catch (uploadError) {{
+                        console.error(`Failed to upload embedded image ${{index}}:`, uploadError);
                         // Keep the image but show warning
-                        alert(`⚠️ Failed to upload embedded image "${altText}": ${uploadError.message}\\n\\nThe image will be removed from the email.`);
+                        alert(`⚠️ Failed to upload embedded image "${{altText}}": ${{uploadError.message}}\\n\\nThe image will be removed from the email.`);
                         img.remove();
-                    }
-                }
+                    }}
+                }}
                 
-                console.log(`✅ Converted ${allImgTags.length} embedded image(s) to inline attachments`);
+                console.log(`✅ Converted ${{allImgTags.length}} embedded image(s) to inline attachments`);
                 
                 // Reset button text
                 button.textContent = 'Sending Campaign...';
-            } else {
+            }} else {{
                 console.log(`ℹ️ No data:/blob: images found to upload (might already be uploaded)`);
                 
                 // Check for images that might have been uploaded previously
                 const imagesWithS3src = tempDiv.querySelectorAll('img[src^="campaign-attachments/"]');
-                if (imagesWithS3src.length > 0) {
-                    console.log(`♻️ Found ${imagesWithS3src.length} image(s) already uploaded to S3`);
+                if (imagesWithS3src.length > 0) {{
+                    console.log(`♻️ Found ${{imagesWithS3src.length}} image(s) already uploaded to S3`);
                     
                     // Add these to campaignAttachments if not already there
-                    imagesWithS3src.forEach((img, idx) => {
+                    imagesWithS3src.forEach((img, idx) => {{
                         const s3Key = img.getAttribute('src');
                         const alreadyExists = campaignAttachments.some(att => att.s3_key === s3Key);
                         
-                        if (!alreadyExists) {
-                            console.log(`   Adding existing S3 image to attachments: ${s3Key}`);
-                            campaignAttachments.push({
-                                filename: `ExistingImage${idx + 1}.png`,
+                        if (!alreadyExists) {{
+                            console.log(`   Adding existing S3 image to attachments: ${{s3Key}}`);
+                            campaignAttachments.push({{
+                                filename: `ExistingImage${{idx + 1}}.png`,
                                 s3_key: s3Key,
                                 size: 0,  // Unknown size
                                 type: 'image/png',
                                 inline: true
-                            });
-                        } else {
-                            console.log(`   S3 image already in attachments: ${s3Key}`);
-                        }
-                    });
-                }
-            }
+                            }});
+                        }} else {{
+                            console.log(`   S3 image already in attachments: ${{s3Key}}`);
+                        }}
+                    }});
+                }}
+            }}
             
             // NOTE: Removed trailing image cleanup code - it was removing legitimate user images
             // Users can have images at the end of their emails intentionally
@@ -4421,60 +4391,60 @@ def serve_web_ui(event):
             
             // DEBUG: Check if tempDiv.innerHTML contains img tags
             const imgInTempDivHTML = emailBody.match(/<img[^>]+>/g);
-            if (imgInTempDivHTML) {
-                console.log(`✅ tempDiv.innerHTML contains ${imgInTempDivHTML.length} <img> tag(s)`);
-                imgInTempDivHTML.forEach((tag, i) => {
-                    console.log(`  ${i + 1}. ${tag.substring(0, 120)}...`);
-                });
-            } else {
+            if (imgInTempDivHTML) {{
+                console.log(`✅ tempDiv.innerHTML contains ${{imgInTempDivHTML.length}} <img> tag(s)`);
+                imgInTempDivHTML.forEach((tag, i) => {{
+                    console.log(`  ${{i + 1}}. ${{tag.substring(0, 120)}}...`);
+                }});
+            }} else {{
                 console.error(`❌ tempDiv.innerHTML has NO <img> tags!`);
-                console.error(`   tempDiv content (first 500 chars): ${emailBody.substring(0, 500)}...`);
-            }
+                console.error(`   tempDiv content (first 500 chars): ${{emailBody.substring(0, 500)}}...`);
+            }}
             
             // Replace data: URIs with S3 keys for backend transmission
             // Do this via string replacement to avoid triggering browser image loads
             const imagesWithS3Keys = tempDiv.querySelectorAll('img[data-s3-key]');
-            if (imagesWithS3Keys.length > 0) {
-                console.log(`📸 Replacing ${imagesWithS3Keys.length} data: URI(s) with S3 keys in HTML string`);
-                console.log(`Email body length before replacement: ${emailBody.length}`);
+            if (imagesWithS3Keys.length > 0) {{
+                console.log(`📸 Replacing ${{imagesWithS3Keys.length}} data: URI(s) with S3 keys in HTML string`);
+                console.log(`Email body length before replacement: ${{emailBody.length}}`);
                 
-                imagesWithS3Keys.forEach((img, idx) => {
+                imagesWithS3Keys.forEach((img, idx) => {{
                     const s3Key = img.getAttribute('data-s3-key');
                     const currentSrc = img.getAttribute('src');
                     
-                    console.log(`Image ${idx + 1}:`);
-                    console.log(`  Current src: ${currentSrc.substring(0, 80)}...`);
-                    console.log(`  S3 key: ${s3Key}`);
+                    console.log(`Image ${{idx + 1}}:`);
+                    console.log(`  Current src: ${{currentSrc.substring(0, 80)}}...`);
+                    console.log(`  S3 key: ${{s3Key}}`);
                     
-                    if (s3Key && currentSrc && currentSrc.startsWith('data:')) {
+                    if (s3Key && currentSrc && currentSrc.startsWith('data:')) {{
                         // Use string replacement to avoid browser fetching the image
                         // Escape special regex characters in the data URI
-                        const escapedSrc = currentSrc.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\\\$&');
+                        const escapedSrc = currentSrc.replace(/[.*+?^${{}}()|[\\]\\\\]/g, '\\\\$&');
                         const regex = new RegExp('src="' + escapedSrc + '"', 'g');
                         const beforeLength = emailBody.length;
                         emailBody = emailBody.replace(regex, 'src="' + s3Key + '"');
                         const afterLength = emailBody.length;
                         
-                        if (beforeLength !== afterLength) {
-                            console.log(`  ✅ Replaced in HTML (length changed: ${beforeLength} → ${afterLength})`);
-                        } else {
+                        if (beforeLength !== afterLength) {{
+                            console.log(`  ✅ Replaced in HTML (length changed: ${{beforeLength}} → ${{afterLength}})`);
+                        }} else {{
                             console.warn(`  ⚠️ No replacement made (length unchanged)`);
-                        }
+                        }}
                         
-                        console.log(`  New src will be: ${s3Key}`);
-                    }
-                });
+                        console.log(`  New src will be: ${{s3Key}}`);
+                    }}
+                }});
                 
                 // Show sample of HTML with S3 keys
-                console.log(`Email body sample after S3 replacement: ${emailBody.substring(0, 300)}...`);
+                console.log(`Email body sample after S3 replacement: ${{emailBody.substring(0, 300)}}...`);
                 
                 // Verify replacement happened
-                if (emailBody.includes('data:image')) {
+                if (emailBody.includes('data:image')) {{
                     console.error('⚠️ WARNING: Email body still contains data:image URIs after replacement!');
                     console.error('This will cause issues. The frontend replacement may have failed.');
-                } else {
+                }} else {{
                     console.log('✅ Confirmed: No data:image URIs in email body (all replaced with S3 keys)');
-                }
+                }}
                 
                 // Now remove data-s3-key attributes from final HTML (no longer needed)
                 emailBody = emailBody.replace(/\\s+data-s3-key="[^"]*"/g, '');
@@ -4483,14 +4453,14 @@ def serve_web_ui(event):
                 
                 // Verify img tags still exist after cleanup
                 const imgAfterCleanup = emailBody.match(/<img[^>]+>/g);
-                if (imgAfterCleanup) {
-                    console.log(`✅ After data-attr cleanup: ${imgAfterCleanup.length} <img> tag(s) still present`);
-                } else {
+                if (imgAfterCleanup) {{
+                    console.log(`✅ After data-attr cleanup: ${{imgAfterCleanup.length}} <img> tag(s) still present`);
+                }} else {{
                     console.error(`❌ After data-attr cleanup: <img> tags were LOST!`);
-                }
-            } else {
+                }}
+            }} else {{
                 console.log('ℹ️ No images with S3 keys to replace');
-            }
+            }}
             
             // Additional regex cleanup for any remaining artifacts
             // IMPORTANT: Preserve blank lines by converting <p><br></p> to <p>&nbsp;</p>
@@ -4514,37 +4484,37 @@ def serve_web_ui(event):
             // Add Quill CSS styles to email body so Quill classes work in recipient emails
             const quillCSS = `<style type="text/css">
     /* Quill Editor Styles for Email Compatibility */
-    .ql-align-center { text-align: center; }
-    .ql-align-right { text-align: right; }
-    .ql-align-left { text-align: left; }
-    .ql-align-justify { text-align: justify; }
-    .ql-indent-1 { padding-left: 3em; }
-    .ql-indent-2 { padding-left: 6em; }
-    .ql-indent-3 { padding-left: 9em; }
-    .ql-size-small { font-size: 0.75em; }
-    .ql-size-large { font-size: 1.5em; }
-    .ql-size-huge { font-size: 2.5em; }
-    .ql-font-serif { font-family: Georgia, Times New Roman, serif; }
-    .ql-font-monospace { font-family: Monaco, Courier New, monospace; }
+    .ql-align-center {{ text-align: center; }}
+    .ql-align-right {{ text-align: right; }}
+    .ql-align-left {{ text-align: left; }}
+    .ql-align-justify {{ text-align: justify; }}
+    .ql-indent-1 {{ padding-left: 3em; }}
+    .ql-indent-2 {{ padding-left: 6em; }}
+    .ql-indent-3 {{ padding-left: 9em; }}
+    .ql-size-small {{ font-size: 0.75em; }}
+    .ql-size-large {{ font-size: 1.5em; }}
+    .ql-size-huge {{ font-size: 2.5em; }}
+    .ql-font-serif {{ font-family: Georgia, Times New Roman, serif; }}
+    .ql-font-monospace {{ font-family: Monaco, Courier New, monospace; }}
     /* Preserve user's custom classes - add more as needed */
-    p { line-height: 1.0; margin: 0; }
+    p {{ line-height: 1.0; margin: 0; }}
 </style>`;
             
             // Prepend CSS to email body
             emailBody = quillCSS + emailBody;
             console.log('✅ Added Quill CSS styles to email for class rendering');
             
-            console.log(`Final email body preview: ${emailBody.substring(0, 200)}...`);
+            console.log(`Final email body preview: ${{emailBody.substring(0, 200)}}...`);
             
             // Verify img tags survived the regex cleanup
             const imgAfterRegexCleanup = emailBody.match(/<img[^>]+>/g);
-            if (bodyBeforeRegexCleanup.includes('<img') && !imgAfterRegexCleanup) {
+            if (bodyBeforeRegexCleanup.includes('<img') && !imgAfterRegexCleanup) {{
                 console.error(`❌ CRITICAL: <img> tags were REMOVED during regex cleanup!`);
-                console.error(`   Before cleanup: ${bodyBeforeRegexCleanup.substring(0, 300)}...`);
-                console.error(`   After cleanup: ${emailBody.substring(0, 300)}...`);
-            } else if (imgAfterRegexCleanup) {
-                console.log(`✅ After regex cleanup: ${imgAfterRegexCleanup.length} <img> tag(s) still present`);
-            }
+                console.error(`   Before cleanup: ${{bodyBeforeRegexCleanup.substring(0, 300)}}...`);
+                console.error(`   After cleanup: ${{emailBody.substring(0, 300)}}...`);
+            }} else if (imgAfterRegexCleanup) {{
+                console.log(`✅ After regex cleanup: ${{imgAfterRegexCleanup.length}} <img> tag(s) still present`);
+            }}
             
             // Get user name from form
             const userName = document.getElementById('userName').value.trim() || 'Web User';
@@ -4557,9 +4527,9 @@ def serve_web_ui(event):
             // Extract and validate email addresses from contacts (normalize to lowercase)
             const targetEmails = targetContacts.map(c => c?.email).filter(email => email && email.includes('@')).map(e => e.toLowerCase());
             // If user provided explicit To addresses, include them as targets (they may be external or not in Contacts DB)
-            if (toList.length > 0) {
+            if (toList.length > 0) {{
                 console.log('Using explicit To list with ' + toList.length + ' addresses');
-            }
+            }}
             console.log('Extracted ' + targetEmails.length + ' valid emails from ' + targetContacts.length + ' contacts');
             
             // Combine contact-derived targets with any explicit To addresses plus CC/BCC (dedupe with case-insensitive comparison)
@@ -4567,9 +4537,9 @@ def serve_web_ui(event):
             console.log('Total targets including To/CC/BCC: ' + allTargetEmails.length + ' (Contacts: ' + targetEmails.length + ', To: ' + toList.length + ', CC: ' + ccList.length + ', BCC: ' + bccList.length + ')');
             console.log('Sample emails:', allTargetEmails.slice(0, 5));
             
-            if (allTargetEmails.length === 0) {
+            if (allTargetEmails.length === 0) {{
                 throw new Error('No valid email addresses found. Please check that your contacts have valid email addresses or add To/CC/BCC recipients.');
-            }
+            }}
 
             // CONFIRMATION POPUP - Show total recipient count and ask for confirmation
             const confirmationMessage = `
@@ -4577,15 +4547,15 @@ def serve_web_ui(event):
 
 You are about to send this campaign to:
 
-📊 Total Recipients: ${allTargetEmails.length}
+📊 Total Recipients: ${{allTargetEmails.length}}
 
 Breakdown:
-• Contacts from database: ${targetEmails.length}
-• To recipients: ${toList.length}
-• CC recipients: ${ccList.length}
-• BCC recipients: ${bccList.length}
+• Contacts from database: ${{targetEmails.length}}
+• To recipients: ${{toList.length}}
+• CC recipients: ${{ccList.length}}
+• BCC recipients: ${{bccList.length}}
 
-Filter: ${filterDescription}
+Filter: ${{filterDescription}}
 
 ⚠️ Are you sure you want to send this campaign?
 
@@ -4595,41 +4565,41 @@ Click OK to proceed or Cancel to abort.
             // Show confirmation dialog and wait for user response
             const userConfirmed = confirm(confirmationMessage);
             
-            if (!userConfirmed) {
+            if (!userConfirmed) {{
                 // User clicked Cancel
                 button.textContent = originalText;
                 button.classList.remove('loading');
                 button.disabled = false;
                 console.log('Campaign send cancelled by user');
                 return; // Exit without sending
-            }
+            }}
             
             console.log('User confirmed campaign send');
             
             // Log final email body for debugging
-            console.log(`📧 Final email body length: ${emailBody.length} characters`);
-            console.log(`📧 Email body sample (first 500 chars): ${emailBody.substring(0, 500)}...`);
+            console.log(`📧 Final email body length: ${{emailBody.length}} characters`);
+            console.log(`📧 Email body sample (first 500 chars): ${{emailBody.substring(0, 500)}}...`);
             
             // Show image tags in email body
             const imgMatches = emailBody.match(/<img[^>]+>/g);
-            if (imgMatches) {
-                console.log(`🖼️ Email body contains ${imgMatches.length} <img> tag(s):`);
-                imgMatches.forEach((tag, i) => {
-                    console.log(`  ${i + 1}. ${tag.substring(0, 120)}...`);
-                });
-            } else {
+            if (imgMatches) {{
+                console.log(`🖼️ Email body contains ${{imgMatches.length}} <img> tag(s):`);
+                imgMatches.forEach((tag, i) => {{
+                    console.log(`  ${{i + 1}}. ${{tag.substring(0, 120)}}...`);
+                }});
+            }} else {{
                 console.log(`⚠️ No <img> tags found in email body!`);
-            }
+            }}
             
-            console.log(`📎 Campaign attachments: ${campaignAttachments.length}`);
-            if (campaignAttachments.length > 0) {
+            console.log(`📎 Campaign attachments: ${{campaignAttachments.length}}`);
+            if (campaignAttachments.length > 0) {{
                 console.log(`📎 Attachment details:`);
-                campaignAttachments.forEach((att, i) => {
-                    console.log(`  ${i + 1}. ${att.filename} (s3_key: ${att.s3_key}, inline: ${att.inline})`);
-                });
-            }
+                campaignAttachments.forEach((att, i) => {{
+                    console.log(`  ${{i + 1}}. ${{att.filename}} (s3_key: ${{att.s3_key}}, inline: ${{att.inline}})`);
+                }});
+            }}
             
-            const campaign = {
+            const campaign = {{
                 campaign_name: document.getElementById('campaignName').value,
                 subject: document.getElementById('subject').value,
                 body: emailBody,
@@ -4643,90 +4613,90 @@ Click OK to proceed or Cancel to abort.
                 cc: ccList,   // array of CC emails (for display/tracking)
                 bcc: bccList, // array of BCC emails (for display/tracking)
                 attachments: campaignAttachments  // Include attachments
-            };
+            }};
                 
                 // Validate required fields
-                if (!campaign.campaign_name || !campaign.subject || !campaign.body) {
+                if (!campaign.campaign_name || !campaign.subject || !campaign.body) {{
                     throw new Error('Please fill in all required fields');
-                }
+                }}
                 
                 // Validate attachment size
                 const totalAttachmentSize = campaignAttachments.reduce((sum, att) => sum + att.size, 0);
-                if (totalAttachmentSize > MAX_ATTACHMENT_SIZE) {
-                    throw new Error(`Attachments exceed 40 MB limit (${(totalAttachmentSize / 1024 / 1024).toFixed(2)} MB)`);
-                }
+                if (totalAttachmentSize > MAX_ATTACHMENT_SIZE) {{
+                    throw new Error(`Attachments exceed 40 MB limit (${{(totalAttachmentSize / 1024 / 1024).toFixed(2)}} MB)`);
+                }}
             
             // Debug: Log campaign object before serialization
-            console.log('Campaign object:', {
+            console.log('Campaign object:', {{
                 campaign_name: campaign.campaign_name,
                 subject: campaign.subject,
                 body_length: campaign.body?.length || 0,
                 attachments_count: campaign.attachments?.length || 0,
                 target_contacts_count: campaign.target_contacts?.length || 0
-            });
+            }});
             
             // DEBUG: Verify img tags are in campaign.body before serialization
             const imgInCampaignBody = campaign.body.match(/<img[^>]+>/g);
-            if (imgInCampaignBody) {
-                console.log(`🔍 BEFORE JSON: campaign.body has ${imgInCampaignBody.length} <img> tag(s)`);
-            } else {
+            if (imgInCampaignBody) {{
+                console.log(`🔍 BEFORE JSON: campaign.body has ${{imgInCampaignBody.length}} <img> tag(s)`);
+            }} else {{
                 console.error(`❌ BEFORE JSON: campaign.body has NO <img> tags!`);
-                console.error(`   Body content: ${campaign.body.substring(0, 300)}...`);
-            }
+                console.error(`   Body content: ${{campaign.body.substring(0, 300)}}...`);
+            }}
             
             // Try to serialize campaign to JSON - catch errors early
             let campaignJSON;
-            try {
+            try {{
                 campaignJSON = JSON.stringify(campaign);
                 console.log(`✅ Campaign JSON serialized successfully`);
-                console.log(`   Size: ${(campaignJSON.length / 1024).toFixed(2)} KB`);
-                console.log(`   Body size: ${(campaign.body?.length || 0 / 1024).toFixed(2)} KB`);
-                console.log(`   Attachments: ${campaign.attachments?.length || 0}`);
+                console.log(`   Size: ${{(campaignJSON.length / 1024).toFixed(2)}} KB`);
+                console.log(`   Body size: ${{(campaign.body?.length || 0 / 1024).toFixed(2)}} KB`);
+                console.log(`   Attachments: ${{campaign.attachments?.length || 0}}`);
                 
                 // DEBUG: Check if img tags survived JSON serialization
-                if (campaignJSON.includes('<img')) {
+                if (campaignJSON.includes('<img')) {{
                     console.log(`🔍 AFTER JSON: Serialized data contains <img> tags ✅`);
-                } else {
+                }} else {{
                     console.error(`❌ AFTER JSON: Serialized data has NO <img> tags!`);
-                }
+                }}
                 
                 // Warn if body is very large
-                if (campaignJSON.length > 5000000) { // 5MB
-                    console.warn(`⚠️ Campaign data is very large (${(campaignJSON.length / 1024 / 1024).toFixed(2)} MB)`);
-                }
-            } catch (jsonError) {
+                if (campaignJSON.length > 5000000) {{ // 5MB
+                    console.warn(`⚠️ Campaign data is very large (${{(campaignJSON.length / 1024 / 1024).toFixed(2)}} MB)`);
+                }}
+            }} catch (jsonError) {{
                 console.error('❌ JSON serialization error:', jsonError);
                 console.error('Campaign object:', campaign);
                 throw new Error(
-                    `Failed to prepare campaign data: ${jsonError.message}\\n\\n` +
+                    `Failed to prepare campaign data: ${{jsonError.message}}\\n\\n` +
                     `This usually happens when the email contains invalid data.\\n` +
                     `Check browser console for details.`
                 );
-            }
+            }}
             
-            console.log(`📤 Sending campaign to backend: ${API_URL}/campaign`);
-            console.log(`   Campaign JSON size: ${campaignJSON.length} characters (${(campaignJSON.length / 1024).toFixed(2)} KB)`);
+            console.log(`📤 Sending campaign to backend: ${{API_URL}}/campaign`);
+            console.log(`   Campaign JSON size: ${{campaignJSON.length}} characters (${{(campaignJSON.length / 1024).toFixed(2)}} KB)`);
             
-            const response = await fetch(`${API_URL}/campaign`, {
+            const response = await fetch(`${{API_URL}}/campaign`, {{
                 method: 'POST',
-                headers: {'Content-Type': 'application/json'},
+                headers: {{'Content-Type': 'application/json'}},
                 body: campaignJSON
-            });
+            }});
             
-            console.log(`Response status: ${response.status} ${response.statusText}`);
+            console.log(`Response status: ${{response.status}} ${{response.statusText}}`);
             
             // Get response as text first to handle HTML error pages
             const responseText = await response.text();
-            console.log(`Response length: ${responseText.length} characters`);
-            console.log(`Response preview: ${responseText.substring(0, 100)}`);
+            console.log(`Response length: ${{responseText.length}} characters`);
+            console.log(`Response preview: ${{responseText.substring(0, 100)}}`);
             
             // Check if response is HTML (error page) instead of JSON
-            if (responseText.trim().startsWith('<')) {
+            if (responseText.trim().startsWith('<')) {{
                 console.error('Server returned HTML instead of JSON:');
                 console.error(responseText.substring(0, 1000));
                 throw new Error(
                     `Campaign Failed: Server returned an error page instead of JSON response\\n\\n` +
-                    `Status: ${response.status} ${response.statusText}\\n\\n` +
+                    `Status: ${{response.status}} ${{response.statusText}}\\n\\n` +
                     `This indicates a backend error. Common causes:\\n` +
                     `• Lambda function error or crash\\n` +
                     `• Missing permissions (S3, DynamoDB, SQS)\\n` +
@@ -4734,28 +4704,28 @@ Click OK to proceed or Cancel to abort.
                     `Check CloudWatch Logs for details:\\n` +
                     `python tail_lambda_logs.py BulkEmailAPI`
                 );
-            }
+            }}
             
             let result;
-            try {
+            try {{
                 result = JSON.parse(responseText);
-            } catch (parseError) {
+            }} catch (parseError) {{
                 console.error('Failed to parse response as JSON:', parseError);
                 console.error('Response text:', responseText.substring(0, 500));
                 throw new Error(
                     `Campaign Failed: Invalid server response\\n\\n` +
-                    `${parseError.message}\\n\\n` +
-                    `The server returned: ${responseText.substring(0, 100)}...\\n\\n` +
+                    `${{parseError.message}}\\n\\n` +
+                    `The server returned: ${{responseText.substring(0, 100)}}...\\n\\n` +
                     `Check CloudWatch Logs: python tail_lambda_logs.py BulkEmailAPI`
                 );
-            }
+            }}
             
             const resultDiv = document.getElementById('campaignResult');
                 
-                if (result.error) {
+                if (result.error) {{
                     console.error('Backend returned error:', result.error);
                     throw new Error(result.error);
-                }
+                }}
                 
                 // Create a beautiful result display
                 Toast.success('Campaign queued successfully! Emails are being sent.', 6000);
@@ -4766,87 +4736,87 @@ Click OK to proceed or Cancel to abort.
                     </div>
                     <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; margin: 20px 0;">
                         <div style="background: var(--success-color); color: white; padding: 20px; border-radius: 8px; text-align: center;">
-                            <h4 style="margin: 0; font-size: 2rem;">${result.queued_count || 0}</h4>
+                            <h4 style="margin: 0; font-size: 2rem;">${{result.queued_count || 0}}</h4>
                             <p style="margin: 5px 0 0 0;">Queued to SQS</p>
                         </div>
                         <div style="background: var(--warning-color); color: white; padding: 20px; border-radius: 8px; text-align: center;">
-                            <h4 style="margin: 0; font-size: 2rem;">${result.failed_to_queue || 0}</h4>
+                            <h4 style="margin: 0; font-size: 2rem;">${{result.failed_to_queue || 0}}</h4>
                             <p style="margin: 5px 0 0 0;">Failed to Queue</p>
                         </div>
                         <div style="background: var(--info-color); color: white; padding: 20px; border-radius: 8px; text-align: center;">
-                            <h4 style="margin: 0; font-size: 2rem;">${result.total_contacts || 0}</h4>
+                            <h4 style="margin: 0; font-size: 2rem;">${{result.total_contacts || 0}}</h4>
                             <p style="margin: 5px 0 0 0;">Total Contacts</p>
                         </div>
                     </div>
                     <div style="background: var(--gray-50); padding: 16px; border-radius: 8px; margin-top: 20px;">
-                        <p style="margin: 0; color: var(--gray-700);"><strong>Campaign ID:</strong> ${result.campaign_id}</p>
-                        <p style="margin: 5px 0 0 0; color: var(--gray-700);"><strong>Target Contacts:</strong> ${filterDescription}</p>
-                        <p style="margin: 5px 0 0 0; color: var(--gray-700);"><strong>Queue:</strong> ${result.queue_name || 'bulk-email-queue'}</p>
+                        <p style="margin: 0; color: var(--gray-700);"><strong>Campaign ID:</strong> ${{result.campaign_id}}</p>
+                        <p style="margin: 5px 0 0 0; color: var(--gray-700);"><strong>Target Contacts:</strong> ${{filterDescription}}</p>
+                        <p style="margin: 5px 0 0 0; color: var(--gray-700);"><strong>Queue:</strong> ${{result.queue_name || 'bulk-email-queue'}}</p>
                         <p style="margin: 10px 0 0 0; color: var(--gray-600); font-size: 0.9rem;">Check CloudWatch Logs to monitor email processing status</p>
                     </div>
                     <details style="margin-top: 20px;">
                         <summary style="cursor: pointer; color: var(--gray-600);">View Raw Response</summary>
-                        <pre style="background: var(--gray-100); padding: 16px; border-radius: 8px; margin-top: 10px; overflow-x: auto;">${JSON.stringify(result, null, 2)}</pre>
+                        <pre style="background: var(--gray-100); padding: 16px; border-radius: 8px; margin-top: 10px; overflow-x: auto;">${{JSON.stringify(result, null, 2)}}</pre>
                     </details>
                 `;
             resultDiv.classList.remove('hidden');
                 
                 button.textContent = 'Campaign Queued!';
                 button.style.background = 'linear-gradient(135deg, var(--success-color), #059669)';
-                setTimeout(() => {
+                setTimeout(() => {{
                     button.textContent = originalText;
                     button.style.background = '';
-                }, 3000);
+                }}, 3000);
                 
-            } catch (error) {
+            }} catch (error) {{
                 const resultDiv = document.getElementById('campaignResult');
-                Toast.error(`Campaign failed: ${error.message}`);
+                Toast.error(`Campaign failed: ${{error.message}}`);
                 resultDiv.innerHTML = `
                     <h3 style="color: var(--danger-color);">Campaign Failed</h3>
-                    <p style="color: var(--gray-600);">${error.message}</p>
+                    <p style="color: var(--gray-600);">${{error.message}}</p>
                 `;
                 resultDiv.classList.remove('hidden');
                 
                 button.textContent = 'Error';
                 button.style.background = 'linear-gradient(135deg, var(--danger-color), #dc2626)';
-                setTimeout(() => {
+                setTimeout(() => {{
                     button.textContent = originalText;
                     button.style.background = '';
-                }, 3000);
-            } finally {
+                }}, 3000);
+            }} finally {{
                 button.classList.remove('loading');
                 button.disabled = false;
-            }
-        }
+            }}
+        }}
         
         // PREVIEW EMAIL FUNCTION - Shows what recipients will receive
-        async function previewCampaign(event) {
+        async function previewCampaign(event) {{
             // Check form availability first
-            if (!checkFormAvailability()) {
+            if (!checkFormAvailability()) {{
                 alert('Form is currently unavailable. Please refresh the page and try again.');
                 return;
-            }
+            }}
             
             const button = event?.target || document.querySelector('.btn-primary');
             const originalText = button?.textContent || '👁️ Preview Email';
             
-            try {
+            try {{
                 // IMPORTANT: Deactivate any active image resize handles first
                 // This ensures images are in their final state before processing
                 const resizeOverlays = document.querySelectorAll('.image-resize-overlay, .ql-image-resize-overlay');
                 const resizeHandles = document.querySelectorAll('.image-resize-handle, .ql-image-resize-handle');
                 
-                if (resizeOverlays.length > 0 || resizeHandles.length > 0) {
-                    console.log(`🔧 PREVIEW: Detected ${resizeOverlays.length + resizeHandles.length} active resize handle(s) - deactivating...`);
+                if (resizeOverlays.length > 0 || resizeHandles.length > 0) {{
+                    console.log(`🔧 PREVIEW: Detected ${{resizeOverlays.length + resizeHandles.length}} active resize handle(s) - deactivating...`);
                     // Click elsewhere in the editor to deactivate resize handles
                     quillEditor.root.blur();
                     quillEditor.root.focus();
                     // Small delay to let resize module clean up
                     await new Promise(resolve => setTimeout(resolve, 100));
                     console.log(`   ✅ Resize handles deactivated`);
-                } else {
+                }} else {{
                     console.log(`✅ PREVIEW: No active resize handles detected`);
-                }
+                }}
                 
                 // Show loading state
                 button.textContent = 'Generating Preview...';
@@ -4865,9 +4835,9 @@ Click OK to proceed or Cancel to abort.
                 const imageComputedStyles = new Map();
                 
                 console.log('👁️ PREVIEW: Locking image sizes and positions...');
-                editorImages.forEach((editorImg, idx) => {
+                editorImages.forEach((editorImg, idx) => {{
                     const computedStyle = window.getComputedStyle(editorImg);
-                    const lockedStyles = {
+                    const lockedStyles = {{
                         width: computedStyle.width,
                         height: computedStyle.height,
                         display: computedStyle.display,
@@ -4879,86 +4849,86 @@ Click OK to proceed or Cancel to abort.
                         verticalAlign: computedStyle.verticalAlign,
                         maxWidth: computedStyle.maxWidth,
                         maxHeight: computedStyle.maxHeight
-                    };
+                    }};
                     
                     const src = editorImg.getAttribute('src');
-                    if (src) {
+                    if (src) {{
                         imageComputedStyles.set(src.substring(0, 100), lockedStyles);
-                        console.log(`🔒 PREVIEW: Locked image ${idx + 1} size/position`);
-                    }
-                });
+                        console.log(`🔒 PREVIEW: Locked image ${{idx + 1}} size/position`);
+                    }}
+                }});
                 
                 // Apply locked styles and unwrap images (same as sendCampaign)
                 const allImageElements = tempDiv.querySelectorAll('img');
                 let unwrappedCount = 0;
                 
-                allImageElements.forEach((img, idx) => {
+                allImageElements.forEach((img, idx) => {{
                     const imgSrc = img.getAttribute('src');
-                    if (imgSrc && imageComputedStyles.has(imgSrc.substring(0, 100))) {
+                    if (imgSrc && imageComputedStyles.has(imgSrc.substring(0, 100))) {{
                         const lockedStyles = imageComputedStyles.get(imgSrc.substring(0, 100));
                         let styleString = '';
                         
-                        if (lockedStyles.width && lockedStyles.width !== 'auto') {
-                            styleString += `width: ${lockedStyles.width}; `;
-                        }
-                        if (lockedStyles.height && lockedStyles.height !== 'auto') {
-                            styleString += `height: ${lockedStyles.height}; `;
-                        }
-                        if (lockedStyles.display && lockedStyles.display !== 'inline') {
-                            styleString += `display: ${lockedStyles.display}; `;
-                        }
-                        if (lockedStyles.float && lockedStyles.float !== 'none') {
-                            styleString += `float: ${lockedStyles.float}; `;
-                        }
-                        if (lockedStyles.verticalAlign && lockedStyles.verticalAlign !== 'baseline') {
-                            styleString += `vertical-align: ${lockedStyles.verticalAlign}; `;
-                        }
-                        if (lockedStyles.marginTop && lockedStyles.marginTop !== '0px') {
-                            styleString += `margin-top: ${lockedStyles.marginTop}; `;
-                        }
-                        if (lockedStyles.marginBottom && lockedStyles.marginBottom !== '0px') {
-                            styleString += `margin-bottom: ${lockedStyles.marginBottom}; `;
-                        }
-                        if (lockedStyles.marginLeft && lockedStyles.marginLeft !== '0px') {
-                            styleString += `margin-left: ${lockedStyles.marginLeft}; `;
-                        }
-                        if (lockedStyles.marginRight && lockedStyles.marginRight !== '0px') {
-                            styleString += `margin-right: ${lockedStyles.marginRight}; `;
-                        }
-                        if (lockedStyles.maxWidth && lockedStyles.maxWidth !== 'none') {
-                            styleString += `max-width: ${lockedStyles.maxWidth}; `;
-                        }
-                        if (lockedStyles.maxHeight && lockedStyles.maxHeight !== 'none') {
-                            styleString += `max-height: ${lockedStyles.maxHeight}; `;
-                        }
+                        if (lockedStyles.width && lockedStyles.width !== 'auto') {{
+                            styleString += `width: ${{lockedStyles.width}}; `;
+                        }}
+                        if (lockedStyles.height && lockedStyles.height !== 'auto') {{
+                            styleString += `height: ${{lockedStyles.height}}; `;
+                        }}
+                        if (lockedStyles.display && lockedStyles.display !== 'inline') {{
+                            styleString += `display: ${{lockedStyles.display}}; `;
+                        }}
+                        if (lockedStyles.float && lockedStyles.float !== 'none') {{
+                            styleString += `float: ${{lockedStyles.float}}; `;
+                        }}
+                        if (lockedStyles.verticalAlign && lockedStyles.verticalAlign !== 'baseline') {{
+                            styleString += `vertical-align: ${{lockedStyles.verticalAlign}}; `;
+                        }}
+                        if (lockedStyles.marginTop && lockedStyles.marginTop !== '0px') {{
+                            styleString += `margin-top: ${{lockedStyles.marginTop}}; `;
+                        }}
+                        if (lockedStyles.marginBottom && lockedStyles.marginBottom !== '0px') {{
+                            styleString += `margin-bottom: ${{lockedStyles.marginBottom}}; `;
+                        }}
+                        if (lockedStyles.marginLeft && lockedStyles.marginLeft !== '0px') {{
+                            styleString += `margin-left: ${{lockedStyles.marginLeft}}; `;
+                        }}
+                        if (lockedStyles.marginRight && lockedStyles.marginRight !== '0px') {{
+                            styleString += `margin-right: ${{lockedStyles.marginRight}}; `;
+                        }}
+                        if (lockedStyles.maxWidth && lockedStyles.maxWidth !== 'none') {{
+                            styleString += `max-width: ${{lockedStyles.maxWidth}}; `;
+                        }}
+                        if (lockedStyles.maxHeight && lockedStyles.maxHeight !== 'none') {{
+                            styleString += `max-height: ${{lockedStyles.maxHeight}}; `;
+                        }}
                         
-                        if (styleString.trim()) {
+                        if (styleString.trim()) {{
                             img.setAttribute('style', styleString.trim());
-                        }
-                    }
+                        }}
+                    }}
                     
                     // Unwrap from resize containers
                     const parent = img.parentElement;
-                    if (parent && parent !== tempDiv && parent.tagName.toLowerCase() !== 'p') {
-                        const meaningfulChildren = Array.from(parent.childNodes).filter(n => {
+                    if (parent && parent !== tempDiv && parent.tagName.toLowerCase() !== 'p') {{
+                        const meaningfulChildren = Array.from(parent.childNodes).filter(n => {{
                             if (n.nodeType === Node.ELEMENT_NODE) return true;
                             if (n.nodeType === Node.TEXT_NODE && n.textContent.trim() !== '') return true;
                             return false;
-                        });
+                        }});
                         
-                        if (meaningfulChildren.length === 1 && meaningfulChildren[0] === img) {
+                        if (meaningfulChildren.length === 1 && meaningfulChildren[0] === img) {{
                             const grandParent = parent.parentElement;
-                            if (grandParent) {
+                            if (grandParent) {{
                                 grandParent.insertBefore(img, parent);
                                 parent.remove();
                                 unwrappedCount++;
-                            }
-                        }
-                    }
-                });
+                            }}
+                        }}
+                    }}
+                }});
                 
-                console.log(`👁️ PREVIEW: Unwrapped ${unwrappedCount} image(s)`);
-                console.log(`👁️ PREVIEW: Locked ${imageComputedStyles.size} image(s) to exact editor size/position`);
+                console.log(`👁️ PREVIEW: Unwrapped ${{unwrappedCount}} image(s)`);
+                console.log(`👁️ PREVIEW: Locked ${{imageComputedStyles.size}} image(s) to exact editor size/position`);
                 
                 // Clean up HTML (same as sendCampaign)
                 const clipboardElements = tempDiv.querySelectorAll('.ql-clipboard, [id*="ql-clipboard"], [class*="ql-clipboard"]');
@@ -4968,171 +4938,171 @@ Click OK to proceed or Cancel to abort.
                 hiddenElements.forEach(el => el.remove());
                 
                 const allElements = tempDiv.querySelectorAll('*');
-                allElements.forEach(element => {
+                allElements.forEach(element => {{
                     // PRESERVE all class attributes (Quill classes and user custom classes)
                     // Remove data-* attributes EXCEPT data-s3-key and data-inline (needed for image processing)
-                    Array.from(element.attributes).forEach(attr => {
+                    Array.from(element.attributes).forEach(attr => {{
                         if (attr.name.startsWith('data-') && 
                             attr.name !== 'data-s3-key' && 
-                            attr.name !== 'data-inline') {
+                            attr.name !== 'data-inline') {{
                             element.removeAttribute(attr.name);
-                        }
-                    });
+                        }}
+                    }});
                     element.removeAttribute('contenteditable');
                     element.removeAttribute('spellcheck');
                     element.removeAttribute('autocorrect');
                     element.removeAttribute('autocapitalize');
-                });
+                }});
                 console.log(`👁️ PREVIEW: Cleaned Quill attributes (preserved ALL CSS classes)`);
                 
                 // Process embedded images (same as sendCampaign)
                 // Check what images exist first
                 const allImages = tempDiv.querySelectorAll('img');
-                console.log(`👁️ PREVIEW: Total images in HTML: ${allImages.length}`);
-                allImages.forEach((img, i) => {
+                console.log(`👁️ PREVIEW: Total images in HTML: ${{allImages.length}}`);
+                allImages.forEach((img, i) => {{
                     const src = img.getAttribute('src');
                     const srcType = src.startsWith('data:') ? 'data:' : 
                                    src.startsWith('blob:') ? 'blob:' : 
                                    src.startsWith('http') ? 'http' : 
                                    src.startsWith('campaign-attachments/') ? 'S3 key' : 'other';
-                    console.log(`   Image ${i + 1}: type=${srcType}, src=${src.substring(0, 60)}...`);
-                });
+                    console.log(`   Image ${{i + 1}}: type=${{srcType}}, src=${{src.substring(0, 60)}}...`);
+                }});
                 
                 // Also check for images that already have S3 keys (from previous upload)
                 const imagesWithExistingS3Keys = tempDiv.querySelectorAll('img[src^="campaign-attachments/"]');
-                console.log(`👁️ PREVIEW: Found ${imagesWithExistingS3Keys.length} image(s) already uploaded to S3`);
+                console.log(`👁️ PREVIEW: Found ${{imagesWithExistingS3Keys.length}} image(s) already uploaded to S3`);
                 
                 // Add existing S3 images to campaignAttachments
-                imagesWithExistingS3Keys.forEach((img, idx) => {
+                imagesWithExistingS3Keys.forEach((img, idx) => {{
                     const s3Key = img.getAttribute('src');
-                    console.log(`   ♻️ Using existing S3 image: ${s3Key}`);
+                    console.log(`   ♻️ Using existing S3 image: ${{s3Key}}`);
                     // Check if this S3 key is already in campaignAttachments
                     const alreadyExists = campaignAttachments.some(att => att.s3_key === s3Key);
-                    if (!alreadyExists) {
-                        campaignAttachments.push({
-                            filename: `ExistingImage${idx + 1}.png`,
+                    if (!alreadyExists) {{
+                        campaignAttachments.push({{
+                            filename: `ExistingImage${{idx + 1}}.png`,
                             s3_key: s3Key,
                             size: 0,  // Unknown size for existing images
                             type: 'image/png',
                             inline: true
-                        });
+                        }});
                         console.log(`   ✅ Added existing S3 image to attachments`);
-                    }
-                });
+                    }}
+                }});
                 
                 const allImgTags = tempDiv.querySelectorAll('img[src^="data:"], img[src^="blob:"]');
-                console.log(`👁️ PREVIEW: Found ${allImgTags.length} embedded image(s) with data:/blob: URIs to upload`);
+                console.log(`👁️ PREVIEW: Found ${{allImgTags.length}} embedded image(s) with data:/blob: URIs to upload`);
                 
-                if (allImgTags.length > 0) {
-                    button.textContent = `Uploading ${allImgTags.length} image(s)...`;
+                if (allImgTags.length > 0) {{
+                    button.textContent = `Uploading ${{allImgTags.length}} image(s)...`;
                     
-                    for (let index = 0; index < allImgTags.length; index++) {
-                        button.textContent = `Uploading image ${index + 1}/${allImgTags.length}...`;
+                    for (let index = 0; index < allImgTags.length; index++) {{
+                        button.textContent = `Uploading image ${{index + 1}}/${{allImgTags.length}}...`;
                         const img = allImgTags[index];
                         const dataUri = img.src;
-                        const altText = img.alt || img.title || `PreviewImage${index + 1}`;
+                        const altText = img.alt || img.title || `PreviewImage${{index + 1}}`;
                         
-                        try {
+                        try {{
                             const matches = dataUri.match(/^data:([^;]+);base64,(.+)$/);
                             if (!matches) continue;
                             
                             const mimeType = matches[1];
                             const base64Data = matches[2];
                             const extension = mimeType.split('/')[1] || 'png';
-                            const filename = `${altText.replace(/[^a-zA-Z0-9]/g, '_')}_${Date.now()}_${index}.${extension}`;
+                            const filename = `${{altText.replace(/[^a-zA-Z0-9]/g, '_')}}_${{Date.now()}}_${{index}}.${{extension}}`;
                             const timestamp = Date.now();
                             const randomStr = Math.random().toString(36).substring(7);
-                            const s3Key = `campaign-attachments/${timestamp}-${randomStr}-${filename}`;
+                            const s3Key = `campaign-attachments/${{timestamp}}-${{randomStr}}-${{filename}}`;
                             
-                            const uploadResponse = await fetch(`${API_URL}/upload-attachment`, {
+                            const uploadResponse = await fetch(`${{API_URL}}/upload-attachment`, {{
                                 method: 'POST',
-                                headers: {'Content-Type': 'application/json'},
-                                body: JSON.stringify({
+                                headers: {{'Content-Type': 'application/json'}},
+                                body: JSON.stringify({{
                                     filename: filename,
                                     content_type: mimeType,
                                     s3_key: s3Key,
                                     data: base64Data
-                                })
-                            });
+                                }})
+                            }});
                             
-                            if (!uploadResponse.ok) {
-                                throw new Error(`Upload failed: ${uploadResponse.status}`);
-                            }
+                            if (!uploadResponse.ok) {{
+                                throw new Error(`Upload failed: ${{uploadResponse.status}}`);
+                            }}
                             
                             const uploadResult = await uploadResponse.json();
-                            campaignAttachments.push({
+                            campaignAttachments.push({{
                                 filename: uploadResult.filename,
                                 s3_key: uploadResult.s3_key,
                                 size: uploadResult.size,
                                 type: uploadResult.type,
                                 inline: true
-                            });
+                            }});
                             
                             // Store S3 key as data attribute for reference, but KEEP the data URI for display
                             // This allows preview to work correctly even after upload
                             img.setAttribute('data-s3-key', uploadResult.s3_key);
                             img.setAttribute('data-inline', 'true');
                             // Keep img.src as data URI so image still displays in preview HTML
-                            console.log(`   ✅ Uploaded and stored S3 key: ${uploadResult.s3_key}`);
-                        } catch (uploadError) {
-                            console.error(`   ❌ Failed to upload image ${index}:`, uploadError);
-                            alert(`Failed to upload image: ${uploadError.message}`);
+                            console.log(`   ✅ Uploaded and stored S3 key: ${{uploadResult.s3_key}}`);
+                        }} catch (uploadError) {{
+                            console.error(`   ❌ Failed to upload image ${{index}}:`, uploadError);
+                            alert(`Failed to upload image: ${{uploadError.message}}`);
                             img.remove();
-                        }
-                    }
-                }
+                        }}
+                    }}
+                }}
                 
-                console.log(`👁️ PREVIEW: Finished processing images. Total attachments: ${campaignAttachments.length}`);
+                console.log(`👁️ PREVIEW: Finished processing images. Total attachments: ${{campaignAttachments.length}}`);
                 
                 // Replace data URIs with S3 keys
                 emailBody = tempDiv.innerHTML;
                 
                 // DEBUG: Check if tempDiv.innerHTML contains img tags
                 const imgInTempDiv = emailBody.match(/<img[^>]+>/g);
-                if (imgInTempDiv) {
-                    console.log(`👁️ PREVIEW: tempDiv.innerHTML contains ${imgInTempDiv.length} <img> tag(s)`);
-                    imgInTempDiv.forEach((tag, i) => {
-                        console.log(`   ${i + 1}. ${tag.substring(0, 120)}...`);
-                    });
-                } else {
+                if (imgInTempDiv) {{
+                    console.log(`👁️ PREVIEW: tempDiv.innerHTML contains ${{imgInTempDiv.length}} <img> tag(s)`);
+                    imgInTempDiv.forEach((tag, i) => {{
+                        console.log(`   ${{i + 1}}. ${{tag.substring(0, 120)}}...`);
+                    }});
+                }} else {{
                     console.error(`👁️ PREVIEW: tempDiv.innerHTML has NO <img> tags!`);
-                    console.error(`   Content: ${emailBody.substring(0, 500)}...`);
-                }
+                    console.error(`   Content: ${{emailBody.substring(0, 500)}}...`);
+                }}
                 
                 const imagesWithS3Keys = tempDiv.querySelectorAll('img[data-s3-key]');
-                console.log(`👁️ PREVIEW: Found ${imagesWithS3Keys.length} image(s) with S3 keys to replace in HTML`);
+                console.log(`👁️ PREVIEW: Found ${{imagesWithS3Keys.length}} image(s) with S3 keys to replace in HTML`);
                 
-                if (imagesWithS3Keys.length > 0) {
-                    imagesWithS3Keys.forEach((img, idx) => {
+                if (imagesWithS3Keys.length > 0) {{
+                    imagesWithS3Keys.forEach((img, idx) => {{
                         const s3Key = img.getAttribute('data-s3-key');
                         const currentSrc = img.getAttribute('src');
-                        console.log(`   Replacing image ${idx + 1}: S3 key=${s3Key}, current src type=${currentSrc.substring(0, 20)}...`);
+                        console.log(`   Replacing image ${{idx + 1}}: S3 key=${{s3Key}}, current src type=${{currentSrc.substring(0, 20)}}...`);
                         
-                        if (s3Key && currentSrc && currentSrc.startsWith('data:')) {
-                            const escapedSrc = currentSrc.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\\\$&');
+                        if (s3Key && currentSrc && currentSrc.startsWith('data:')) {{
+                            const escapedSrc = currentSrc.replace(/[.*+?^${{}}()|[\\]\\\\]/g, '\\\\$&');
                             const regex = new RegExp('src="' + escapedSrc + '"', 'g');
                             const beforeLength = emailBody.length;
                             emailBody = emailBody.replace(regex, 'src="' + s3Key + '"');
                             const afterLength = emailBody.length;
                             
-                            if (beforeLength !== afterLength) {
-                                console.log(`   ✅ Replaced data: URI with S3 key (length: ${beforeLength} → ${afterLength})`);
-                            } else {
+                            if (beforeLength !== afterLength) {{
+                                console.log(`   ✅ Replaced data: URI with S3 key (length: ${{beforeLength}} → ${{afterLength}})`);
+                            }} else {{
                                 console.warn(`   ⚠️ No replacement made (length unchanged) - trying alternate method`);
                                 // Try simpler replacement
                                 emailBody = emailBody.replace(currentSrc, s3Key);
                                 console.log(`   ✅ Used simple replace method`);
-                            }
-                        }
-                    });
-                }
+                            }}
+                        }}
+                    }});
+                }}
                 
                 // Verify no data: URIs remain
-                if (emailBody.includes('data:image')) {
+                if (emailBody.includes('data:image')) {{
                     console.warn(`   ⚠️ WARNING: Email body still contains data:image URIs!`);
-                } else {
+                }} else {{
                     console.log(`   ✅ All data: URIs replaced with S3 keys`);
-                }
+                }}
                 
                 // Remove data-s3-key attributes from HTML after replacement
                 emailBody = emailBody.replace(/\\s+data-s3-key="[^"]*"/g, '');
@@ -5141,11 +5111,11 @@ Click OK to proceed or Cancel to abort.
                 
                 // Check img tags after data-attr removal
                 const imgAfterDataAttrRemoval = emailBody.match(/<img[^>]+>/g);
-                if (imgAfterDataAttrRemoval) {
-                    console.log(`   ✅ After data-attr removal: ${imgAfterDataAttrRemoval.length} <img> tag(s) still present`);
-                } else {
+                if (imgAfterDataAttrRemoval) {{
+                    console.log(`   ✅ After data-attr removal: ${{imgAfterDataAttrRemoval.length}} <img> tag(s) still present`);
+                }} else {{
                     console.error(`   ❌ After data-attr removal: <img> tags LOST!`);
-                }
+                }}
                 
                 // Additional HTML cleanup
                 // IMPORTANT: Preserve blank lines as <p>&nbsp;</p>
@@ -5157,7 +5127,7 @@ Click OK to proceed or Cancel to abort.
                     .replace(/\\s+data-[^=]*="[^"]*"/g, '')  // Remove all remaining data-* attributes
                     .trim();
                 
-                console.log(`👁️ PREVIEW: Final email body length: ${emailBody.length} characters`);
+                console.log(`👁️ PREVIEW: Final email body length: ${{emailBody.length}} characters`);
                 
                 // Add inline style to all <p> tags for consistent line-height: 1.0
                 // This ensures preview and actual email both show single-spaced text
@@ -5168,20 +5138,20 @@ Click OK to proceed or Cancel to abort.
                 // Add Quill CSS styles so Quill classes work in preview
                 const quillCSS = `<style type="text/css">
     /* Quill Editor Styles for Email Compatibility */
-    .ql-align-center { text-align: center; }
-    .ql-align-right { text-align: right; }
-    .ql-align-left { text-align: left; }
-    .ql-align-justify { text-align: justify; }
-    .ql-indent-1 { padding-left: 3em; }
-    .ql-indent-2 { padding-left: 6em; }
-    .ql-indent-3 { padding-left: 9em; }
-    .ql-size-small { font-size: 0.75em; }
-    .ql-size-large { font-size: 1.5em; }
-    .ql-size-huge { font-size: 2.5em; }
-    .ql-font-serif { font-family: Georgia, Times New Roman, serif; }
-    .ql-font-monospace { font-family: Monaco, Courier New, monospace; }
+    .ql-align-center {{ text-align: center; }}
+    .ql-align-right {{ text-align: right; }}
+    .ql-align-left {{ text-align: left; }}
+    .ql-align-justify {{ text-align: justify; }}
+    .ql-indent-1 {{ padding-left: 3em; }}
+    .ql-indent-2 {{ padding-left: 6em; }}
+    .ql-indent-3 {{ padding-left: 9em; }}
+    .ql-size-small {{ font-size: 0.75em; }}
+    .ql-size-large {{ font-size: 1.5em; }}
+    .ql-size-huge {{ font-size: 2.5em; }}
+    .ql-font-serif {{ font-family: Georgia, Times New Roman, serif; }}
+    .ql-font-monospace {{ font-family: Monaco, Courier New, monospace; }}
     /* User custom classes preserved */
-    p { line-height: 1.0; margin: 0; }
+    p {{ line-height: 1.0; margin: 0; }}
 </style>`;
                 
                 // Prepend CSS to email body
@@ -5190,13 +5160,13 @@ Click OK to proceed or Cancel to abort.
                 
                 // Check if img tags survived cleanup
                 const imgAfterCleanup = emailBody.match(/<img[^>]+>/g);
-                if (bodyBeforeCleanup.includes('<img') && !imgAfterCleanup) {
+                if (bodyBeforeCleanup.includes('<img') && !imgAfterCleanup) {{
                     console.error(`   ❌ PREVIEW: <img> tags REMOVED during cleanup!`);
-                    console.error(`   Before: ${bodyBeforeCleanup.substring(0, 300)}...`);
-                    console.error(`   After: ${emailBody.substring(0, 300)}...`);
-                } else if (imgAfterCleanup) {
-                    console.log(`   ✅ After cleanup: ${imgAfterCleanup.length} <img> tag(s) still present`);
-                }
+                    console.error(`   Before: ${{bodyBeforeCleanup.substring(0, 300)}}...`);
+                    console.error(`   After: ${{emailBody.substring(0, 300)}}...`);
+                }} else if (imgAfterCleanup) {{
+                    console.log(`   ✅ After cleanup: ${{imgAfterCleanup.length}} <img> tag(s) still present`);
+                }}
                 
                 button.textContent = 'Generating preview...';
                 
@@ -5209,7 +5179,7 @@ Click OK to proceed or Cancel to abort.
                 const bccList = parseEmails(document.getElementById('campaignBcc')?.value || '');
                 
                 // Create preview data object
-                const previewData = {
+                const previewData = {{
                     campaign_name: document.getElementById('campaignName').value || 'Untitled Preview',
                     subject: document.getElementById('subject').value || 'No Subject',
                     body: emailBody,
@@ -5218,176 +5188,176 @@ Click OK to proceed or Cancel to abort.
                     to: toList,
                     cc: ccList,
                     bcc: bccList
-                };
+                }};
                 
                 console.log('👁️ PREVIEW: Sending to backend...');
-                console.log(`   From: ${fromEmail}`);
-                console.log(`   To: ${toList.length} recipients`);
-                console.log(`   CC: ${ccList.length} recipients`);
-                console.log(`   BCC: ${bccList.length} recipients`);
-                console.log(`   Body length: ${emailBody.length} characters`);
-                console.log(`   Attachments: ${campaignAttachments.length}`);
+                console.log(`   From: ${{fromEmail}}`);
+                console.log(`   To: ${{toList.length}} recipients`);
+                console.log(`   CC: ${{ccList.length}} recipients`);
+                console.log(`   BCC: ${{bccList.length}} recipients`);
+                console.log(`   Body length: ${{emailBody.length}} characters`);
+                console.log(`   Attachments: ${{campaignAttachments.length}}`);
                 
                 // Show attachment details
-                if (campaignAttachments.length > 0) {
+                if (campaignAttachments.length > 0) {{
                     console.log(`   📎 Attachment details:`);
-                    campaignAttachments.forEach((att, i) => {
-                        console.log(`      ${i + 1}. ${att.filename} (s3_key: ${att.s3_key}, inline: ${att.inline})`);
-                    });
-                }
+                    campaignAttachments.forEach((att, i) => {{
+                        console.log(`      ${{i + 1}}. ${{att.filename}} (s3_key: ${{att.s3_key}}, inline: ${{att.inline}})`);
+                    }});
+                }}
                 
                 // Show sample of email body HTML with image tags
                 const imgMatches = emailBody.match(/<img[^>]+>/g);
-                if (imgMatches) {
-                    console.log(`   🖼️ Email body contains ${imgMatches.length} <img> tag(s):`);
-                    imgMatches.forEach((tag, i) => {
-                        console.log(`      ${i + 1}. ${tag.substring(0, 100)}...`);
-                    });
-                } else {
+                if (imgMatches) {{
+                    console.log(`   🖼️ Email body contains ${{imgMatches.length}} <img> tag(s):`);
+                    imgMatches.forEach((tag, i) => {{
+                        console.log(`      ${{i + 1}}. ${{tag.substring(0, 100)}}...`);
+                    }});
+                }} else {{
                     console.log(`   ⚠️ No <img> tags found in email body!`);
-                }
+                }}
                 
                 // Send preview to backend
-                const response = await fetch(`${API_URL}/preview`, {
+                const response = await fetch(`${{API_URL}}/preview`, {{
                     method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
+                    headers: {{'Content-Type': 'application/json'}},
                     body: JSON.stringify(previewData)
-                });
+                }});
                 
-                if (!response.ok) {
-                    throw new Error(`Preview generation failed: ${response.status} ${response.statusText}`);
-                }
+                if (!response.ok) {{
+                    throw new Error(`Preview generation failed: ${{response.status}} ${{response.statusText}}`);
+                }}
                 
                 const result = await response.json();
                 console.log('👁️ PREVIEW: Generated successfully!', result);
                 
                 // Open preview in new window
-                const previewUrl = `${API_URL}/preview/${result.preview_id}`;
-                console.log(`👁️ PREVIEW: Opening in new window: ${previewUrl}`);
+                const previewUrl = `${{API_URL}}/preview/${{result.preview_id}}`;
+                console.log(`👁️ PREVIEW: Opening in new window: ${{previewUrl}}`);
                 window.open(previewUrl, '_blank', 'width=900,height=800,scrollbars=yes,resizable=yes');
                 
                 // Show success message
                 Toast.success('Preview generated! Opening in new window...', 2000);
                 button.textContent = '✅ Preview Ready!';
                 button.style.background = 'linear-gradient(135deg, var(--success-color), #059669)';
-                setTimeout(() => {
+                setTimeout(() => {{
                     button.textContent = originalText;
                     button.style.background = '';
-                }, 2000);
+                }}, 2000);
                 
-            } catch (error) {
+            }} catch (error) {{
                 console.error('Preview error:', error);
-                Toast.error(`Preview failed: ${error.message}`);
-                alert(`Preview failed: ${error.message}`);
+                Toast.error(`Preview failed: ${{error.message}}`);
+                alert(`Preview failed: ${{error.message}}`);
                 
                 button.textContent = '❌ Preview Failed';
                 button.style.background = 'linear-gradient(135deg, var(--danger-color), #dc2626)';
-                setTimeout(() => {
+                setTimeout(() => {{
                     button.textContent = originalText;
                     button.style.background = '';
-                }, 3000);
-            } finally {
+                }}, 3000);
+            }} finally {{
                 button.classList.remove('loading');
                 button.disabled = false;
-            }
-        }
+            }}
+        }}
         
-        async function loadConfig() {
-            try {
-                console.log('Loading config from:', `${API_URL}/config`);
-                const response = await fetch(`${API_URL}/config`);
+        async function loadConfig() {{
+            try {{
+                console.log('Loading config from:', `${{API_URL}}/config`);
+                const response = await fetch(`${{API_URL}}/config`);
                 console.log('Config response status:', response.status);
                 
-                if (response.ok) {
+                if (response.ok) {{
                     const result = await response.json();
                     console.log('Config result:', result);
                     const config = result.config;
                     console.log('Config data:', config);
                     
-                    if (config && config.aws_region) {
+                    if (config && config.aws_region) {{
                         document.getElementById('awsRegion').value = config.aws_region;
                         console.log('✅ AWS Region loaded from DynamoDB:', config.aws_region);
-                    }
+                    }}
                     
-                    if (config && config.from_email) {
+                    if (config && config.from_email) {{
                         document.getElementById('fromEmail').value = config.from_email;
                         console.log('✅ From Email loaded from DynamoDB:', config.from_email);
-                    } else {
+                    }} else {{
                         console.log('⚠️ No from_email found in config - using defaults');
-                    }
+                    }}
                     
                     // emails_per_minute field removed
-                } else if (response.status === 404) {
+                }} else if (response.status === 404) {{
                     console.log('ℹ️ No email configuration found in DynamoDB - using defaults');
                     console.log('You can save configuration in the Email Config tab');
-                } else {
+                }} else {{
                     console.log('⚠️ Config response not OK:', response.status);
                     // alert('Config API error: ' + response.status);
-                }
-            } catch (e) {
+                }}
+            }} catch (e) {{
                 console.error('Error loading config:', e);
-            }
-        }
+            }}
+        }}
         
         // User identity management (browser localStorage)
-        function saveUserName() {
+        function saveUserName() {{
             const userName = document.getElementById('userName').value.trim();
-            if (userName) {
+            if (userName) {{
                 localStorage.setItem('emailCampaignUserName', userName);
                 console.log('User name saved:', userName);
-            }
-        }
+            }}
+        }}
         
-        function loadUserName() {
+        function loadUserName() {{
             const savedName = localStorage.getItem('emailCampaignUserName');
-            if (savedName) {
+            if (savedName) {{
                 document.getElementById('userName').value = savedName;
                 console.log('User name loaded from browser:', savedName);
-            }
-        }
+            }}
+        }}
         
         // Contact filter state
         let currentFilterType = null;  // null = no filter selected, '' = "All" selected, other = specific filter
-        let selectedFilterValues = {};  // {filterType: [values]}
+        let selectedFilterValues = {{}};  // {{filterType: [values]}}
         
         // Helper function to get field value case-insensitively
-        function getFieldValue(contact, fieldName) {
+        function getFieldValue(contact, fieldName) {{
             // Try exact match first
-            if (contact[fieldName] !== undefined) {
+            if (contact[fieldName] !== undefined) {{
                 return contact[fieldName];
-            }
+            }}
             
             // Try case-insensitive search
             const lowerFieldName = fieldName.toLowerCase();
-            for (const key in contact) {
-                if (key.toLowerCase() === lowerFieldName) {
+            for (const key in contact) {{
+                if (key.toLowerCase() === lowerFieldName) {{
                     return contact[key];
-                }
-            }
+                }}
+            }}
             
             return null;
-        }
+        }}
         
-        async function selectFilterType(filterType) {
+        async function selectFilterType(filterType) {{
             console.log('Filter type selected:', filterType, 'Current type:', currentFilterType);
             
             // Allow toggling off by clicking the same button (including "All")
-            if (currentFilterType === filterType) {
+            if (currentFilterType === filterType) {{
                 console.log('Toggling off current filter type');
                 currentFilterType = null;
                 document.getElementById('availableValuesArea').style.display = 'none';
                 updateButtonStyles(null);  // Reset all buttons to unselected state
                 return;
-            }
+            }}
             
             currentFilterType = filterType;
             updateButtonStyles(filterType);
             
-            if (!filterType || filterType === '') {
+            if (!filterType || filterType === '') {{
                 // "All" selected - hide available values area
                 document.getElementById('availableValuesArea').style.display = 'none';
                 return;
-            }
+            }}
             
             // Show loading message
             const availableValuesList = document.getElementById('availableValuesList');
@@ -5395,125 +5365,125 @@ Click OK to proceed or Cancel to abort.
             document.getElementById('availableCount').textContent = 'Querying database...';
             document.getElementById('availableValuesArea').style.display = 'block';
             
-            try {
-                console.log(`Querying DynamoDB for distinct values of field: ${filterType}`);
+            try {{
+                console.log(`Querying DynamoDB for distinct values of field: ${{filterType}}`);
                 
                 // Call the backend API to get distinct values from DynamoDB
-                const response = await fetch(`${API_URL}/contacts/distinct?field=${encodeURIComponent(filterType)}`);
+                const response = await fetch(`${{API_URL}}/contacts/distinct?field=${{encodeURIComponent(filterType)}}`);
                 
-                if (!response.ok) {
-                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-                }
+                if (!response.ok) {{
+                    throw new Error(`HTTP ${{response.status}}: ${{response.statusText}}`);
+                }}
                 
                 const result = await response.json();
                 const distinctValues = result.values || [];
                 
-                console.log(`Received ${distinctValues.length} distinct values for ${filterType} from DynamoDB`);
+                console.log(`Received ${{distinctValues.length}} distinct values for ${{filterType}} from DynamoDB`);
                 
-                if (distinctValues.length === 0) {
+                if (distinctValues.length === 0) {{
                     availableValuesList.innerHTML = '<div style="padding: 20px; text-align: center; color: #9ca3af;"><span style="font-size: 13px;">No values found for this field</span></div>';
                     document.getElementById('availableCount').textContent = 'No values available';
                     return;
-                }
+                }}
                 
                 // Display available values as clickable buttons
                 availableValuesList.innerHTML = '';
                 
-                distinctValues.forEach(value => {
+                distinctValues.forEach(value => {{
                     const btn = document.createElement('button');
                     btn.className = 'available-value-btn';
                     btn.textContent = value;
                     btn.onclick = () => addFilterValue(filterType, value);
                     btn.style.cssText = 'padding: 6px 12px; background: white; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 12px; cursor: pointer; transition: all 0.2s; color: #374151;';
-                    btn.onmouseover = () => { btn.style.background = '#eff6ff'; btn.style.borderColor = '#6366f1'; };
-                    btn.onmouseout = () => { btn.style.background = 'white'; btn.style.borderColor = '#cbd5e1'; };
+                    btn.onmouseover = () => {{ btn.style.background = '#eff6ff'; btn.style.borderColor = '#6366f1'; }};
+                    btn.onmouseout = () => {{ btn.style.background = 'white'; btn.style.borderColor = '#cbd5e1'; }};
                     availableValuesList.appendChild(btn);
-                });
+                }});
                 
-                document.getElementById('availableCount').textContent = `${distinctValues.length} values available`;
+                document.getElementById('availableCount').textContent = `${{distinctValues.length}} values available`;
                 
-            } catch (error) {
+            }} catch (error) {{
                 console.error('Error loading distinct values:', error);
-                availableValuesList.innerHTML = `<div style="padding: 20px; text-align: center; color: #ef4444;"><span style="font-size: 13px;">❌ Error loading values: ${error.message}</span></div>`;
+                availableValuesList.innerHTML = `<div style="padding: 20px; text-align: center; color: #ef4444;"><span style="font-size: 13px;">❌ Error loading values: ${{error.message}}</span></div>`;
                 document.getElementById('availableCount').textContent = 'Error loading values';
-            }
-        }
+            }}
+        }}
         
-        function updateButtonStyles(filterType) {
+        function updateButtonStyles(filterType) {{
             // Update button styles based on selected filter type
-            document.querySelectorAll('.filter-type-btn').forEach(btn => {
+            document.querySelectorAll('.filter-type-btn').forEach(btn => {{
                 const btnFilter = btn.getAttribute('data-filter');
                 
-                if (filterType === null) {
+                if (filterType === null) {{
                     // Nothing selected - all buttons unselected
                     btn.style.background = 'white';
                     btn.style.borderColor = '#e5e7eb';
                     btn.style.color = '#374151';
-                } else if (btnFilter === filterType && filterType !== '') {
+                }} else if (btnFilter === filterType && filterType !== '') {{
                     // Selected filter type (not "All")
                     btn.style.background = '#6366f1';
                     btn.style.borderColor = '#6366f1';
                     btn.style.color = 'white';
-                } else if (filterType === '' && btnFilter === '') {
+                }} else if (filterType === '' && btnFilter === '') {{
                     // "All" button selected
                     btn.style.background = '#10b981';
                     btn.style.borderColor = '#10b981';
                     btn.style.color = 'white';
-                } else {
+                }} else {{
                     // Unselected buttons
                     btn.style.background = 'white';
                     btn.style.borderColor = '#e5e7eb';
                     btn.style.color = '#374151';
-                }
-            });
-        }
+                }}
+            }});
+        }}
         
-        function addFilterValue(filterType, value) {
+        function addFilterValue(filterType, value) {{
             console.log('Adding filter value:', filterType, value);
             
             // Initialize array if needed
-            if (!selectedFilterValues[filterType]) {
+            if (!selectedFilterValues[filterType]) {{
                 selectedFilterValues[filterType] = [];
-            }
+            }}
             
             // Don't add duplicates
-            if (selectedFilterValues[filterType].includes(value)) {
+            if (selectedFilterValues[filterType].includes(value)) {{
                 console.log('Value already selected');
                 return;
-            }
+            }}
             
             selectedFilterValues[filterType].push(value);
             updateSelectedValuesTags();
-        }
+        }}
         
-        function removeFilterValue(filterType, value) {
+        function removeFilterValue(filterType, value) {{
             console.log('Removing filter value:', filterType, value);
             
-            if (selectedFilterValues[filterType]) {
+            if (selectedFilterValues[filterType]) {{
                 selectedFilterValues[filterType] = selectedFilterValues[filterType].filter(v => v !== value);
                 
                 // Remove filter type if no values left
-                if (selectedFilterValues[filterType].length === 0) {
+                if (selectedFilterValues[filterType].length === 0) {{
                     delete selectedFilterValues[filterType];
-                }
-            }
+                }}
+            }}
             
             updateSelectedValuesTags();
-        }
+        }}
         
-        function updateSelectedValuesTags() {
+        function updateSelectedValuesTags() {{
             const tagsContainer = document.getElementById('selectedValuesTags');
             tagsContainer.innerHTML = '';
             
             let hasValues = false;
             
             // Display all selected values as tags
-            for (const [filterType, values] of Object.entries(selectedFilterValues)) {
-                if (values && values.length > 0) {
+            for (const [filterType, values] of Object.entries(selectedFilterValues)) {{
+                if (values && values.length > 0) {{
                     hasValues = true;
                     
                     // Get filter type label
-                    const filterLabels = {
+                    const filterLabels = {{
                         'entity_type': 'Entity Type',
                         'state': 'State',
                         'agency_name': 'Agency',
@@ -5526,33 +5496,33 @@ Click OK to proceed or Cancel to abort.
                         'water_wastewater': 'Water/Wastewater',
                         'weekly_rollup': 'Weekly Rollup',
                         'region': 'Region'
-                    };
+                    }};
                     
                     const label = filterLabels[filterType] || filterType;
                     
-                    values.forEach(value => {
+                    values.forEach(value => {{
                         const tag = document.createElement('div');
                         tag.style.cssText = 'display: inline-flex; align-items: center; gap: 6px; padding: 6px 10px; background: #6366f1; color: white; border-radius: 6px; font-size: 13px; font-weight: 500;';
                         tag.innerHTML = `
-                            <span style="font-size: 11px; opacity: 0.9;">${label}:</span>
-                            <span>${value}</span>
-                            <button onclick="removeFilterValue('${filterType}', '${value.replace(/'/g, "\\\\'")}');" style="background: none; border: none; color: white; cursor: pointer; padding: 0 2px; font-size: 16px; line-height: 1; opacity: 0.8;" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.8'">
+                            <span style="font-size: 11px; opacity: 0.9;">${{label}}:</span>
+                            <span>${{value}}</span>
+                            <button onclick="removeFilterValue('${{filterType}}', '${{value.replace(/'/g, "\\\\'")}}');" style="background: none; border: none; color: white; cursor: pointer; padding: 0 2px; font-size: 16px; line-height: 1; opacity: 0.8;" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.8'">
                                 ×
                             </button>
                         `;
                         tagsContainer.appendChild(tag);
-                    });
-                }
-            }
+                    }});
+                }}
+            }}
             
-            if (!hasValues) {
+            if (!hasValues) {{
                 tagsContainer.innerHTML = '<small style="color: #9ca3af; font-style: italic;">No filters selected - showing all contacts</small>';
-            }
-        }
+            }}
+        }}
         
-        function clearAllFilters() {
+        function clearAllFilters() {{
             console.log('Clearing all filters');
-            selectedFilterValues = {};
+            selectedFilterValues = {{}};
             currentFilterType = null;
             
             // Reset all buttons to unselected state
@@ -5566,19 +5536,19 @@ Click OK to proceed or Cancel to abort.
             
             // Show all contacts
             displayContacts(allContacts);
-        }
+        }}
         
-        window.onload = () => {
+        window.onload = () => {{
             // Initialize UI and load configuration
             loadConfig();
             // loadGroupsFromDB();  // Disabled - groups feature removed
             loadUserName();  // Load saved user name from browser
             
             console.log('Web UI loaded successfully');
-        };
+        }};
     </script>
 </body>
-</html>""".format(api_url=api_url).format(api_url=api_url)
+</html>"""
     
     return {
         'statusCode': 200,
@@ -5707,8 +5677,7 @@ def get_contacts(headers, event=None):
                 import json as json_lib
                 last_key = json_lib.loads(last_key_str)
                 scan_params['ExclusiveStartKey'] = last_key
-            except (json.JSONDecodeError, ValueError) as e:
-                print(f"⚠️ Invalid lastKey format: {str(e)}")
+            except:
                 pass  # Invalid lastKey, ignore
         
         # Scan contacts table with pagination
