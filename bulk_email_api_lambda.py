@@ -4173,11 +4173,10 @@ def serve_web_ui(event):
             hiddenElements.forEach(el => el.remove());
             console.log(`Removed ${{hiddenElements.length}} hidden elements`);
             
-            // Remove all Quill-specific attributes and classes
+            // Remove Quill-specific attributes but PRESERVE all CSS classes
             const allElements = tempDiv.querySelectorAll('*');
             allElements.forEach(element => {{
-                // Remove all class attributes
-                element.removeAttribute('class');
+                // PRESERVE all class attributes (Quill classes and user custom classes)
                 // Remove data-* attributes EXCEPT data-s3-key and data-inline (needed for image processing)
                 Array.from(element.attributes).forEach(attr => {{
                     if (attr.name.startsWith('data-') && 
@@ -4195,7 +4194,7 @@ def serve_web_ui(event):
                 // Remove autocapitalize attributes
                 element.removeAttribute('autocapitalize');
             }});
-            console.log('✅ Cleaned Quill attributes (preserved data-s3-key for images)');
+            console.log('✅ Cleaned Quill attributes (preserved ALL CSS classes)');
             
             // DEBUG: Check what images exist before upload attempt
             const allImages = tempDiv.querySelectorAll('img');
@@ -4470,7 +4469,7 @@ def serve_web_ui(event):
                 .replace(/<p>\\s*<br\\s*\\/?\\s*>\\s*<\\/p>/g, '<p>&nbsp;</p>')  // Preserve blank lines as &nbsp;
                 .replace(/<p>\\s*<\\/p>/g, '')  // Remove truly empty paragraphs (no content, no br)
                 .replace(/<br>\\s*<br>/g, '<br>')  // Remove double line breaks (reduce to single)
-                .replace(/\\s+class=""/g, '')  // Remove empty class attributes
+                // PRESERVE class attributes (user custom classes and Quill classes)
                 .replace(/\\s+data-[^=]*="[^"]*"/g, '')  // Remove all data-* attributes (S3 keys already in src)
                 .trim();
             
@@ -4481,6 +4480,29 @@ def serve_web_ui(event):
             emailBody = emailBody.replace(/<p>/g, '<p style="line-height: 1.0; margin: 0;">');
             emailBody = emailBody.replace(/<p([^>]*?)style="([^"]*)"([^>]*)>/g, '<p$1style="$2; line-height: 1.0; margin: 0;"$3>');
             console.log('✅ Added line-height: 1.0 to all <p> tags for recipients');
+            
+            // Add Quill CSS styles to email body so Quill classes work in recipient emails
+            const quillCSS = `<style type="text/css">
+    /* Quill Editor Styles for Email Compatibility */
+    .ql-align-center {{ text-align: center; }}
+    .ql-align-right {{ text-align: right; }}
+    .ql-align-left {{ text-align: left; }}
+    .ql-align-justify {{ text-align: justify; }}
+    .ql-indent-1 {{ padding-left: 3em; }}
+    .ql-indent-2 {{ padding-left: 6em; }}
+    .ql-indent-3 {{ padding-left: 9em; }}
+    .ql-size-small {{ font-size: 0.75em; }}
+    .ql-size-large {{ font-size: 1.5em; }}
+    .ql-size-huge {{ font-size: 2.5em; }}
+    .ql-font-serif {{ font-family: Georgia, Times New Roman, serif; }}
+    .ql-font-monospace {{ font-family: Monaco, Courier New, monospace; }}
+    /* Preserve user's custom classes - add more as needed */
+    p {{ line-height: 1.0; margin: 0; }}
+</style>`;
+            
+            // Prepend CSS to email body
+            emailBody = quillCSS + emailBody;
+            console.log('✅ Added Quill CSS styles to email for class rendering');
             
             console.log(`Final email body preview: ${{emailBody.substring(0, 200)}}...`);
             
@@ -4917,7 +4939,7 @@ Click OK to proceed or Cancel to abort.
                 
                 const allElements = tempDiv.querySelectorAll('*');
                 allElements.forEach(element => {{
-                    element.removeAttribute('class');
+                    // PRESERVE all class attributes (Quill classes and user custom classes)
                     // Remove data-* attributes EXCEPT data-s3-key and data-inline (needed for image processing)
                     Array.from(element.attributes).forEach(attr => {{
                         if (attr.name.startsWith('data-') && 
@@ -4931,7 +4953,7 @@ Click OK to proceed or Cancel to abort.
                     element.removeAttribute('autocorrect');
                     element.removeAttribute('autocapitalize');
                 }});
-                console.log(`👁️ PREVIEW: Cleaned Quill attributes (preserved data-s3-key for images)`);
+                console.log(`👁️ PREVIEW: Cleaned Quill attributes (preserved ALL CSS classes)`);
                 
                 // Process embedded images (same as sendCampaign)
                 // Check what images exist first
@@ -5101,7 +5123,7 @@ Click OK to proceed or Cancel to abort.
                 emailBody = emailBody
                     .replace(/<p>\\s*<br\\s*\\/?\\s*>\\s*<\\/p>/g, '<p>&nbsp;</p>')  // Preserve blank lines
                     .replace(/<p>\\s*<\\/p>/g, '')  // Remove truly empty paragraphs
-                    .replace(/\\s+class=""/g, '')  // Remove empty class attributes
+                    // PRESERVE class attributes (user custom classes and Quill classes)
                     .replace(/\\s+data-[^=]*="[^"]*"/g, '')  // Remove all remaining data-* attributes
                     .trim();
                 
@@ -5112,6 +5134,29 @@ Click OK to proceed or Cancel to abort.
                 emailBody = emailBody.replace(/<p>/g, '<p style="line-height: 1.0; margin: 0;">');
                 emailBody = emailBody.replace(/<p([^>]*?)style="([^"]*)"([^>]*)>/g, '<p$1style="$2; line-height: 1.0; margin: 0;"$3>');
                 console.log(`   ✅ Added line-height: 1.0 to all <p> tags`);
+                
+                // Add Quill CSS styles so Quill classes work in preview
+                const quillCSS = `<style type="text/css">
+    /* Quill Editor Styles for Email Compatibility */
+    .ql-align-center {{ text-align: center; }}
+    .ql-align-right {{ text-align: right; }}
+    .ql-align-left {{ text-align: left; }}
+    .ql-align-justify {{ text-align: justify; }}
+    .ql-indent-1 {{ padding-left: 3em; }}
+    .ql-indent-2 {{ padding-left: 6em; }}
+    .ql-indent-3 {{ padding-left: 9em; }}
+    .ql-size-small {{ font-size: 0.75em; }}
+    .ql-size-large {{ font-size: 1.5em; }}
+    .ql-size-huge {{ font-size: 2.5em; }}
+    .ql-font-serif {{ font-family: Georgia, Times New Roman, serif; }}
+    .ql-font-monospace {{ font-family: Monaco, Courier New, monospace; }}
+    /* User custom classes preserved */
+    p {{ line-height: 1.0; margin: 0; }}
+</style>`;
+                
+                // Prepend CSS to email body
+                emailBody = quillCSS + emailBody;
+                console.log(`   ✅ Added Quill CSS styles for class rendering`);
                 
                 // Check if img tags survived cleanup
                 const imgAfterCleanup = emailBody.match(/<img[^>]+>/g);

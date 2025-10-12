@@ -1279,63 +1279,67 @@ def send_smtp_email(campaign, contact, from_email, subject, body, msg_idx=0, cc_
 def clean_quill_html_for_email(html_content):
     """
     Clean Quill editor HTML content for email sending.
-    Removes Quill-specific CSS classes and graphics that appear as transparent icons.
+    UPDATED: Now PRESERVES all CSS classes (Quill and user custom classes).
+    Only removes editor-specific attributes like contenteditable, spellcheck.
     """
     import re
     
     if not html_content:
         return html_content
     
-    # Remove Quill-specific CSS classes that add graphics
-    quill_classes_to_remove = [
-        r'class="[^"]*ql-[^"]*"',  # Remove all ql-* classes
-        r'class="[^"]*ql-editor[^"]*"',  # Remove ql-editor class
-        r'class="[^"]*ql-container[^"]*"',  # Remove ql-container class
-        r'class="[^"]*ql-snow[^"]*"',  # Remove ql-snow class
-        r'class="[^"]*ql-bubble[^"]*"',  # Remove ql-bubble class
-    ]
+    # IMPORTANT: PRESERVE all CSS classes (both Quill and user custom classes)
+    # The frontend now adds <style> tag with Quill CSS definitions
     
-    for pattern in quill_classes_to_remove:
-        html_content = re.sub(pattern, '', html_content)
-    
-    # Remove Quill-specific attributes
+    # Remove only editor-specific attributes (not classes!)
     quill_attrs_to_remove = [
         r'data-[^=]*="[^"]*"',  # Remove data-* attributes
         r'spellcheck="[^"]*"',  # Remove spellcheck
         r'autocorrect="[^"]*"',  # Remove autocorrect
         r'autocapitalize="[^"]*"',  # Remove autocapitalize
+        r'contenteditable="[^"]*"',  # Remove contenteditable
     ]
     
     for pattern in quill_attrs_to_remove:
         html_content = re.sub(pattern, '', html_content)
     
-    # Clean up empty class attributes
-    html_content = re.sub(r'class=""', '', html_content)
-    html_content = re.sub(r'class="\s*"', '', html_content)
-    
     # Remove Quill-specific div wrappers but keep content
     html_content = re.sub(r'<div[^>]*class="[^"]*ql-editor[^"]*"[^>]*>', '', html_content)
     html_content = re.sub(r'</div>\s*$', '', html_content)  # Remove trailing div
     
-    # Clean up multiple spaces
-    # Collapse runs of whitespace to a single space (keeps HTML compact)
+    # IMPORTANT: Preserve <style> tags by protecting them during whitespace collapse
+    # Extract <style> tags, collapse whitespace in HTML only, then restore <style> tags
+    style_tags = []
+    def save_style(match):
+        style_tags.append(match.group(0))
+        return f'___STYLE_PLACEHOLDER_{len(style_tags) - 1}___'
+    
+    # Save style tags
+    html_content = re.sub(r'<style[^>]*>.*?</style>', save_style, html_content, flags=re.DOTALL | re.IGNORECASE)
+    
+    # Clean up multiple spaces in HTML only
     html_content = re.sub(r'\s+', ' ', html_content)
     html_content = html_content.strip()
+    
+    # Restore style tags
+    for i, style_tag in enumerate(style_tags):
+        html_content = html_content.replace(f'___STYLE_PLACEHOLDER_{i}___', style_tag)
+    
+    logger.info(f"clean_quill_html_for_email: Preserved {len(style_tags)} <style> tag(s)")
 
     # --- Additional normalization to reduce visible gaps/newlines in emails ---
     try:
-        # Remove empty paragraph tags often emitted by editors like Quill (e.g. <p><br></p> or <p>&nbsp;</p>)
-        html_content = re.sub(r'<p(?:\s+[^>]*)?>\s*(?:&nbsp;|<br\s*/?>|\s)*\s*</p>', '', html_content, flags=re.IGNORECASE)
-
+        # IMPORTANT: DO NOT remove <p>&nbsp;</p> - these represent intentional blank lines from users
+        # Only remove truly empty paragraphs with no content
+        html_content = re.sub(r'<p(?:\s+[^>]*)?>\s*<br\s*/?\s*>\s*</p>', '<p>&nbsp;</p>', html_content, flags=re.IGNORECASE)  # Convert <p><br></p> to <p>&nbsp;</p>
+        html_content = re.sub(r'<p(?:\s+[^>]*)?>\s*</p>', '', html_content, flags=re.IGNORECASE)  # Remove only truly empty <p></p>
+        
         # Collapse multiple consecutive <br> into a single <br/>
         html_content = re.sub(r'(<br\s*/?>\s*){2,}', '<br/>', html_content, flags=re.IGNORECASE)
 
-        # Collapse sequences of empty or near-empty paragraphs into a single paragraph
-        # Example: </p> <p> </p> <p>Some text</p>  -> </p><p>Some text</p>
-        html_content = re.sub(r'</p>\s*(?:<p(?:\s+[^>]*)?>\s*</p>\s*)+', '</p>', html_content, flags=re.IGNORECASE)
-
-        # Trim leading/trailing whitespace inside paragraph tags: <p>  text  </p> -> <p>text</p>
-        html_content = re.sub(r'<p([^>]*)>\s*(.*?)\s*</p>', lambda m: f"<p{m.group(1)}>{m.group(2).strip()}</p>", html_content, flags=re.IGNORECASE)
+        # Trim leading/trailing whitespace inside paragraph tags (but preserve &nbsp;)
+        html_content = re.sub(r'<p([^>]*)>\s*((?:(?!&nbsp;).)*?)\s*</p>', lambda m: f"<p{m.group(1)}>{m.group(2).strip()}</p>" if m.group(2).strip() else f"<p{m.group(1)}></p>", html_content, flags=re.IGNORECASE)
+        
+        logger.info("clean_quill_html_for_email: Preserved <p>&nbsp;</p> blank lines")
     except Exception as _norm_err:
         # If normalization fails for any reason, keep the cleaned content unchanged
         logger.debug(f"clean_quill_html_for_email: normalization step failed: {_norm_err}")
