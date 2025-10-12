@@ -10,15 +10,22 @@
 **Solution:** Preserve blank lines by converting `<p><br></p>` to `<p>&nbsp;</p>` instead of removing them.
 
 ### Issue 2: Embedded Images Not in Recipients' Emails
-**Problem:** Embedded images uploaded to S3 weren't appearing in recipients' emails.
+**Problem:** Embedded images uploaded to S3 weren't appearing in recipients' emails. Email worker logs showed "no <img> tags found in HTML body".
 
 **Root Causes:**
-1. Email worker wasn't detecting S3 keys in format `campaign-attachments/...`
-2. S3 operations required AWS Signature Version 4 for KMS-encrypted buckets
+1. **CRITICAL BUG:** Frontend was removing `data-s3-key` attributes BEFORE doing S3 key replacement
+   - Line 4166-4171 removed ALL data-* attributes from images
+   - This happened BEFORE line 4376 tried to use data-s3-key for replacement
+   - Result: S3 keys were uploaded but never inserted into HTML body
+2. Email worker wasn't detecting S3 keys in format `campaign-attachments/...`
+3. S3 operations required AWS Signature Version 4 for KMS-encrypted buckets
 
 **Solutions:**
-1. Updated email worker to detect simple S3 key paths
-2. Configured S3 client with signature_version='s3v4'
+1. **CRITICAL FIX:** Preserve `data-s3-key` and `data-inline` attributes during Quill cleanup
+2. Do S3 key replacement using preserved attributes
+3. Remove data attributes AFTER replacement is complete
+4. Updated email worker to detect simple S3 key paths
+5. Configured S3 client with signature_version='s3v4'
 
 ### Issue 3: Preview Window Line Spacing
 **Problem:** Preview window showed 1.5 line spacing instead of 1.0.
@@ -26,6 +33,39 @@
 **Solution:** Changed line-height from 1.5 to 1.0 in preview CSS.
 
 ## 🔧 Fixes Applied
+
+### Fix 0: CRITICAL - Preserve data-s3-key Attributes
+
+**THE BUG:**
+```javascript
+// Step 1: Upload image, set data-s3-key attribute
+img.setAttribute('data-s3-key', uploadResult.s3_key);
+
+// Step 2: Remove ALL data-* attributes (INCLUDING data-s3-key!) ← BUG!
+Array.from(element.attributes).forEach(attr => {
+    if (attr.name.startsWith('data-')) {
+        element.removeAttribute(attr.name);  // Removes data-s3-key!
+    }
+});
+
+// Step 3: Try to use data-s3-key for replacement ← FAILS!
+const imagesWithS3Keys = tempDiv.querySelectorAll('img[data-s3-key]');  // Returns nothing!
+```
+
+**THE FIX:**
+```javascript
+// Preserve data-s3-key and data-inline during cleanup
+Array.from(element.attributes).forEach(attr => {
+    if (attr.name.startsWith('data-') && 
+        attr.name !== 'data-s3-key' &&      // PRESERVE for S3 replacement
+        attr.name !== 'data-inline') {      // PRESERVE for inline flag
+        element.removeAttribute(attr.name);
+    }
+});
+
+// Now data-s3-key is available for replacement
+const imagesWithS3Keys = tempDiv.querySelectorAll('img[data-s3-key]');  // Works!
+```
 
 ### Fix 1: Blank Lines Preservation
 

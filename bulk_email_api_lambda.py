@@ -4163,9 +4163,11 @@ def serve_web_ui(event):
             allElements.forEach(element => {{
                 // Remove all class attributes
                 element.removeAttribute('class');
-                // Remove all data-* attributes
+                // Remove data-* attributes EXCEPT data-s3-key and data-inline (needed for image processing)
                 Array.from(element.attributes).forEach(attr => {{
-                    if (attr.name.startsWith('data-')) {{
+                    if (attr.name.startsWith('data-') && 
+                        attr.name !== 'data-s3-key' && 
+                        attr.name !== 'data-inline') {{
                         element.removeAttribute(attr.name);
                     }}
                 }});
@@ -4178,6 +4180,7 @@ def serve_web_ui(event):
                 // Remove autocapitalize attributes
                 element.removeAttribute('autocapitalize');
             }});
+            console.log('✅ Cleaned Quill attributes (preserved data-s3-key for images)');
             
             // IMPORTANT: Convert embedded images (base64 data URIs) to attachments
             // This allows inline images in the email body
@@ -4415,6 +4418,11 @@ def serve_web_ui(event):
                 }} else {{
                     console.log('✅ Confirmed: No data:image URIs in email body (all replaced with S3 keys)');
                 }}
+                
+                // Now remove data-s3-key attributes from final HTML (no longer needed)
+                emailBody = emailBody.replace(/\\s+data-s3-key="[^"]*"/g, '');
+                emailBody = emailBody.replace(/\\s+data-inline="[^"]*"/g, '');
+                console.log('✅ Removed data-s3-key attributes from final HTML');
             }}
             
             // Additional regex cleanup for any remaining artifacts
@@ -4424,7 +4432,7 @@ def serve_web_ui(event):
                 .replace(/<p>\\s*<\\/p>/g, '')  // Remove truly empty paragraphs (no content, no br)
                 .replace(/<br>\\s*<br>/g, '<br>')  // Remove double line breaks (reduce to single)
                 .replace(/\\s+class=""/g, '')  // Remove empty class attributes
-                .replace(/\\s+data-[^=]*="[^"]*"/g, '')  // Remove any remaining data attributes
+                .replace(/\\s+data-[^=]*="[^"]*"/g, '')  // Remove all data-* attributes (S3 keys already in src)
                 .trim();
             
             console.log('✅ Applied HTML cleanup and preserved blank lines as <p>&nbsp;</p>');
@@ -4985,13 +4993,18 @@ Click OK to proceed or Cancel to abort.
                     console.log(`   ✅ All data: URIs replaced with S3 keys`);
                 }}
                 
+                // Remove data-s3-key attributes from HTML after replacement
+                emailBody = emailBody.replace(/\\s+data-s3-key="[^"]*"/g, '');
+                emailBody = emailBody.replace(/\\s+data-inline="[^"]*"/g, '');
+                console.log(`   ✅ Removed data-s3-key attributes from HTML`);
+                
                 // Additional HTML cleanup
                 // IMPORTANT: Preserve blank lines as <p>&nbsp;</p>
                 emailBody = emailBody
                     .replace(/<p>\\s*<br\\s*\\/?\\s*>\\s*<\\/p>/g, '<p>&nbsp;</p>')  // Preserve blank lines
                     .replace(/<p>\\s*<\\/p>/g, '')  // Remove truly empty paragraphs
                     .replace(/\\s+class=""/g, '')  // Remove empty class attributes
-                    .replace(/\\s+data-[^=]*="[^"]*"/g, '')  // Remove any remaining data attributes
+                    .replace(/\\s+data-[^=]*="[^"]*"/g, '')  // Remove all remaining data-* attributes
                     .trim();
                 
                 console.log(`👁️ PREVIEW: Final email body length: ${{emailBody.length}} characters`);
@@ -6202,6 +6215,31 @@ def send_campaign(body, headers, event=None):
         # Get attachments
         attachments = body.get('attachments', [])
         
+        # Get email body for inspection
+        email_body = body.get('body', '')
+        
+        # DEBUG: Show what was received from frontend
+        print(f"📧 Campaign body length: {len(email_body)} characters")
+        print(f"📧 Body sample (first 500 chars): {email_body[:500]}...")
+        
+        # Check for img tags in the received body
+        import re
+        img_tags = re.findall(r'<img[^>]+>', email_body, re.IGNORECASE)
+        if img_tags:
+            print(f"🖼️ Found {len(img_tags)} <img> tag(s) in campaign body:")
+            for i, tag in enumerate(img_tags):
+                print(f"   {i+1}. {tag[:200]}...")
+        else:
+            print(f"⚠️ No <img> tags found in campaign body!")
+        
+        # Show attachment details
+        if attachments:
+            print(f"📎 {len(attachments)} attachment(s) received:")
+            for i, att in enumerate(attachments):
+                print(f"   {i+1}. {att.get('filename')} - s3_key: {att.get('s3_key')}, inline: {att.get('inline')}, size: {att.get('size', 0)}")
+        else:
+            print(f"📎 No attachments received")
+        
         # Get user info from request context or body
         launched_by = body.get('launched_by', 'Web User')
         if 'requestContext' in event:
@@ -6464,11 +6502,28 @@ def save_preview(body, headers):
         print(f"   Preview ID: {preview_id}")
         print(f"   Subject: {subject}")
         print(f"   From: {from_email}")
-        print(f"   To: {len(to_recipients)} recipients")
-        print(f"   CC: {len(cc_recipients)} recipients")
-        print(f"   BCC: {len(bcc_recipients)} recipients")
+        print(f"   To: {len(to_recipients)} recipients - {to_recipients}")
+        print(f"   CC: {len(cc_recipients)} recipients - {cc_recipients}")
+        print(f"   BCC: {len(bcc_recipients)} recipients - {bcc_recipients}")
         print(f"   Body length: {len(email_body)} characters")
+        print(f"   Body sample (first 300 chars): {email_body[:300]}...")
         print(f"   Attachments: {len(attachments)}")
+        
+        # Check for img tags in the received HTML body
+        import re
+        img_tags = re.findall(r'<img[^>]+>', email_body, re.IGNORECASE)
+        if img_tags:
+            print(f"   🖼️ Found {len(img_tags)} <img> tag(s) in received HTML:")
+            for i, tag in enumerate(img_tags):
+                print(f"      {i+1}. {tag[:150]}...")
+        else:
+            print(f"   ⚠️ No <img> tags found in received HTML body!")
+        
+        # Show attachment details
+        if attachments:
+            print(f"   📎 Attachment details:")
+            for i, att in enumerate(attachments):
+                print(f"      {i+1}. {att.get('filename')} - s3_key: {att.get('s3_key')}, inline: {att.get('inline')}")
         
         # Clean up the email body HTML for better preview display
         import re

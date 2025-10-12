@@ -366,13 +366,26 @@ def lambda_handler(event, context):
                 logger.info(f"[Message {idx}] Email service: {email_service}")
                 logger.info(f"[Message {idx}] From: {from_email}")
                 logger.info(f"[Message {idx}] To: {contact_email}")
+                logger.info(f"[Message {idx}] Campaign body length: {len(body)} characters")
+                logger.info(f"[Message {idx}] Campaign body sample (first 300 chars): {body[:300]}...")
+                
+                # Check for img tags in campaign body
+                import re
+                img_tags_in_campaign = re.findall(r'<img[^>]+>', body, re.IGNORECASE)
+                if img_tags_in_campaign:
+                    logger.info(f"[Message {idx}] 🖼️ Found {len(img_tags_in_campaign)} <img> tag(s) in campaign body:")
+                    for i, tag in enumerate(img_tags_in_campaign):
+                        logger.info(f"[Message {idx}]    {i+1}. {tag[:150]}...")
+                else:
+                    logger.warning(f"[Message {idx}] ⚠️ No <img> tags found in campaign body!")
                 
                 # Personalize content
                 personalized_subject = personalize_content(subject, contact)
                 personalized_body = personalize_content(body, contact)
                 
                 logger.info(f"[Message {idx}] Subject: {personalized_subject}")
-                logger.debug(f"[Message {idx}] Body length: {len(personalized_body)} characters")
+                logger.info(f"[Message {idx}] Personalized body length: {len(personalized_body)} characters")
+                logger.info(f"[Message {idx}] Personalized body sample (first 300 chars): {personalized_body[:300]}...")
                 
                 # Check message role: normal per-contact sends vs single-send for cc/bcc/to
                 role = message.get('role')  # None, 'cc', 'bcc', or 'to'
@@ -391,6 +404,13 @@ def lambda_handler(event, context):
 
                 # Apply adaptive rate control delay before sending
                 attachments = campaign.get('attachments', [])
+                
+                # DEBUG: Show attachments details
+                logger.info(f"[Message {idx}] Campaign has {len(attachments)} attachment(s)")
+                if attachments:
+                    for i, att in enumerate(attachments):
+                        logger.info(f"[Message {idx}]    {i+1}. {att.get('filename')} - s3_key: {att.get('s3_key')}, inline: {att.get('inline')}")
+                
                 delay = rate_control.get_delay_for_email(attachments)
                 
                 if delay > 0:
