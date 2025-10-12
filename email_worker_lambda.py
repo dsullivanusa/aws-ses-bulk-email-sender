@@ -896,8 +896,11 @@ def send_ses_email(campaign, contact, from_email, subject, body, msg_idx=0, cc_l
                         except Exception as http_err:
                             logger.warning(f"[Message {msg_idx}] Failed to download image {src}: {str(http_err)}")
 
-                    # S3-like references
-                    elif src.startswith('s3://') or (ATTACHMENTS_BUCKET in src and ('s3.amazonaws.com' in src or src.startswith('/'))):
+                    # S3-like references - now includes simple S3 key paths
+                    elif (src.startswith('s3://') or 
+                          (ATTACHMENTS_BUCKET in src and ('s3.amazonaws.com' in src or src.startswith('/'))) or
+                          src.startswith('campaign-attachments/') or 
+                          src.startswith('email-previews/')):
                         s3_key_candidate = None
                         try:
                             if src.startswith('s3://'):
@@ -906,6 +909,10 @@ def send_ses_email(campaign, contact, from_email, subject, body, msg_idx=0, cc_l
                             elif 's3.amazonaws.com' in src:
                                 parts = src.split('/', 3)
                                 s3_key_candidate = parts[3] if len(parts) > 3 else None
+                            elif src.startswith('campaign-attachments/') or src.startswith('email-previews/'):
+                                # Direct S3 key path from frontend
+                                s3_key_candidate = src
+                                logger.info(f"[Message {msg_idx}] Detected inline S3 key: {s3_key_candidate}")
                             else:
                                 s3_key_candidate = src.lstrip('/')
 
