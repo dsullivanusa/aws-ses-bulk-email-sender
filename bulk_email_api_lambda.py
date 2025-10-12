@@ -4419,7 +4419,7 @@ def serve_web_ui(event):
                     if (s3Key && currentSrc && currentSrc.startsWith('data:')) {{
                         // Use string replacement to avoid browser fetching the image
                         // Escape special regex characters in the data URI
-                        const escapedSrc = currentSrc.replace(/[.*+?^${{}}()|[\]\\\\]/g, '\\\\$&');
+                        const escapedSrc = currentSrc.replace(/[.*+?^${{}}()|[\\]\\\\]/g, '\\\\$&');
                         const regex = new RegExp('src="' + escapedSrc + '"', 'g');
                         const beforeLength = emailBody.length;
                         emailBody = emailBody.replace(regex, 'src="' + s3Key + '"');
@@ -4447,8 +4447,8 @@ def serve_web_ui(event):
                 }}
                 
                 // Now remove data-s3-key attributes from final HTML (no longer needed)
-                emailBody = emailBody.replace(/\\\\s+data-s3-key="[^"]*"/g, '');
-                emailBody = emailBody.replace(/\\\\s+data-inline="[^"]*"/g, '');
+                emailBody = emailBody.replace(/\\s+data-s3-key="[^"]*"/g, '');
+                emailBody = emailBody.replace(/\\s+data-inline="[^"]*"/g, '');
                 console.log('✅ Removed data-s3-key attributes from final HTML');
                 
                 // Verify img tags still exist after cleanup
@@ -4466,11 +4466,11 @@ def serve_web_ui(event):
             // IMPORTANT: Preserve blank lines by converting <p><br></p> to <p>&nbsp;</p>
             const bodyBeforeRegexCleanup = emailBody;
             emailBody = emailBody
-                .replace(/<p>\\\\s*<br\\\\s*\\\\/?\\\\s*>\\\\s*<\\\\/p>/g, '<p>&nbsp;</p>')  // Preserve blank lines as &nbsp;
-                .replace(/<p>\\\\s*<\\\\/p>/g, '')  // Remove truly empty paragraphs (no content, no br)
-                .replace(/<br>\\\\s*<br>/g, '<br>')  // Remove double line breaks (reduce to single)
+                .replace(/<p>\\s*<br\\s*\\/?\\s*>\\s*<\\/p>/g, '<p>&nbsp;</p>')  // Preserve blank lines as &nbsp;
+                .replace(/<p>\\s*<\\/p>/g, '')  // Remove truly empty paragraphs (no content, no br)
+                .replace(/<br>\\s*<br>/g, '<br>')  // Remove double line breaks (reduce to single)
                 // PRESERVE class attributes (user custom classes and Quill classes)
-                .replace(/\\\\s+data-[^=]*="[^"]*"/g, '')  // Remove all data-* attributes (S3 keys already in src)
+                .replace(/\\s+data-[^=]*="[^"]*"/g, '')  // Remove all data-* attributes (S3 keys already in src)
                 .trim();
             
             console.log('✅ Applied HTML cleanup and preserved blank lines as <p>&nbsp;</p>');
@@ -5105,8 +5105,8 @@ Click OK to proceed or Cancel to abort.
                 }}
                 
                 // Remove data-s3-key attributes from HTML after replacement
-                emailBody = emailBody.replace(/\\\\s+data-s3-key="[^"]*"/g, '');
-                emailBody = emailBody.replace(/\\\\s+data-inline="[^"]*"/g, '');
+                emailBody = emailBody.replace(/\\s+data-s3-key="[^"]*"/g, '');
+                emailBody = emailBody.replace(/\\s+data-inline="[^"]*"/g, '');
                 console.log(`   ✅ Removed data-s3-key attributes from HTML`);
                 
                 // Check img tags after data-attr removal
@@ -5121,10 +5121,10 @@ Click OK to proceed or Cancel to abort.
                 // IMPORTANT: Preserve blank lines as <p>&nbsp;</p>
                 const bodyBeforeCleanup = emailBody;
                 emailBody = emailBody
-                    .replace(/<p>\\\\s*<br\\\\s*\\\\/?\\\\s*>\\\\s*<\\\\/p>/g, '<p>&nbsp;</p>')  // Preserve blank lines
-                    .replace(/<p>\\\\s*<\\\\/p>/g, '')  // Remove truly empty paragraphs
+                    .replace(/<p>\\s*<br\\s*\\/?\\s*>\\s*<\\/p>/g, '<p>&nbsp;</p>')  // Preserve blank lines
+                    .replace(/<p>\\s*<\\/p>/g, '')  // Remove truly empty paragraphs
                     // PRESERVE class attributes (user custom classes and Quill classes)
-                    .replace(/\\\\s+data-[^=]*="[^"]*"/g, '')  // Remove all remaining data-* attributes
+                    .replace(/\\s+data-[^=]*="[^"]*"/g, '')  // Remove all remaining data-* attributes
                     .trim();
                 
                 console.log(`👁️ PREVIEW: Final email body length: ${{emailBody.length}} characters`);
