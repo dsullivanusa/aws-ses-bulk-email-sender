@@ -4475,6 +4475,13 @@ def serve_web_ui(event):
                 .trim();
             
             console.log('✅ Applied HTML cleanup and preserved blank lines as <p>&nbsp;</p>');
+            
+            // Add inline style to all <p> tags for consistent line-height: 1.0
+            // This ensures recipients see single-spaced text
+            emailBody = emailBody.replace(/<p>/g, '<p style="line-height: 1.0; margin: 0;">');
+            emailBody = emailBody.replace(/<p([^>]*?)style="([^"]*)"([^>]*)>/g, '<p$1style="$2; line-height: 1.0; margin: 0;"$3>');
+            console.log('✅ Added line-height: 1.0 to all <p> tags for recipients');
+            
             console.log(`Final email body preview: ${{emailBody.substring(0, 200)}}...`);
             
             // Verify img tags survived the regex cleanup
@@ -5099,6 +5106,12 @@ Click OK to proceed or Cancel to abort.
                     .trim();
                 
                 console.log(`👁️ PREVIEW: Final email body length: ${{emailBody.length}} characters`);
+                
+                // Add inline style to all <p> tags for consistent line-height: 1.0
+                // This ensures preview and actual email both show single-spaced text
+                emailBody = emailBody.replace(/<p>/g, '<p style="line-height: 1.0; margin: 0;">');
+                emailBody = emailBody.replace(/<p([^>]*?)style="([^"]*)"([^>]*)>/g, '<p$1style="$2; line-height: 1.0; margin: 0;"$3>');
+                console.log(`   ✅ Added line-height: 1.0 to all <p> tags`);
                 
                 // Check if img tags survived cleanup
                 const imgAfterCleanup = emailBody.match(/<img[^>]+>/g);
