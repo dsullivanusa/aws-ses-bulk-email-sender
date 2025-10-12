@@ -4197,9 +4197,20 @@ def serve_web_ui(event):
             }});
             console.log('✅ Cleaned Quill attributes (preserved data-s3-key for images)');
             
+            // DEBUG: Check what images exist before upload attempt
+            const allImages = tempDiv.querySelectorAll('img');
+            console.log(`🔍 Total images in tempDiv after cleanup: ${{allImages.length}}`);
+            allImages.forEach((img, i) => {{
+                const src = img.getAttribute('src');
+                const dataS3Key = img.getAttribute('data-s3-key');
+                console.log(`  Image ${{i + 1}}: src type=${{src ? src.substring(0, 20) : 'NO SRC'}}..., has data-s3-key=${{!!dataS3Key}}`);
+            }});
+            
             // IMPORTANT: Convert embedded images (base64 data URIs) to attachments
             // This allows inline images in the email body
             const allImgTags = tempDiv.querySelectorAll('img[src^="data:"], img[src^="blob:"]');
+            console.log(`🔍 Images with data:/blob: URIs to upload: ${{allImgTags.length}}`);
+            
             if (allImgTags.length > 0) {{
                 console.log(`🖼️ Found ${{allImgTags.length}} embedded image(s) in email body`);
                 
@@ -4344,50 +4355,52 @@ def serve_web_ui(event):
                 
                 // Reset button text
                 button.textContent = 'Sending Campaign...';
+            }} else {{
+                console.log(`ℹ️ No data:/blob: images found to upload (might already be uploaded)`);
+                
+                // Check for images that might have been uploaded previously
+                const imagesWithS3src = tempDiv.querySelectorAll('img[src^="campaign-attachments/"]');
+                if (imagesWithS3src.length > 0) {{
+                    console.log(`♻️ Found ${{imagesWithS3src.length}} image(s) already uploaded to S3`);
+                    
+                    // Add these to campaignAttachments if not already there
+                    imagesWithS3src.forEach((img, idx) => {{
+                        const s3Key = img.getAttribute('src');
+                        const alreadyExists = campaignAttachments.some(att => att.s3_key === s3Key);
+                        
+                        if (!alreadyExists) {{
+                            console.log(`   Adding existing S3 image to attachments: ${{s3Key}}`);
+                            campaignAttachments.push({{
+                                filename: `ExistingImage${{idx + 1}}.png`,
+                                s3_key: s3Key,
+                                size: 0,  // Unknown size
+                                type: 'image/png',
+                                inline: true
+                            }});
+                        }} else {{
+                            console.log(`   S3 image already in attachments: ${{s3Key}}`);
+                        }}
+                    }});
+                }}
             }}
             
-                // Remove only the trailing Quill-added image (commonly a data: or blob: image placed at the end)
-                const imgElements = tempDiv.querySelectorAll('img');
-                if (imgElements.length > 0) {{
-                    // Find the last non-empty node inside tempDiv
-                    let last = tempDiv.lastChild;
-                    while (last && last.nodeType === Node.TEXT_NODE && last.textContent.trim() === '') {{
-                        last = last.previousSibling;
-                    }}
+            // NOTE: Removed trailing image cleanup code - it was removing legitimate user images
+            // Users can have images at the end of their emails intentionally
 
-                    let removed = 0;
-                    if (last) {{
-                        if (last.nodeType === Node.ELEMENT_NODE && last.tagName.toLowerCase() === 'img') {{
-                            const src = last.getAttribute('src') || '';
-                            if (src.startsWith('data:') || src.startsWith('blob:')) {{
-                                last.remove();
-                                removed++;
-                            }}
-                        }} else if (last.nodeType === Node.ELEMENT_NODE) {{
-                            // If the last element contains only an <img> (and optional whitespace), remove that img if it's a data/blob URI
-                            const meaningfulChildren = Array.from(last.childNodes).filter(n => !(n.nodeType === Node.TEXT_NODE && n.textContent.trim() === ''));
-                            if (meaningfulChildren.length === 1 && meaningfulChildren[0].nodeType === Node.ELEMENT_NODE && meaningfulChildren[0].tagName.toLowerCase() === 'img') {{
-                                const img = meaningfulChildren[0];
-                                const src = img.getAttribute('src') || '';
-                                if (src.startsWith('data:') || src.startsWith('blob:')) {{
-                                    img.remove();
-                                    // remove parent if now empty
-                                    if (last.innerHTML.trim() === '') last.remove();
-                                    removed++;
-                                }}
-                            }}
-                        }}
-                    }}
-
-                    if (removed > 0) {{
-                        console.log(`Removed ${{removed}} trailing Quill image(s)`);
-                    }} else {{
-                        console.log('No trailing Quill images matched removal criteria');
-                    }}
-                }}
-
-            // Get cleaned HTML (with data: URIs still intact)
+            // Get cleaned HTML (with data: URIs still intact or S3 keys if already uploaded)
             emailBody = tempDiv.innerHTML;
+            
+            // DEBUG: Check if tempDiv.innerHTML contains img tags
+            const imgInTempDivHTML = emailBody.match(/<img[^>]+>/g);
+            if (imgInTempDivHTML) {{
+                console.log(`✅ tempDiv.innerHTML contains ${{imgInTempDivHTML.length}} <img> tag(s)`);
+                imgInTempDivHTML.forEach((tag, i) => {{
+                    console.log(`  ${{i + 1}}. ${{tag.substring(0, 120)}}...`);
+                }});
+            }} else {{
+                console.error(`❌ tempDiv.innerHTML has NO <img> tags!`);
+                console.error(`   tempDiv content (first 500 chars): ${{emailBody.substring(0, 500)}}...`);
+            }}
             
             // Replace data: URIs with S3 keys for backend transmission
             // Do this via string replacement to avoid triggering browser image loads
@@ -4898,8 +4911,11 @@ Click OK to proceed or Cancel to abort.
                 const allElements = tempDiv.querySelectorAll('*');
                 allElements.forEach(element => {{
                     element.removeAttribute('class');
+                    // Remove data-* attributes EXCEPT data-s3-key and data-inline (needed for image processing)
                     Array.from(element.attributes).forEach(attr => {{
-                        if (attr.name.startsWith('data-')) {{
+                        if (attr.name.startsWith('data-') && 
+                            attr.name !== 'data-s3-key' && 
+                            attr.name !== 'data-inline') {{
                             element.removeAttribute(attr.name);
                         }}
                     }});
@@ -4908,6 +4924,7 @@ Click OK to proceed or Cancel to abort.
                     element.removeAttribute('autocorrect');
                     element.removeAttribute('autocapitalize');
                 }});
+                console.log(`👁️ PREVIEW: Cleaned Quill attributes (preserved data-s3-key for images)`);
                 
                 // Process embedded images (same as sendCampaign)
                 // Check what images exist first
@@ -5010,6 +5027,19 @@ Click OK to proceed or Cancel to abort.
                 
                 // Replace data URIs with S3 keys
                 emailBody = tempDiv.innerHTML;
+                
+                // DEBUG: Check if tempDiv.innerHTML contains img tags
+                const imgInTempDiv = emailBody.match(/<img[^>]+>/g);
+                if (imgInTempDiv) {{
+                    console.log(`👁️ PREVIEW: tempDiv.innerHTML contains ${{imgInTempDiv.length}} <img> tag(s)`);
+                    imgInTempDiv.forEach((tag, i) => {{
+                        console.log(`   ${{i + 1}}. ${{tag.substring(0, 120)}}...`);
+                    }});
+                }} else {{
+                    console.error(`👁️ PREVIEW: tempDiv.innerHTML has NO <img> tags!`);
+                    console.error(`   Content: ${{emailBody.substring(0, 500)}}...`);
+                }}
+                
                 const imagesWithS3Keys = tempDiv.querySelectorAll('img[data-s3-key]');
                 console.log(`👁️ PREVIEW: Found ${{imagesWithS3Keys.length}} image(s) with S3 keys to replace in HTML`);
                 
@@ -5050,8 +5080,17 @@ Click OK to proceed or Cancel to abort.
                 emailBody = emailBody.replace(/\\s+data-inline="[^"]*"/g, '');
                 console.log(`   ✅ Removed data-s3-key attributes from HTML`);
                 
+                // Check img tags after data-attr removal
+                const imgAfterDataAttrRemoval = emailBody.match(/<img[^>]+>/g);
+                if (imgAfterDataAttrRemoval) {{
+                    console.log(`   ✅ After data-attr removal: ${{imgAfterDataAttrRemoval.length}} <img> tag(s) still present`);
+                }} else {{
+                    console.error(`   ❌ After data-attr removal: <img> tags LOST!`);
+                }}
+                
                 // Additional HTML cleanup
                 // IMPORTANT: Preserve blank lines as <p>&nbsp;</p>
+                const bodyBeforeCleanup = emailBody;
                 emailBody = emailBody
                     .replace(/<p>\\s*<br\\s*\\/?\\s*>\\s*<\\/p>/g, '<p>&nbsp;</p>')  // Preserve blank lines
                     .replace(/<p>\\s*<\\/p>/g, '')  // Remove truly empty paragraphs
@@ -5060,6 +5099,16 @@ Click OK to proceed or Cancel to abort.
                     .trim();
                 
                 console.log(`👁️ PREVIEW: Final email body length: ${{emailBody.length}} characters`);
+                
+                // Check if img tags survived cleanup
+                const imgAfterCleanup = emailBody.match(/<img[^>]+>/g);
+                if (bodyBeforeCleanup.includes('<img') && !imgAfterCleanup) {{
+                    console.error(`   ❌ PREVIEW: <img> tags REMOVED during cleanup!`);
+                    console.error(`   Before: ${{bodyBeforeCleanup.substring(0, 300)}}...`);
+                    console.error(`   After: ${{emailBody.substring(0, 300)}}...`);
+                }} else if (imgAfterCleanup) {{
+                    console.log(`   ✅ After cleanup: ${{imgAfterCleanup.length}} <img> tag(s) still present`);
+                }}
                 
                 button.textContent = 'Generating preview...';
                 
