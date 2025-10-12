@@ -6348,9 +6348,25 @@ def save_preview(body, headers):
         print(f"   Body length: {len(email_body)} characters")
         print(f"   Attachments: {len(attachments)}")
         
+        # Clean up the email body HTML for better preview display
+        import re
+        preview_html = email_body
+        
+        # Remove empty paragraphs that cause double spacing
+        preview_html = re.sub(r'<p>\s*</p>', '', preview_html)
+        preview_html = re.sub(r'<p><br></p>', '', preview_html)
+        preview_html = re.sub(r'<p>\s*<br\s*/?>\s*</p>', '', preview_html)
+        
+        # Convert multiple <br> tags to single <br>
+        preview_html = re.sub(r'(<br\s*/?>\s*){2,}', '<br>', preview_html)
+        
+        # Convert </p><p> to </p><p style="margin-top:0"> for tighter spacing
+        preview_html = preview_html.replace('</p><p>', '</p><p style="margin-top:0">')
+        
+        print(f"   📝 Cleaned HTML for preview (removed empty paragraphs)")
+        
         # Replace S3 keys with actual image URLs for preview display
         # This converts "campaign-attachments/..." to full S3 URLs
-        preview_html = email_body
         for attachment in attachments:
             if attachment.get('inline'):
                 s3_key = attachment.get('s3_key')
@@ -6362,9 +6378,32 @@ def save_preview(body, headers):
                             Params={'Bucket': ATTACHMENTS_BUCKET, 'Key': s3_key},
                             ExpiresIn=3600  # 1 hour
                         )
-                        # Replace S3 key with presigned URL in HTML
-                        preview_html = preview_html.replace(f'src="{s3_key}"', f'src="{image_url}"')
-                        print(f"   ✅ Replaced S3 key with presigned URL: {s3_key}")
+                        
+                        # Try multiple replacement patterns
+                        replaced = False
+                        
+                        # Pattern 1: src="s3_key"
+                        if f'src="{s3_key}"' in preview_html:
+                            preview_html = preview_html.replace(f'src="{s3_key}"', f'src="{image_url}"')
+                            replaced = True
+                            print(f"   ✅ Replaced S3 key (pattern 1): {s3_key}")
+                        
+                        # Pattern 2: src='s3_key'
+                        if f"src='{s3_key}'" in preview_html:
+                            preview_html = preview_html.replace(f"src='{s3_key}'", f'src="{image_url}"')
+                            replaced = True
+                            print(f"   ✅ Replaced S3 key (pattern 2): {s3_key}")
+                        
+                        # Pattern 3: Just the s3_key anywhere in src attribute
+                        if not replaced and s3_key in preview_html:
+                            preview_html = preview_html.replace(s3_key, image_url)
+                            replaced = True
+                            print(f"   ✅ Replaced S3 key (pattern 3): {s3_key}")
+                        
+                        if not replaced:
+                            print(f"   ⚠️ Warning: S3 key not found in HTML: {s3_key}")
+                            print(f"   HTML preview (first 500 chars): {preview_html[:500]}")
+                            
                     except Exception as url_error:
                         print(f"   ⚠️ Failed to generate presigned URL for {s3_key}: {url_error}")
         
