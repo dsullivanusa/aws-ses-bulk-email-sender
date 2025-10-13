@@ -5607,29 +5607,29 @@ Click OK to proceed or Cancel to abort.
                 console.log(`   ✅ Added margin: 0 to <p> tags (line-height controlled by size classes)`);
                 
                 // Add Quill CSS styles so Quill classes work in preview
-                const quillCSS = `<style type="text/css">
-    /* Quill Editor Styles for Email Compatibility */
-    .ql-align-center {{ text-align: center; }}
-    .ql-align-right {{ text-align: right; }}
-    .ql-align-left {{ text-align: left; }}
-    .ql-align-justify {{ text-align: justify; }}
-    .ql-indent-1 {{ padding-left: 3em; }}
-    .ql-indent-2 {{ padding-left: 6em; }}
-    .ql-indent-3 {{ padding-left: 9em; }}
-    .ql-size-small {{ font-size: 0.75em; line-height: 0.9; }}
-    .ql-size-large {{ font-size: 1.5em; line-height: 1.2; }}
-    .ql-size-huge {{ font-size: 2.5em; line-height: 1.3; }}
-    .ql-font-arial {{ font-family: Arial, sans-serif; }}
-    .ql-font-times-new-roman {{ font-family: 'Times New Roman', Times, serif; }}
-    .ql-font-courier-new {{ font-family: 'Courier New', Courier, monospace; }}
-    .ql-font-georgia {{ font-family: Georgia, serif; }}
-    .ql-font-verdana {{ font-family: Verdana, sans-serif; }}
-    .ql-font-comic-sans {{ font-family: 'Comic Sans MS', cursive; }}
-    .ql-font-trebuchet {{ font-family: 'Trebuchet MS', sans-serif; }}
-    .ql-font-impact {{ font-family: Impact, sans-serif; }}
-    /* User custom classes preserved */
-    p {{ line-height: 1.0; margin: 0; }}
-</style>`;
+                const quillCSS = '<style type="text/css">' +
+    '/* Quill Editor Styles for Email Compatibility */' +
+    '.ql-align-center {{ text-align: center; }}' +
+    '.ql-align-right {{ text-align: right; }}' +
+    '.ql-align-left {{ text-align: left; }}' +
+    '.ql-align-justify {{ text-align: justify; }}' +
+    '.ql-indent-1 {{ padding-left: 3em; }}' +
+    '.ql-indent-2 {{ padding-left: 6em; }}' +
+    '.ql-indent-3 {{ padding-left: 9em; }}' +
+    '.ql-size-small {{ font-size: 0.75em; line-height: 0.9; }}' +
+    '.ql-size-large {{ font-size: 1.5em; line-height: 1.2; }}' +
+    '.ql-size-huge {{ font-size: 2.5em; line-height: 1.3; }}' +
+    '.ql-font-arial {{ font-family: Arial, sans-serif; }}' +
+    '.ql-font-times-new-roman {{ font-family: "Times New Roman", Times, serif; }}' +
+    '.ql-font-courier-new {{ font-family: "Courier New", Courier, monospace; }}' +
+    '.ql-font-georgia {{ font-family: Georgia, serif; }}' +
+    '.ql-font-verdana {{ font-family: Verdana, sans-serif; }}' +
+    '.ql-font-comic-sans {{ font-family: "Comic Sans MS", cursive; }}' +
+    '.ql-font-trebuchet {{ font-family: "Trebuchet MS", sans-serif; }}' +
+    '.ql-font-impact {{ font-family: Impact, sans-serif; }}' +
+    '/* User custom classes preserved */' +
+    'p {{ line-height: 1.0; margin: 0; }}' +
+    '</style>';
                 
                 // Prepend CSS to email body
                 emailBody = quillCSS + emailBody;
