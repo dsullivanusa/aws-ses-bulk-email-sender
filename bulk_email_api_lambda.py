@@ -4872,9 +4872,9 @@ def serve_web_ui(event):
             console.log('=' .repeat(50));
             
             // 📧 VISUAL DEBUG DISPLAY: Show recipients in the UI temporarily
-            const resultDiv = document.getElementById('campaignResult');
-            if (resultDiv && (toList.length > 0 || ccList.length > 0 || bccList.length > 0)) {{
-                resultDiv.innerHTML = `
+            let debugResultDiv = document.getElementById('campaignResult');
+            if (debugResultDiv && (toList.length > 0 || ccList.length > 0 || bccList.length > 0)) {{
+                debugResultDiv.innerHTML = `
                     <div style="background: var(--info-color); color: white; padding: 15px; border-radius: 8px; margin: 10px 0;">
                         <h4 style="margin: 0 0 10px 0;">📧 Campaign Recipients Debug</h4>
                         <div style="font-family: monospace; font-size: 0.9em;">
