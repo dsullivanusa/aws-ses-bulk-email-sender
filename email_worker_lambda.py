@@ -394,10 +394,27 @@ def lambda_handler(event, context):
                 cc_list = campaign.get('cc', []) or []
                 bcc_list = campaign.get('bcc', []) or []
                 
-                if role in ('cc', 'bcc', 'to'):
-                    logger.info(f"[Message {idx}] Special role message detected: {role} (single-send to {contact_email}) - Including {len(cc_list)} CC addresses")
+                # Handle special roles: CC and BCC recipients should receive emails with proper headers
+                if role == 'cc':
+                    logger.info(f"[Message {idx}] CC recipient: {contact_email} will receive email with their address in CC field")
+                    # For CC recipients: they should be in CC field, not To field
+                    cc_list = [contact_email]  # Put this recipient in CC
+                    # Use sender as To address (SES requirement)
+                    contact_email_for_sending = from_email
+                elif role == 'bcc':
+                    logger.info(f"[Message {idx}] BCC recipient: {contact_email} will receive email with their address in BCC field")
+                    # For BCC recipients: they should be in BCC field, not To field
+                    bcc_list = [contact_email]  # Put this recipient in BCC
+                    # Use sender as To address (SES requirement)
+                    contact_email_for_sending = from_email
+                elif role == 'to':
+                    logger.info(f"[Message {idx}] Explicit To recipient: {contact_email}")
+                    # Regular To recipient
+                    contact_email_for_sending = contact_email
                 else:
                     logger.info(f"[Message {idx}] Regular contact message - Including {len(cc_list)} CC addresses and {len(bcc_list)} BCC addresses")
+                    # Regular contact from database
+                    contact_email_for_sending = contact_email
 
                 # Apply adaptive rate control delay before sending
                 attachments = campaign.get('attachments', [])
@@ -440,15 +457,20 @@ def lambda_handler(event, context):
                             ]
                         )
                 
+                # Update contact email for sending based on role
+                contact_for_sending = contact.copy()
+                contact_for_sending['email'] = contact_email_for_sending
+                
                 # Send email via AWS SES or SMTP
                 logger.info(f"[Message {idx}] Sending email via {email_service.upper()}")
+                logger.info(f"[Message {idx}] To: {contact_email_for_sending}, CC: {cc_list}, BCC: {bcc_list}")
                 send_start = datetime.now()
                 
                 try:
                     if email_service == 'ses':
-                        success = send_ses_email(campaign, contact, from_email, personalized_subject, personalized_body, idx, cc_list=cc_list, bcc_list=bcc_list)
+                        success = send_ses_email(campaign, contact_for_sending, from_email, personalized_subject, personalized_body, idx, cc_list=cc_list, bcc_list=bcc_list)
                     else:
-                        success = send_smtp_email(campaign, contact, from_email, personalized_subject, personalized_body, idx, cc_list=cc_list, bcc_list=bcc_list)
+                        success = send_smtp_email(campaign, contact_for_sending, from_email, personalized_subject, personalized_body, idx, cc_list=cc_list, bcc_list=bcc_list)
                     
                     send_duration = (datetime.now() - send_start).total_seconds()
                     logger.info(f"[Message {idx}] Email send attempt completed in {send_duration:.2f} seconds")
