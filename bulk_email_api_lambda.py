@@ -4997,17 +4997,8 @@ Click OK to proceed or Cancel to abort.
                 Object.entries(fontUsage).forEach(([font, count]) => {{
                     console.log(`   • ${{font}}: ${{count}} occurrence(s)`);
                 }});
-                
-                // Show user-friendly notification
-                const fontList = Object.keys(fontUsage).join(', ');
-                if (typeof Toast !== 'undefined') {{
-                    Toast.info(`Campaign uses fonts: ${{fontList}}`, 4000);
-                }}
             }} else {{
                 console.log('🎨 FONTS BEING SENT: Default font only (no custom fonts detected)');
-                if (typeof Toast !== 'undefined') {{
-                    Toast.info('Campaign uses default font', 3000);
-                }}
             }}
             
             const campaign = {{

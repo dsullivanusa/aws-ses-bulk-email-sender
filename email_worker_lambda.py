@@ -477,16 +477,16 @@ def lambda_handler(event, context):
                     )
                     # For CC recipients: they should be in CC field, not To field
                     cc_list = [contact_email]  # Put this recipient in CC
-                    # Use sender as To address (SES requirement)
-                    contact_email_for_sending = from_email
+                    # Use the recipient's email as To address
+                    contact_email_for_sending = contact_email
                 elif role == "bcc":
                     logger.info(
                         f"[Message {idx}] BCC recipient: {contact_email} will receive email with their address in BCC field"
                     )
                     # For BCC recipients: they should be in BCC field, not To field
                     bcc_list = [contact_email]  # Put this recipient in BCC
-                    # Use sender as To address (SES requirement)
-                    contact_email_for_sending = from_email
+                    # Use the recipient's email as To address
+                    contact_email_for_sending = contact_email
                 elif role == "to":
                     logger.info(
                         f"[Message {idx}] Explicit To recipient: {contact_email}"
@@ -1204,6 +1204,9 @@ def send_ses_email(
                 
                 return False  # Don't send the email
             
+            # Print recipient addresses before calling SES
+            print(f"📧✉️ *** To: {destination.get('ToAddresses', [])}, CC: {destination.get('CcAddresses', [])}, BCC: {destination.get('BccAddresses', [])}")
+            
             response = ses_client.send_email(
                 Source=from_email,
                 Destination=destination,
@@ -1735,6 +1738,9 @@ def send_ses_email(
             
             return False  # Don't send the email
         
+        # Print recipient addresses before calling SES
+        print(f"📧✉️ *** To: [{contact['email']}], CC: {cc_list if cc_list else []}, BCC: {bcc_list if bcc_list else []}")
+        
         # Use as_bytes() to produce the raw MIME bytes for SES to avoid newline/line-ending surprises
         raw_bytes = msg.as_bytes()
         response = ses_client.send_raw_email(
@@ -1870,6 +1876,9 @@ def send_smtp_email(
         envelope_recipients = [contact["email"]]
         envelope_recipients.extend(cc_list)
         envelope_recipients.extend(bcc_list)
+
+        # Print recipient addresses before calling SMTP
+        print(f"📧✉️ *** To: [{contact['email']}], CC: {cc_list if cc_list else []}, BCC: {bcc_list if bcc_list else []}")
 
         with smtplib.SMTP(smtp_server, smtp_port) as server:
             logger.info(
