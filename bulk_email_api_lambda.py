@@ -125,7 +125,7 @@ def lambda_handler(event, context):
             return get_preview(preview_id, headers)
         else:
             print(f"   → Route not found: {method} {path}")
-            print(f"   Available routes: /config, /contacts, /campaign, /upload-attachment, etc.")
+            print("   Available routes: /config, /contacts, /campaign, /upload-attachment, etc.")
             return {'statusCode': 404, 'headers': headers, 'body': json.dumps({'error': f'Route not found: {method} {path}'})}
             
     except Exception as e:
@@ -165,13 +165,8 @@ def serve_web_ui(event):
     <link href="https://cdn.quilljs.com/1.3.6/quill.snow.css" rel="stylesheet">
     <script src="https://cdn.quilljs.com/1.3.6/quill.js"></script>
     
-    <!-- Quill Image Resize Module with fallback -->
-    <script src="https://cdn.jsdelivr.net/npm/quill-image-resize-module@3.0.0/image-resize.min.js" 
-            onerror="console.error('Primary CDN failed for image-resize module, trying fallback...'); 
-                     var script = document.createElement('script'); 
-                     script.src = 'https://unpkg.com/quill-image-resize-module@3.0.0/image-resize.min.js'; 
-                     script.onerror = function() {{ console.error('Fallback CDN also failed for image-resize module'); }}; 
-                     document.head.appendChild(script);"></script>
+    <!-- Quill Image Resize Module -->
+    <script src="https://cdn.jsdelivr.net/npm/quill-image-resize-module@3.0.0/image-resize.min.js"></script>
     
     <style>
         /* Modern CSS Variables for Consistent Theming */
@@ -1677,15 +1672,15 @@ def serve_web_ui(event):
 
             <div style="display:flex; gap:12px; margin-top:8px;">
                 <div style="flex:1;">
-                    <label for="campaignTo" style="font-size:12px; color:var(--gray-600)">To (comma or semi-colon separated)</label>
+                    <label for="campaignTo" style="font-size:12px; color:var(--gray-600)">To (comma-separated)</label>
                     <input type="text" id="campaignTo" placeholder="recipient1@example.com, recipient2@example.com" style="width:100%; padding:8px; border-radius:6px; border:1px solid #e5e7eb;">
                 </div>
                 <div style="flex:1;">
-                    <label for="campaignCc" style="font-size:12px; color:var(--gray-600)">CC (comma or semi-colon separated)</label>
-                    <input type="text" id="campaignCc" placeholder="alice@example.com; bob@example.com" style="width:100%; padding:8px; border-radius:6px; border:1px solid #e5e7eb;">
+                    <label for="campaignCc" style="font-size:12px; color:var(--gray-600)">CC (comma-separated)</label>
+                    <input type="text" id="campaignCc" placeholder="alice@example.com, bob@example.com" style="width:100%; padding:8px; border-radius:6px; border:1px solid #e5e7eb;">
                 </div>
                 <div style="flex:1;">
-                    <label for="campaignBcc" style="font-size:12px; color:var(--gray-600)">BCC (comma or semi-colon separated)</label>
+                    <label for="campaignBcc" style="font-size:12px; color:var(--gray-600)">BCC (comma-separated)</label>
                     <input type="text" id="campaignBcc" placeholder="hidden@example.com" style="width:100%; padding:8px; border-radius:6px; border:1px solid #e5e7eb;">
                 </div>
             </div>
@@ -1872,13 +1867,21 @@ def serve_web_ui(event):
         // Initialize Quill Rich Text Editor
         let quillEditor;
         document.addEventListener('DOMContentLoaded', function() {{
-            // Configure font sizes BEFORE registering modules
+            // Register Image Resize module if available
+            if (typeof ImageResize !== 'undefined') {{
+                Quill.register('modules/imageResize', ImageResize.default);
+                console.log('✅ Quill Image Resize module registered');
+            }}
+            
+            // Old font configuration removed - using Outlook-optimized version below
+            
+            // Configure font sizes
             const Size = Quill.import('formats/size');
             Size.whitelist = ['small', 'large', 'huge'];
             Quill.register(Size, true);
-            console.log('✅ Quill Size format registered:', Size.whitelist);
+            console.log('✅ Quill Size module registered:', Size.whitelist);
             
-            // Register Outlook-optimized fonts BEFORE registering modules
+            // Register Outlook-optimized fonts for Quill
             const Font = Quill.import('formats/font');
             Font.whitelist = [
                 // Outlook-safe system fonts (100% compatible)
@@ -1889,19 +1892,6 @@ def serve_web_ui(event):
             ];
             Quill.register(Font, true);
             console.log('✅ Outlook-optimized fonts registered:', Font.whitelist);
-            
-            // Register Image Resize module AFTER formats are configured
-            if (typeof ImageResize !== 'undefined') {{
-                // Try both with and without .default (different CDN versions export differently)
-                const ImageResizeModule = ImageResize.default || ImageResize;
-                Quill.register('modules/imageResize', ImageResizeModule);
-                console.log('✅ Quill Image Resize module registered successfully');
-                console.log('   ImageResize object type:', typeof ImageResize);
-                console.log('   Using:', ImageResize.default ? 'ImageResize.default' : 'ImageResize');
-            }} else {{
-                console.warn('⚠️ ImageResize module not found - image resizing will not be available');
-                console.warn('   Check if the CDN script loaded: https://cdn.jsdelivr.net/npm/quill-image-resize-module@3.0.0/image-resize.min.js');
-            }}
             
             quillEditor = new Quill('#body', {{
                 theme: 'snow',
@@ -1945,15 +1935,82 @@ def serve_web_ui(event):
                 }}
             }});
             
-            console.log('✅ Quill editor initialized');
+            console.log('✅ Quill editor initialized with image resize support');
             
-            // Verify imageResize module is working
-            if (quillEditor.getModule('imageResize')) {{
-                console.log('✅ Image resize module is active and available');
-            }} else {{
-                console.warn('⚠️ Image resize module did not initialize properly');
-                console.warn('   This may cause issues with image resizing functionality');
-            }}
+            // Add font change event listeners for detailed logging
+            quillEditor.on('selection-change', function(range, oldRange, source) {{
+                if (range && range.length === 0) {{
+                    // Cursor position changed - log current font at cursor
+                    const format = quillEditor.getFormat(range.index, 1);
+                    if (format.font) {{
+                        console.log(`🎨 FONT SELECTION: Cursor at position ${{range.index}} has font: ${{format.font}}`);
+                        console.log(`   📍 Font Details: ${{JSON.stringify(format)}}`);
+                    }}
+                }}
+            }});
+            
+            quillEditor.on('text-change', function(delta, oldDelta, source) {{
+                if (source === 'user') {{
+                    // User made a change - check if font formatting was applied
+                    const selection = quillEditor.getSelection();
+                    if (selection) {{
+                        const format = quillEditor.getFormat(selection.index, selection.length || 1);
+                        if (format.font) {{
+                            console.log(`🎨 FONT APPLIED: User applied font "${{format.font}}" at position ${{selection.index}}`);
+                            console.log(`   📝 Selection length: ${{selection.length || 1}} characters`);
+                            console.log(`   🎯 Full format: ${{JSON.stringify(format)}}`);
+                            
+                            // Log to server as well
+                            fetch('/dev/null', {{
+                                method: 'POST',
+                                headers: {{'Content-Type': 'application/json'}},
+                                body: JSON.stringify({{
+                                    action: 'font_change',
+                                    font: format.font,
+                                    position: selection.index,
+                                    length: selection.length || 1,
+                                    timestamp: new Date().toISOString()
+                                }})
+                            }}).catch(() => {{}}); // Silent fail for logging
+                        }}
+                    }}
+                }}
+            }});
+            
+            // Monitor font dropdown clicks directly
+            setTimeout(() => {{
+                const fontPicker = document.querySelector('.ql-font');
+                if (fontPicker) {{
+                    fontPicker.addEventListener('click', function() {{
+                        console.log('🖱️ FONT DROPDOWN: User clicked font dropdown');
+                        
+                        // Monitor for font selection
+                        setTimeout(() => {{
+                            const fontItems = document.querySelectorAll('.ql-font .ql-picker-item');
+                            fontItems.forEach(item => {{
+                                item.addEventListener('click', function() {{
+                                    const fontValue = this.getAttribute('data-value') || 'default';
+                                    console.log(`🎨 FONT SELECTED: User selected font "${{fontValue}}"`);
+                                    console.log(`   📋 Font display name: ${{this.textContent || 'Default'}}`);
+                                    console.log(`   ⏰ Timestamp: ${{new Date().toLocaleString()}}`);
+                                    
+                                    // Show user-friendly notification
+                                    if (typeof Toast !== 'undefined') {{
+                                        Toast.info(`Font changed to: ${{fontValue === 'default' ? 'Default' : fontValue}}`, 2000);
+                                    }}
+                                }});
+                            }});
+                        }}, 100);
+                    }});
+                    
+                    console.log('✅ Font dropdown click monitoring enabled');
+            
+            // Start continuous font monitoring
+            startFontMonitoring();
+                }} else {{
+                    console.warn('⚠️ Font dropdown not found for monitoring');
+                }}
+            }}, 500);
             
             // Add tooltips to Quill toolbar buttons
             setTimeout(() => {{
@@ -1965,26 +2022,7 @@ def serve_web_ui(event):
                     
                     // Font dropdown
                     const fontSelect = toolbar.querySelector('.ql-font');
-                    if (fontSelect) {{
-                        fontSelect.setAttribute('title', 'Font family (Arial, Georgia, etc.)');
-                        
-                        // Add event listener to log font changes
-                        fontSelect.addEventListener('change', function(e) {{
-                            const selectedFont = e.target.value || 'default (sans-serif)';
-                            console.log('🔤 Font changed to:', selectedFont);
-                            console.log('   Font select value:', e.target.value);
-                            console.log('   Font select label:', e.target.options[e.target.selectedIndex]?.text || 'N/A');
-                            
-                            // Get current selection to show what text was affected
-                            const range = quillEditor.getSelection();
-                            if (range && range.length > 0) {{
-                                console.log('   Applied to selection: length =', range.length, 'chars at index', range.index);
-                            }} else if (range) {{
-                                console.log('   Applied to cursor position: index =', range.index);
-                            }}
-                        }});
-                        console.log('✅ Added font change listener');
-                    }}
+                    if (fontSelect) fontSelect.setAttribute('title', 'Font family (Arial, Georgia, etc.)');
                     
                     // Size dropdown
                     const sizeSelect = toolbar.querySelector('.ql-size');
@@ -2042,35 +2080,6 @@ def serve_web_ui(event):
                     console.log('✅ Added tooltips to Quill toolbar buttons');
                 }}
             }}, 100);  // Small delay to ensure toolbar is rendered
-            
-            // Add Quill editor event listener to track font changes via formatting
-            quillEditor.on('text-change', function(delta, oldDelta, source) {{
-                if (source === 'user') {{
-                    // Check if the change includes font formatting
-                    const ops = delta.ops || [];
-                    for (let i = 0; i < ops.length; i++) {{
-                        const op = ops[i];
-                        if (op.attributes && op.attributes.font) {{
-                            console.log('🔤 Font applied via text-change event:', op.attributes.font);
-                            console.log('   Change source:', source);
-                            console.log('   Operation:', JSON.stringify(op, null, 2));
-                        }}
-                    }}
-                }}
-            }});
-            
-            // Add selection-change listener to show current font at cursor position
-            quillEditor.on('selection-change', function(range, oldRange, source) {{
-                if (range) {{
-                    const format = quillEditor.getFormat(range);
-                    if (format.font !== undefined) {{
-                        console.log('🔤 Current font at cursor/selection:', format.font || 'default (sans-serif)');
-                        console.log('   Range:', 'index=' + range.index + ', length=' + range.length);
-                    }}
-                }}
-            }});
-            
-            console.log('✅ Added Quill text-change and selection-change listeners for font tracking');
         }});
         
         // Initialize the application
@@ -2261,11 +2270,10 @@ def serve_web_ui(event):
             console.log('Campaign form cleared');
         }};
         
-        // Helper to parse comma or semi-colon separated email lists into arrays
+        // Helper to parse comma-separated email lists into arrays
         function parseEmails(input) {{
             if (!input) return [];
-            // Support both commas and semi-colons as separators
-            return input.replace(/;/g, ',').split(',').map(s => s.trim()).filter(s => s.length > 0);
+            return input.split(',').map(s => s.trim()).filter(s => s.length > 0);
         }}
         
         // Paste raw HTML into Quill editor
@@ -4853,6 +4861,40 @@ def serve_web_ui(event):
             const ccList = parseEmails(document.getElementById('campaignCc')?.value || '').map(e => e.toLowerCase());
             const bccList = parseEmails(document.getElementById('campaignBcc')?.value || '').map(e => e.toLowerCase());
             
+            // 📧 ENHANCED LOGGING: Display To/CC/BCC lines in web UI console
+            // 📧 ENHANCED LOGGING: Display To/CC/BCC lines in web UI console
+            console.log('📧 EMAIL RECIPIENTS - WEB UI LOGGING:');
+            console.log('=' .repeat(50));
+            console.log('📬 To Recipients:', toList.length > 0 ? toList : 'None');
+            console.log('📋 CC Recipients:', ccList.length > 0 ? ccList : 'None');
+            console.log('🔒 BCC Recipients:', bccList.length > 0 ? bccList : 'None');
+            console.log('📊 Total Recipients: To=' + toList.length + ', CC=' + ccList.length + ', BCC=' + bccList.length);
+            console.log('=' .repeat(50));
+            
+            // 📧 VISUAL DEBUG DISPLAY: Show recipients in the UI temporarily
+            const resultDiv = document.getElementById('campaignResult');
+            if (resultDiv && (toList.length > 0 || ccList.length > 0 || bccList.length > 0)) {{
+                resultDiv.innerHTML = `
+                    <div style="background: var(--info-color); color: white; padding: 15px; border-radius: 8px; margin: 10px 0;">
+                        <h4 style="margin: 0 0 10px 0;">📧 Campaign Recipients Debug</h4>
+                        <div style="font-family: monospace; font-size: 0.9em;">
+                            <div><strong>📬 To Recipients (${{toList.length}}):</strong> ${{toList.length > 0 ? toList.join(', ') : 'None'}}</div>
+                            <div><strong>📋 CC Recipients (${{ccList.length}}):</strong> ${{ccList.length > 0 ? ccList.join(', ') : 'None'}}</div>
+                            <div><strong>🔒 BCC Recipients (${{bccList.length}}):</strong> ${{bccList.length > 0 ? bccList.join(', ') : 'None'}}</div>
+                        </div>
+                        <div style="margin-top: 10px; font-size: 0.8em; opacity: 0.9;">
+                            This debug info will be replaced when the campaign is sent...
+                        </div>
+                    </div>
+                `;
+            }}
+            
+            // 📧 TOAST NOTIFICATION: Show recipients summary
+            if (toList.length > 0 || ccList.length > 0 || bccList.length > 0) {{
+                const recipientSummary = `To: ${{toList.length}}, CC: ${{ccList.length}}, BCC: ${{bccList.length}}`;
+                Toast.info(`📧 Recipients: ${{recipientSummary}}`, 4000);
+            }}
+            
             // Extract and validate email addresses from contacts (normalize to lowercase)
             const targetEmails = targetContacts.map(c => c?.email).filter(email => email && email.includes('@')).map(e => e.toLowerCase());
             // If user provided explicit To addresses, include them as targets (they may be external or not in Contacts DB)
@@ -4861,17 +4903,12 @@ def serve_web_ui(event):
             }}
             console.log('Extracted ' + targetEmails.length + ' valid emails from ' + targetContacts.length + ' contacts');
             
-            // IMPORTANT: Only combine contact-derived targets with explicit To addresses
-            // CC and BCC should NOT be in this list - they'll be sent separately to backend
-            let recipientEmails = [...new Set([...targetEmails, ...toList])];
-            console.log('Primary recipients (Contacts + To): ' + recipientEmails.length);
+            // Combine contact-derived targets with any explicit To addresses plus CC/BCC (dedupe with case-insensitive comparison)
+            let allTargetEmails = [...new Set([...targetEmails, ...toList, ...ccList, ...bccList])];
+            console.log('Total targets including To/CC/BCC: ' + allTargetEmails.length + ' (Contacts: ' + targetEmails.length + ', To: ' + toList.length + ', CC: ' + ccList.length + ', BCC: ' + bccList.length + ')');
+            console.log('Sample emails:', allTargetEmails.slice(0, 5));
             
-            // Calculate total unique recipients for display (including CC/BCC)
-            let allUniqueRecipients = [...new Set([...recipientEmails, ...ccList, ...bccList])];
-            console.log('Total unique recipients including To/CC/BCC: ' + allUniqueRecipients.length + ' (Primary: ' + recipientEmails.length + ', To: ' + toList.length + ', CC: ' + ccList.length + ', BCC: ' + bccList.length + ')');
-            console.log('Sample emails:', allUniqueRecipients.slice(0, 5));
-            
-            if (allUniqueRecipients.length === 0) {{
+            if (allTargetEmails.length === 0) {{
                 throw new Error('No valid email addresses found. Please check that your contacts have valid email addresses or add To/CC/BCC recipients.');
             }}
 
@@ -4881,7 +4918,7 @@ def serve_web_ui(event):
 
 You are about to send this campaign to:
 
-📊 Total Unique Recipients: ${{allUniqueRecipients.length}}
+📊 Total Recipients: ${{allTargetEmails.length}}
 
 Breakdown:
 • Contacts from database: ${{targetEmails.length}}
@@ -4890,8 +4927,6 @@ Breakdown:
 • BCC recipients: ${{bccList.length}}
 
 Filter: ${{filterDescription}}
-
-Note: Duplicates across To/CC/BCC are automatically removed - each person gets only one email.
 
 ⚠️ Are you sure you want to send this campaign?
 
@@ -4935,19 +4970,51 @@ Click OK to proceed or Cancel to abort.
                 }});
             }}
             
+            // Log font usage before sending campaign
+            console.log('🎨 CAMPAIGN FONT ANALYSIS: Analyzing fonts used in email...');
+            const fontMatches = emailBody.match(/class="[^"]*ql-font-([^"\s]+)/g) || [];
+            const fontUsage = {{}};
+            
+            fontMatches.forEach(match => {{
+                const fontMatch = match.match(/ql-font-([^"\s]+)/);
+                if (fontMatch) {{
+                    const font = fontMatch[1];
+                    fontUsage[font] = (fontUsage[font] || 0) + 1;
+                }}
+            }});
+            
+            if (Object.keys(fontUsage).length > 0) {{
+                console.log('🎨 FONTS BEING SENT TO RECIPIENTS:');
+                Object.entries(fontUsage).forEach(([font, count]) => {{
+                    console.log(`   • ${{font}}: ${{count}} occurrence(s)`);
+                }});
+                
+                // Show user-friendly notification
+                const fontList = Object.keys(fontUsage).join(', ');
+                if (typeof Toast !== 'undefined') {{
+                    Toast.info(`Campaign uses fonts: ${{fontList}}`, 4000);
+                }}
+            }} else {{
+                console.log('🎨 FONTS BEING SENT: Default font only (no custom fonts detected)');
+                if (typeof Toast !== 'undefined') {{
+                    Toast.info('Campaign uses default font', 3000);
+                }}
+            }}
+            
             const campaign = {{
                 campaign_name: document.getElementById('campaignName').value,
                 subject: document.getElementById('subject').value,
                 body: emailBody,
+                font_usage: fontUsage,  // Add font usage to campaign data
                 launched_by: userName,                                                                 //Send user identity to backend
                 filter_type: Object.keys(selectedCampaignFilterValues).length > 0 ? 'custom' : null,
                 filter_values: Object.keys(selectedCampaignFilterValues).length > 0 ? JSON.stringify(selectedCampaignFilterValues): null,
                 filter_description: filterDescription,
                 // Provide explicit To list (if given) and final target contacts
                 to: toList,
-                target_contacts: recipientEmails,  // Send only primary recipients (contacts + To) - CC/BCC handled separately
-                cc: ccList,   // array of CC emails (backend will queue these separately and dedupe)
-                bcc: bccList, // array of BCC emails (backend will queue these separately and dedupe)
+                target_contacts: allTargetEmails,  // Send combined email list (contacts + CC + BCC or explicit To) to backend
+                cc: ccList,   // array of CC emails (for display/tracking)
+                bcc: bccList, // array of BCC emails (for display/tracking)
                 attachments: campaignAttachments  // Include attachments
             }};
                 
@@ -5086,6 +5153,23 @@ Click OK to proceed or Cancel to abort.
                     </div>
                     <div style="background: var(--gray-50); padding: 16px; border-radius: 8px; margin-top: 20px;">
                         <p style="margin: 0; color: var(--gray-700);"><strong>Campaign ID:</strong> ${{result.campaign_id}}</p>
+                        <div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid var(--gray-200);">
+                            <h4 style="margin: 0 0 10px 0; color: var(--gray-800);">📧 Email Recipients</h4>
+                            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px;">
+                                <div style="background: white; padding: 10px; border-radius: 6px; border-left: 4px solid var(--primary-color);">
+                                    <strong style="color: var(--primary-color);">📬 To:</strong><br>
+                                    <span style="font-size: 0.9em; color: var(--gray-600);">${{toList.length > 0 ? toList.join(', ') : 'None'}}</span>
+                                </div>
+                                <div style="background: white; padding: 10px; border-radius: 6px; border-left: 4px solid var(--warning-color);">
+                                    <strong style="color: var(--warning-color);">📋 CC:</strong><br>
+                                    <span style="font-size: 0.9em; color: var(--gray-600);">${{ccList.length > 0 ? ccList.join(', ') : 'None'}}</span>
+                                </div>
+                                <div style="background: white; padding: 10px; border-radius: 6px; border-left: 4px solid var(--gray-500);">
+                                    <strong style="color: var(--gray-500);">🔒 BCC:</strong><br>
+                                    <span style="font-size: 0.9em; color: var(--gray-600);">${{bccList.length > 0 ? bccList.join(', ') : 'None'}}</span>
+                                </div>
+                            </div>
+                        </div>
                         <p style="margin: 5px 0 0 0; color: var(--gray-700);"><strong>Target Contacts:</strong> ${{filterDescription}}</p>
                         <p style="margin: 5px 0 0 0; color: var(--gray-700);"><strong>Queue:</strong> ${{result.queue_name || 'bulk-email-queue'}}</p>
                         <p style="margin: 10px 0 0 0; color: var(--gray-600); font-size: 0.9rem;">Check CloudWatch Logs to monitor email processing status</p>
@@ -5526,11 +5610,40 @@ Click OK to proceed or Cancel to abort.
                 const ccList = parseEmails(document.getElementById('campaignCc')?.value || '');
                 const bccList = parseEmails(document.getElementById('campaignBcc')?.value || '');
                 
+                // 📧 PREVIEW LOGGING: Display To/CC/BCC lines for preview
+                console.log('📧 EMAIL RECIPIENTS - PREVIEW LOGGING:');
+                console.log('📬 To Recipients (Preview):', toList.length > 0 ? toList : 'None');
+                console.log('📋 CC Recipients (Preview):', ccList.length > 0 ? ccList : 'None');
+                console.log('🔒 BCC Recipients (Preview):', bccList.length > 0 ? bccList : 'None');
+                
+                // Log font usage in preview
+                console.log('🎨 PREVIEW FONT ANALYSIS: Analyzing fonts in preview...');
+                const previewFontMatches = emailBody.match(/class="[^"]*ql-font-([^"\s]+)/g) || [];
+                const previewFontUsage = {{}};
+                
+                previewFontMatches.forEach(match => {{
+                    const fontMatch = match.match(/ql-font-([^"\s]+)/);
+                    if (fontMatch) {{
+                        const font = fontMatch[1];
+                        previewFontUsage[font] = (previewFontUsage[font] || 0) + 1;
+                    }}
+                }});
+                
+                if (Object.keys(previewFontUsage).length > 0) {{
+                    console.log('🎨 FONTS IN PREVIEW:');
+                    Object.entries(previewFontUsage).forEach(([font, count]) => {{
+                        console.log(`   • ${{font}}: ${{count}} occurrence(s)`);
+                    }});
+                }} else {{
+                    console.log('🎨 FONTS IN PREVIEW: Default font only');
+                }}
+                
                 // Create preview data object
                 const previewData = {{
                     campaign_name: document.getElementById('campaignName').value || 'Untitled Preview',
                     subject: document.getElementById('subject').value || 'No Subject',
                     body: emailBody,
+                    font_usage: previewFontUsage,  // Add font usage to preview data
                     attachments: campaignAttachments,
                     from_email: fromEmail,
                     to: toList,
@@ -5884,6 +5997,45 @@ Click OK to proceed or Cancel to abort.
             
             // Show all contacts
             displayContacts(allContacts);
+        }}
+        
+        // Font monitoring and logging functions
+        function logFontUsage() {{
+            if (!quillEditor) return;
+            
+            const content = quillEditor.root.innerHTML;
+            const fontClasses = content.match(/class="[^"]*ql-font-([^"\s]+)/g) || [];
+            const fontCounts = {{}};
+            
+            fontClasses.forEach(match => {{
+                const font = match.match(/ql-font-([^"\s]+)/)[1];
+                fontCounts[font] = (fontCounts[font] || 0) + 1;
+            }});
+            
+            if (Object.keys(fontCounts).length > 0) {{
+                console.log('🎨 CURRENT FONT USAGE IN EDITOR:');
+                Object.entries(fontCounts).forEach(([font, count]) => {{
+                    console.log(`   • ${{font}}: ${{count}} occurrence(s)`);
+                }});
+            }} else {{
+                console.log('🎨 CURRENT FONT USAGE: Default font only');
+            }}
+            
+            return fontCounts;
+        }}
+        
+        function startFontMonitoring() {{
+            console.log('🎨 FONT MONITORING: Started real-time font usage tracking');
+            
+            // Log font usage every 5 seconds when editor has content
+            setInterval(() => {{
+                if (quillEditor && quillEditor.getLength() > 1) {{
+                    const fontUsage = logFontUsage();
+                    
+                    // Store in session for campaign sending
+                    sessionStorage.setItem('currentFontUsage', JSON.stringify(fontUsage));
+                }}
+            }}, 5000);
         }}
         
         window.onload = () => {{
@@ -6413,7 +6565,7 @@ def get_groups(headers):
 def upload_attachment(body, headers):
     """Upload attachment to S3 bucket"""
     try:
-        print(f"📎 Upload attachment request received")
+        print("📎 Upload attachment request received")
         print(f"Request body keys: {list(body.keys())}")
         
         filename = body.get('filename')
@@ -6440,7 +6592,7 @@ def upload_attachment(body, headers):
             }
         
         # Decode base64 data
-        print(f"Decoding base64 data...")
+        print("Decoding base64 data...")
         try:
             file_data = base64.b64decode(data)
             print(f"Decoded file size: {len(file_data)} bytes")
@@ -6680,6 +6832,33 @@ def delete_contact(event, headers):
 def send_campaign(body, headers, event=None):
     """Send email campaign by saving to DynamoDB and queuing contacts to SQS"""
     try:
+        # Log font usage analysis for the campaign
+        email_body = body.get('body', '')
+        print(f"🎨 FONT ANALYSIS: Analyzing email body for font usage...")
+        
+        # Extract font classes from the email HTML
+        import re
+        font_classes = re.findall(r'class="[^"]*ql-font-([^"\s]+)', email_body)
+        if font_classes:
+            unique_fonts = list(set(font_classes))
+            print(f"🎨 FONTS USED IN CAMPAIGN: {len(unique_fonts)} different fonts detected")
+            for i, font in enumerate(unique_fonts, 1):
+                font_count = font_classes.count(font)
+                print(f"   {i}. Font '{font}': used {font_count} time(s)")
+            
+            # Log to campaign metadata
+            font_usage_summary = {font: font_classes.count(font) for font in unique_fonts}
+            print(f"🎨 FONT USAGE SUMMARY: {font_usage_summary}")
+        else:
+            print(f"🎨 FONTS USED IN CAMPAIGN: No custom fonts detected (using default font)")
+        
+        # Check for inline font styles as backup
+        inline_fonts = re.findall(r'font-family:\s*([^;"\'>]+)', email_body, re.IGNORECASE)
+        if inline_fonts:
+            unique_inline_fonts = list(set([font.strip().strip('"\'') for font in inline_fonts]))
+            print(f"🎨 INLINE FONTS DETECTED: {unique_inline_fonts}")
+        
+        print(f"📧 Campaign body length: {len(email_body)} characters")
         # Get email configuration
         config_response = email_config_table.get_item(Key={'config_id': 'default'})
         if 'Item' not in config_response:
@@ -6691,45 +6870,41 @@ def send_campaign(body, headers, event=None):
         target_contact_emails = body.get('target_contacts', [])
         filter_description = body.get('filter_description', 'All Contacts')
         
-        # Get CC and BCC lists to exclude from primary recipients
-        cc_list = body.get('cc', []) or []
-        bcc_list = body.get('bcc', []) or []
-        
-        # Create normalized sets for comparison (lowercase, trimmed)
-        cc_set = set([email.lower().strip() for email in cc_list if email])
-        bcc_set = set([email.lower().strip() for email in bcc_list if email])
-        cc_bcc_combined = cc_set | bcc_set
-        
-        # DEBUG: Enhanced logging for CC duplication diagnosis
-        print(f"🔍 CC DUPLICATION DEBUG - EXCLUSION SETS:")
-        print(f"   CC set: {cc_set}")
-        print(f"   BCC set: {bcc_set}")
-        print(f"   Combined exclusion set: {cc_bcc_combined}")
-        print(f"   Exclusion set size: {len(cc_bcc_combined)}")
-        
         print(f"Received campaign request with {len(target_contact_emails)} email addresses")
-        print(f"CC list has {len(cc_list)} addresses: {cc_list}")
-        print(f"BCC list has {len(bcc_list)} addresses: {bcc_list}")
-        print(f"Sample target emails: {target_contact_emails[:5]}")
+        print(f"Sample emails: {target_contact_emails[:5]}")
         
-        if not target_contact_emails and not cc_list and not bcc_list:
+        if not target_contact_emails:
             return {'statusCode': 400, 'headers': headers, 'body': json.dumps({'error': 'No target email addresses specified. Please select recipients in the Campaign tab.'})}
         
+        # Get CC and BCC lists FIRST to exclude them from regular contacts
+        cc_list = body.get('cc', []) or []
+        bcc_list = body.get('bcc', []) or []
+        to_list = body.get('to', []) or []
+        
+        # Create normalized sets for exclusion (case-insensitive)
+        cc_set = set([email.lower().strip() for email in cc_list if email and '@' in email])
+        bcc_set = set([email.lower().strip() for email in bcc_list if email and '@' in email])
+        to_set = set([email.lower().strip() for email in to_list if email and '@' in email])
+        cc_bcc_to_combined = cc_set | bcc_set | to_set
+        
+        print(f"🔍 CC DUPLICATION FIX - EXCLUSION SETUP:")
+        print(f"   CC list: {cc_list}")
+        print(f"   BCC list: {bcc_list}")
+        print(f"   To list: {to_list}")
+        print(f"   Combined exclusion set: {cc_bcc_to_combined}")
+        
         # Create contact objects directly from email addresses (independent of Contacts table)
-        # IMPORTANT: Exclude anyone who is ONLY on CC or BCC list - they'll be queued separately
+        # IMPORTANT: Exclude anyone on CC/BCC/To lists - they'll be queued separately
         contacts = []
         excluded_count = 0
-        
-        print(f"🔍 CC DUPLICATION DEBUG - CONTACT PROCESSING:")
         
         for email in target_contact_emails:
             if email and '@' in email:  # Basic email validation
                 normalized_email = email.lower().strip()
-                # Exclude if this email is on CC or BCC list
-                if normalized_email in cc_bcc_combined:
-                    print(f"   ✅ EXCLUDING {email} from primary recipients (found in CC/BCC list)")
-                    print(f"      Normalized: {normalized_email}")
-                    print(f"      In exclusion set: {normalized_email in cc_bcc_combined}")
+                
+                # CRITICAL: Exclude if this email is on CC/BCC/To list
+                if normalized_email in cc_bcc_to_combined:
+                    print(f"   ✅ EXCLUDING {email} from regular contacts (found in CC/BCC/To list)")
                     excluded_count += 1
                 else:
                     print(f"   ➕ ADDING {email} as regular contact")
@@ -6742,11 +6917,14 @@ def send_campaign(body, headers, event=None):
             else:
                 print(f"Invalid email format, skipping: {email}")
         
-        print(f"Campaign targeting {len(contacts)} primary recipients ({filter_description})")
-        print(f"Excluded {excluded_count} addresses that are on CC/BCC lists")
+        print(f"📊 CC DUPLICATION FIX - SUMMARY:")
+        print(f"   Total target emails: {len(target_contact_emails)}")
+        print(f"   Regular contacts created: {len(contacts)}")
+        print(f"   Excluded (CC/BCC/To): {excluded_count}")
         
-        # Validate that we have at least one recipient (primary, CC, or BCC)
-        if not contacts and not cc_list and not bcc_list:
+        print(f"Campaign targeting {len(contacts)} valid email addresses ({filter_description})")
+        
+        if not contacts:
             error_msg = f'No valid email addresses found. Received {len(target_contact_emails)} entries but none are valid emails. Please check email format (must contain @).'
             return {'statusCode': 400, 'headers': headers, 'body': json.dumps({'error': error_msg})}
         
@@ -6826,6 +7004,12 @@ def send_campaign(body, headers, event=None):
         if body.get('bcc'):
             campaign_item['bcc'] = body.get('bcc')
         
+        # Add font usage analysis to campaign record
+        if body.get('font_usage'):
+            campaign_item['font_usage'] = body.get('font_usage')
+            font_list = list(body.get('font_usage').keys())
+            print(f"🎨 CAMPAIGN FONTS STORED: {font_list}")
+        
         campaigns_table.put_item(Item=campaign_item)
         print(f"Campaign {campaign_id} saved to DynamoDB")
         
@@ -6874,37 +7058,20 @@ def send_campaign(body, headers, event=None):
                 print(f"Failed to queue email for {contact.get('email')}: {str(e)}")
                 failed_to_queue += 1
         
-        # Enqueue one message per CC and BCC recipient (single-send), avoid duplicates
+        # Enqueue one message per CC and BCC recipient (single-send), avoid duplicates with target contacts
         # Normalize to lowercase for case-insensitive comparison
         all_target_emails = set([c.get('email').lower().strip() for c in contacts if c.get('email')])
-        to_list = body.get('to', []) or []
-        # cc_list and bcc_list already retrieved at top of function (lines 6677-6678)
-        
-        # Track all sent emails to prevent duplicates across To/CC/BCC
-        sent_emails = set(all_target_emails)  # Start with target contacts (already excludes CC/BCC)
-        
-        print(f"Deduplication: Starting with {len(sent_emails)} target contact(s)")
-        print(f"Deduplication: To list has {len(to_list)} recipient(s)")
-        print(f"Deduplication: CC list has {len(cc_list)} recipient(s)")
-        print(f"Deduplication: BCC list has {len(bcc_list)} recipient(s)")
 
-        # Helper to enqueue additional recipients with comprehensive deduplication
+        # Helper to enqueue additional recipients
         def enqueue_special(recipient_email, role):
             nonlocal queued_count, failed_to_queue
             if not recipient_email or '@' not in recipient_email:
                 print(f"Skipping invalid {role} email: {recipient_email}")
                 return
-            
-            # Normalize email for comparison
-            normalized_email = recipient_email.lower().strip()
-            
-            # Check if already sent
-            if normalized_email in sent_emails:
-                print(f"Skipping {role.upper()} {recipient_email} - already queued as another recipient type")
+            # Case-insensitive comparison to avoid duplicates
+            if recipient_email.lower().strip() in all_target_emails:
+                print(f"Skipping {role} {recipient_email} because it is already in target contacts")
                 return
-            
-            # Add to sent set to prevent future duplicates
-            sent_emails.add(normalized_email)
 
             try:
                 special_message = {
@@ -6937,17 +7104,17 @@ def send_campaign(body, headers, event=None):
                 print(f"Failed to queue {role} email for {recipient_email}: {str(e)}")
                 failed_to_queue += 1
 
-        # Enqueue explicit To addresses first (highest priority)
-        for to_addr in to_list:
-            enqueue_special(to_addr, 'to')
-        
-        # Enqueue CC addresses (will skip if already in To list)
+        # Enqueue CC addresses (single-send each)
         for cc in cc_list:
             enqueue_special(cc, 'cc')
 
-        # Enqueue BCC addresses (will skip if already in To or CC lists)
+        # Enqueue BCC addresses (single-send each)
         for bcc in bcc_list:
             enqueue_special(bcc, 'bcc')
+        
+        # Enqueue explicit To addresses (single-send each) - skip addresses already in target contacts
+        for to_addr in to_list:
+            enqueue_special(to_addr, 'to')
         # Update campaign status
         campaigns_table.update_item(
             Key={'campaign_id': campaign_id},
@@ -6999,9 +7166,33 @@ def send_ses_email(config, contact, subject, body):
         personalized_subject = personalize_content(subject, contact)
         personalized_body = personalize_content(body, contact)
         
+        # Build destination with proper CC/BCC handling
+        destination = {}
+        
+        # Check if this contact has a specific role (cc, bcc, or regular to)
+        contact_role = contact.get('role', 'to')
+        
+        if contact_role == 'cc':
+            # For CC recipients: they get the email with their address in CC field
+            # We need to include at least one To address for SES to work
+            destination = {
+                'ToAddresses': [config.get('from_email', contact['email'])],  # Use from_email as To
+                'CcAddresses': [contact['email']]
+            }
+        elif contact_role == 'bcc':
+            # For BCC recipients: they get the email with their address in BCC field
+            # We need to include at least one To address for SES to work
+            destination = {
+                'ToAddresses': [config.get('from_email', contact['email'])],  # Use from_email as To
+                'BccAddresses': [contact['email']]
+            }
+        else:
+            # For regular To recipients: they get the email normally
+            destination = {'ToAddresses': [contact['email']]}
+        
         ses_client.send_email(
             Source=config['from_email'],
-            Destination={'ToAddresses': [contact['email']]},
+            Destination=destination,
             Message={
                 'Subject': {'Data': personalized_subject},
                 'Body': {'Html': {'Data': personalized_body}}
@@ -7277,8 +7468,8 @@ def save_preview(body, headers):
             <div class="preview-meta">
                 <div><span class="label">From:</span> {from_email}</div>
                 {f'<div><span class="label">To:</span> {", ".join(to_recipients) if to_recipients else "(No recipients)"}</div>' if to_recipients or True else ''}
-                {f'<div><span class="label">CC:</span> <strong>{", ".join(cc_recipients)}</strong></div>' if cc_recipients and len(cc_recipients) > 0 else ''}
-                {f'<div><span class="label">BCC:</span> {", ".join(bcc_recipients)}</div>' if bcc_recipients and len(bcc_recipients) > 0 else ''}
+                {f'<div><span class="label">CC:</span> {", ".join(cc_recipients)}</div>' if cc_recipients else ''}
+                {f'<div><span class="label">BCC:</span> {", ".join(bcc_recipients)}</div>' if bcc_recipients else ''}
                 <div><span class="label">Subject:</span> {subject}</div>
             </div>
         </div>

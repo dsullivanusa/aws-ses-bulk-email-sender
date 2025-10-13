@@ -110,8 +110,8 @@ def main():
     if len(sys.argv) < 2:
         print("Usage: python tail_lambda_logs.py <function-name> [--no-follow]")
         print("\nExamples:")
-        print("  python tail_lambda_logs.py BulkEmailAPI")
-        print("  python tail_lambda_logs.py EmailWorker --no-follow")
+        print("  python tail_lambda_logs.py bulk-email-api-function")
+        print("  python tail_lambda_logs.py email-worker-function --no-follow")
         return
     
     function_name = sys.argv[1]

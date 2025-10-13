@@ -465,6 +465,12 @@ def lambda_handler(event, context):
                 bcc_list = campaign.get("bcc", []) or []
 
                 # Handle special roles: CC and BCC recipients should receive emails with proper headers
+                logger.info(f"[Message {idx}] 🎭 ROLE-BASED PROCESSING:")
+                logger.info(f"[Message {idx}]   Message Role: {role}")
+                logger.info(f"[Message {idx}]   Contact Email: {contact_email}")
+                logger.info(f"[Message {idx}]   Campaign CC: {campaign.get('cc', [])}")
+                logger.info(f"[Message {idx}]   Campaign BCC: {campaign.get('bcc', [])}")
+                
                 if role == "cc":
                     logger.info(
                         f"[Message {idx}] CC recipient: {contact_email} will receive email with their address in CC field"
@@ -1160,6 +1166,44 @@ def send_ses_email(
                 destination["CcAddresses"] = cc_list
             if bcc_list:
                 destination["BccAddresses"] = bcc_list
+            
+            # DEBUG: Print To, CC, BCC for simple email
+            logger.info(f"[Message {msg_idx}] 📧 EMAIL HEADERS (Simple Email):")
+            logger.info(f"[Message {msg_idx}]   To: {destination.get('ToAddresses', [])}")
+            logger.info(f"[Message {msg_idx}]   CC: {destination.get('CcAddresses', [])}")
+            logger.info(f"[Message {msg_idx}]   BCC: {destination.get('BccAddresses', [])}")
+            
+            # 🚨 VALIDATION: Check for To address before sending to SES
+            to_addresses = destination.get('ToAddresses', [])
+            if not to_addresses or len(to_addresses) == 0:
+                campaign_id = campaign.get('campaign_id', 'unknown') if campaign else 'unknown'
+                error_msg = f"No To address specified for simple email. SES requires at least one To recipient."
+                
+                # Print statement for immediate visibility
+                print(f"🚨 SES VALIDATION ERROR - Campaign {campaign_id}: {error_msg}")
+                print(f"   Message {msg_idx}: Destination={destination}")
+                print(f"   Message {msg_idx}: Contact={contact}")
+                print(f"   Message {msg_idx}: Role={message.get('role', 'None')}")
+                
+                logger.error(f"[Message {msg_idx}] ❌ SES VALIDATION ERROR - Campaign {campaign_id}: {error_msg}")
+                logger.error(f"[Message {msg_idx}]   Destination: {destination}")
+                logger.error(f"[Message {msg_idx}]   Contact: {contact}")
+                logger.error(f"[Message {msg_idx}]   Role: {message.get('role', 'None')}")
+                
+                # Send CloudWatch metric for validation errors
+                send_cloudwatch_metric(
+                    'SESValidationErrors',
+                    1,
+                    'Count',
+                    [
+                        {'Name': 'ErrorType', 'Value': 'NoToAddress'},
+                        {'Name': 'EmailType', 'Value': 'SimpleEmail'},
+                        {'Name': 'CampaignId', 'Value': campaign_id}
+                    ]
+                )
+                
+                return False  # Don't send the email
+            
             response = ses_client.send_email(
                 Source=from_email,
                 Destination=destination,
@@ -1168,6 +1212,7 @@ def send_ses_email(
                     "Body": {"Html": {"Data": body}},
                 },
             )
+            
             logger.info(
                 f"[Message {msg_idx}] ✅ SES Response: {json.dumps(response, default=str)}"
             )
@@ -1182,10 +1227,46 @@ def send_ses_email(
         msg["From"] = from_email
         msg["To"] = contact["email"]
         msg["Subject"] = subject
+        
+        # 🚨 VALIDATION: Check if To field is valid
+        to_email = contact.get("email", "").strip()
+        if not to_email or "@" not in to_email:
+            campaign_id = campaign.get('campaign_id', 'unknown') if campaign else 'unknown'
+            error_msg = f"Invalid or empty To email address in MIME message: '{to_email}'"
+            
+            # Print statement for immediate visibility
+            print(f"🚨 SES VALIDATION ERROR - Campaign {campaign_id}: {error_msg}")
+            print(f"   Message {msg_idx}: Contact={contact}")
+            print(f"   Message {msg_idx}: To Email='{to_email}'")
+            
+            logger.error(f"[Message {msg_idx}] ❌ SES VALIDATION ERROR - Campaign {campaign_id}: {error_msg}")
+            logger.error(f"[Message {msg_idx}]   Contact: {contact}")
+            logger.error(f"[Message {msg_idx}]   To Email: '{to_email}'")
+            
+            # Send CloudWatch metric for validation errors
+            send_cloudwatch_metric(
+                'SESValidationErrors',
+                1,
+                'Count',
+                [
+                    {'Name': 'ErrorType', 'Value': 'InvalidToEmail'},
+                    {'Name': 'EmailType', 'Value': 'RawEmailMIME'},
+                    {'Name': 'CampaignId', 'Value': campaign_id}
+                ]
+            )
+            
+            return False  # Don't send the email
 
         # Add Cc header for recipients (BCC must not appear in headers)
         if cc_list:
             msg["Cc"] = ", ".join(cc_list)
+        
+        # DEBUG: Print To, CC, BCC for raw email (with attachments)
+        logger.info(f"[Message {msg_idx}] 📧 EMAIL HEADERS (Raw Email with Attachments):")
+        logger.info(f"[Message {msg_idx}]   To: {contact['email']}")
+        logger.info(f"[Message {msg_idx}]   CC: {cc_list}")
+        logger.info(f"[Message {msg_idx}]   BCC: {bcc_list}")
+        logger.info(f"[Message {msg_idx}]   MIME CC Header: {msg.get('Cc', 'None')}")
 
         # multipart/related container for HTML body and inline images
         related = MIMEMultipart("related")
@@ -1337,6 +1418,11 @@ def send_ses_email(
             destinations.extend(cc_list)
         if bcc_list:
             destinations.extend(bcc_list)
+        
+        # DEBUG: Print SES envelope destinations
+        logger.info(f"[Message {msg_idx}] 📬 SES ENVELOPE DESTINATIONS:")
+        logger.info(f"[Message {msg_idx}]   All Recipients: {destinations}")
+        logger.info(f"[Message {msg_idx}]   Total Count: {len(destinations)}")
 
         # Attempt to rewrite HTML body references to S3 keys or filenames to cid: references
         try:
@@ -1574,6 +1660,81 @@ def send_ses_email(
                 f"[Message {msg_idx}] Failed to produce debug raw MIME: {str(dbg_err)}"
             )
 
+        # 🚨 VALIDATION: Check for To address before sending raw email to SES
+        if not destinations or len(destinations) == 0:
+            error_msg = f"No destinations specified for raw email. SES requires at least one recipient."
+            logger.error(f"[Message {msg_idx}] ❌ SES VALIDATION ERROR: {error_msg}")
+            logger.error(f"[Message {msg_idx}]   Contact: {contact}")
+            logger.error(f"[Message {msg_idx}]   CC List: {cc_list}")
+            logger.error(f"[Message {msg_idx}]   BCC List: {bcc_list}")
+            logger.error(f"[Message {msg_idx}]   Role: {message.get('role', 'None')}")
+            
+            # Send CloudWatch metric for validation errors
+            send_cloudwatch_metric(
+                'SESValidationErrors',
+                1,
+                'Count',
+                [
+                    {'Name': 'ErrorType', 'Value': 'NoDestinations'},
+                    {'Name': 'EmailType', 'Value': 'RawEmail'}
+                ]
+            )
+            
+            return False  # Don't send the email
+        
+        # Additional validation: Check if primary To address exists
+        primary_to = contact.get('email') if contact else None
+        if not primary_to or '@' not in primary_to:
+            error_msg = f"Invalid or missing primary To address: {primary_to}"
+            logger.error(f"[Message {msg_idx}] ❌ SES VALIDATION ERROR: {error_msg}")
+            logger.error(f"[Message {msg_idx}]   Contact: {contact}")
+            logger.error(f"[Message {msg_idx}]   Destinations: {destinations}")
+            
+            # Send CloudWatch metric for validation errors
+            send_cloudwatch_metric(
+                'SESValidationErrors',
+                1,
+                'Count',
+                [
+                    {'Name': 'ErrorType', 'Value': 'InvalidToAddress'},
+                    {'Name': 'EmailType', 'Value': 'RawEmail'}
+                ]
+            )
+            
+            return False  # Don't send the email
+
+        # 🚨 VALIDATION: Check for destinations before sending raw email to SES
+        if not destinations or len(destinations) == 0:
+            campaign_id = campaign.get('campaign_id', 'unknown') if campaign else 'unknown'
+            error_msg = f"No destinations specified for raw email. SES requires at least one recipient."
+            
+            # Print statement for immediate visibility
+            print(f"🚨 SES VALIDATION ERROR - Campaign {campaign_id}: {error_msg}")
+            print(f"   Message {msg_idx}: Destinations={destinations}")
+            print(f"   Message {msg_idx}: Contact={contact}")
+            print(f"   Message {msg_idx}: CC List={cc_list}")
+            print(f"   Message {msg_idx}: BCC List={bcc_list}")
+            
+            logger.error(f"[Message {msg_idx}] ❌ SES VALIDATION ERROR - Campaign {campaign_id}: {error_msg}")
+            logger.error(f"[Message {msg_idx}]   Destinations: {destinations}")
+            logger.error(f"[Message {msg_idx}]   Contact: {contact}")
+            logger.error(f"[Message {msg_idx}]   CC List: {cc_list}")
+            logger.error(f"[Message {msg_idx}]   BCC List: {bcc_list}")
+            
+            # Send CloudWatch metric for validation errors
+            send_cloudwatch_metric(
+                'SESValidationErrors',
+                1,
+                'Count',
+                [
+                    {'Name': 'ErrorType', 'Value': 'NoDestinations'},
+                    {'Name': 'EmailType', 'Value': 'RawEmail'},
+                    {'Name': 'CampaignId', 'Value': campaign_id}
+                ]
+            )
+            
+            return False  # Don't send the email
+        
         # Use as_bytes() to produce the raw MIME bytes for SES to avoid newline/line-ending surprises
         raw_bytes = msg.as_bytes()
         response = ses_client.send_raw_email(
@@ -1663,6 +1824,35 @@ def send_smtp_email(
         msg["From"] = from_email
         msg["To"] = contact["email"]
         msg["Subject"] = subject
+        
+        # 🚨 VALIDATION: Check if To field is valid
+        to_email = contact.get("email", "").strip()
+        if not to_email or "@" not in to_email:
+            campaign_id = campaign.get('campaign_id', 'unknown') if campaign else 'unknown'
+            error_msg = f"Invalid or empty To email address in MIME message: '{to_email}'"
+            
+            # Print statement for immediate visibility
+            print(f"🚨 SES VALIDATION ERROR - Campaign {campaign_id}: {error_msg}")
+            print(f"   Message {msg_idx}: Contact={contact}")
+            print(f"   Message {msg_idx}: To Email='{to_email}'")
+            
+            logger.error(f"[Message {msg_idx}] ❌ SES VALIDATION ERROR - Campaign {campaign_id}: {error_msg}")
+            logger.error(f"[Message {msg_idx}]   Contact: {contact}")
+            logger.error(f"[Message {msg_idx}]   To Email: '{to_email}'")
+            
+            # Send CloudWatch metric for validation errors
+            send_cloudwatch_metric(
+                'SESValidationErrors',
+                1,
+                'Count',
+                [
+                    {'Name': 'ErrorType', 'Value': 'InvalidToEmail'},
+                    {'Name': 'EmailType', 'Value': 'SimpleRawEmail'},
+                    {'Name': 'CampaignId', 'Value': campaign_id}
+                ]
+            )
+            
+            return False  # Don't send the email
 
         # Prefer message-level lists if provided
         if cc_list is None:
