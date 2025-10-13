@@ -390,17 +390,14 @@ def lambda_handler(event, context):
                 # Check message role: normal per-contact sends vs single-send for cc/bcc/to
                 role = message.get('role')  # None, 'cc', 'bcc', or 'to'
 
+                # Include campaign-level CC addresses in all emails so recipients can see who else is CC'd
+                cc_list = campaign.get('cc', []) or []
+                bcc_list = campaign.get('bcc', []) or []
+                
                 if role in ('cc', 'bcc', 'to'):
-                    # For single-send CC/BCC/To messages, do not include campaign-level CC/BCC in the envelope
-                    cc_list = []
-                    bcc_list = []
-                    logger.info(f"[Message {idx}] Special role message detected: {role} (single-send to {contact_email})")
+                    logger.info(f"[Message {idx}] Special role message detected: {role} (single-send to {contact_email}) - Including {len(cc_list)} CC addresses")
                 else:
-                    # Regular contact messages should NOT include campaign-level CC/BCC
-                    # because those recipients are already getting dedicated single-send messages
-                    cc_list = []
-                    bcc_list = []
-                    logger.info(f"[Message {idx}] Regular contact message (CC/BCC recipients get separate messages)")
+                    logger.info(f"[Message {idx}] Regular contact message - Including {len(cc_list)} CC addresses and {len(bcc_list)} BCC addresses")
 
                 # Apply adaptive rate control delay before sending
                 attachments = campaign.get('attachments', [])

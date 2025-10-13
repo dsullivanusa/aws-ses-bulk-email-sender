@@ -1672,15 +1672,15 @@ def serve_web_ui(event):
 
             <div style="display:flex; gap:12px; margin-top:8px;">
                 <div style="flex:1;">
-                    <label for="campaignTo" style="font-size:12px; color:var(--gray-600)">To (comma-separated)</label>
+                    <label for="campaignTo" style="font-size:12px; color:var(--gray-600)">To (comma or semi-colon separated)</label>
                     <input type="text" id="campaignTo" placeholder="recipient1@example.com, recipient2@example.com" style="width:100%; padding:8px; border-radius:6px; border:1px solid #e5e7eb;">
                 </div>
                 <div style="flex:1;">
-                    <label for="campaignCc" style="font-size:12px; color:var(--gray-600)">CC (comma-separated)</label>
-                    <input type="text" id="campaignCc" placeholder="alice@example.com, bob@example.com" style="width:100%; padding:8px; border-radius:6px; border:1px solid #e5e7eb;">
+                    <label for="campaignCc" style="font-size:12px; color:var(--gray-600)">CC (comma or semi-colon separated)</label>
+                    <input type="text" id="campaignCc" placeholder="alice@example.com; bob@example.com" style="width:100%; padding:8px; border-radius:6px; border:1px solid #e5e7eb;">
                 </div>
                 <div style="flex:1;">
-                    <label for="campaignBcc" style="font-size:12px; color:var(--gray-600)">BCC (comma-separated)</label>
+                    <label for="campaignBcc" style="font-size:12px; color:var(--gray-600)">BCC (comma or semi-colon separated)</label>
                     <input type="text" id="campaignBcc" placeholder="hidden@example.com" style="width:100%; padding:8px; border-radius:6px; border:1px solid #e5e7eb;">
                 </div>
             </div>
@@ -1947,7 +1947,26 @@ def serve_web_ui(event):
                     
                     // Font dropdown
                     const fontSelect = toolbar.querySelector('.ql-font');
-                    if (fontSelect) fontSelect.setAttribute('title', 'Font family (Arial, Georgia, etc.)');
+                    if (fontSelect) {{
+                        fontSelect.setAttribute('title', 'Font family (Arial, Georgia, etc.)');
+                        
+                        // Add event listener to log font changes
+                        fontSelect.addEventListener('change', function(e) {{
+                            const selectedFont = e.target.value || 'default (sans-serif)';
+                            console.log('🔤 Font changed to:', selectedFont);
+                            console.log('   Font select value:', e.target.value);
+                            console.log('   Font select label:', e.target.options[e.target.selectedIndex]?.text || 'N/A');
+                            
+                            // Get current selection to show what text was affected
+                            const range = quillEditor.getSelection();
+                            if (range && range.length > 0) {{
+                                console.log('   Applied to selection: length =', range.length, 'chars at index', range.index);
+                            }} else if (range) {{
+                                console.log('   Applied to cursor position: index =', range.index);
+                            }}
+                        }});
+                        console.log('✅ Added font change listener');
+                    }}
                     
                     // Size dropdown
                     const sizeSelect = toolbar.querySelector('.ql-size');
@@ -2005,6 +2024,35 @@ def serve_web_ui(event):
                     console.log('✅ Added tooltips to Quill toolbar buttons');
                 }}
             }}, 100);  // Small delay to ensure toolbar is rendered
+            
+            // Add Quill editor event listener to track font changes via formatting
+            quillEditor.on('text-change', function(delta, oldDelta, source) {{
+                if (source === 'user') {{
+                    // Check if the change includes font formatting
+                    const ops = delta.ops || [];
+                    for (let i = 0; i < ops.length; i++) {{
+                        const op = ops[i];
+                        if (op.attributes && op.attributes.font) {{
+                            console.log('🔤 Font applied via text-change event:', op.attributes.font);
+                            console.log('   Change source:', source);
+                            console.log('   Operation:', JSON.stringify(op, null, 2));
+                        }}
+                    }}
+                }}
+            }});
+            
+            // Add selection-change listener to show current font at cursor position
+            quillEditor.on('selection-change', function(range, oldRange, source) {{
+                if (range) {{
+                    const format = quillEditor.getFormat(range);
+                    if (format.font !== undefined) {{
+                        console.log('🔤 Current font at cursor/selection:', format.font || 'default (sans-serif)');
+                        console.log('   Range:', 'index=' + range.index + ', length=' + range.length);
+                    }}
+                }}
+            }});
+            
+            console.log('✅ Added Quill text-change and selection-change listeners for font tracking');
         }});
         
         // Initialize the application
@@ -2195,10 +2243,11 @@ def serve_web_ui(event):
             console.log('Campaign form cleared');
         }};
         
-        // Helper to parse comma-separated email lists into arrays
+        // Helper to parse comma or semi-colon separated email lists into arrays
         function parseEmails(input) {{
             if (!input) return [];
-            return input.split(',').map(s => s.trim()).filter(s => s.length > 0);
+            // Support both commas and semi-colons as separators
+            return input.replace(/;/g, ',').split(',').map(s => s.trim()).filter(s => s.length > 0);
         }}
         
         // Paste raw HTML into Quill editor
@@ -7156,8 +7205,8 @@ def save_preview(body, headers):
             <div class="preview-meta">
                 <div><span class="label">From:</span> {from_email}</div>
                 {f'<div><span class="label">To:</span> {", ".join(to_recipients) if to_recipients else "(No recipients)"}</div>' if to_recipients or True else ''}
-                {f'<div><span class="label">CC:</span> {", ".join(cc_recipients)}</div>' if cc_recipients else ''}
-                {f'<div><span class="label">BCC:</span> {", ".join(bcc_recipients)}</div>' if bcc_recipients else ''}
+                {f'<div><span class="label">CC:</span> <strong>{", ".join(cc_recipients)}</strong></div>' if cc_recipients and len(cc_recipients) > 0 else ''}
+                {f'<div><span class="label">BCC:</span> {", ".join(bcc_recipients)}</div>' if bcc_recipients and len(bcc_recipients) > 0 else ''}
                 <div><span class="label">Subject:</span> {subject}</div>
             </div>
         </div>
