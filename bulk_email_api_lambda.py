@@ -4903,13 +4903,22 @@ def serve_web_ui(event):
             }}
             console.log('Extracted ' + targetEmails.length + ' valid emails from ' + targetContacts.length + ' contacts');
             
-            // Combine contact-derived targets with any explicit To addresses plus CC/BCC (dedupe with case-insensitive comparison)
+            // Combine contact-derived targets with explicit To addresses (but NOT CC/BCC - they're handled separately)
+            let primaryTargetEmails = [...new Set([...targetEmails, ...toList])];
+            
+            // Total recipients for validation (includes CC/BCC for counting)
             let allTargetEmails = [...new Set([...targetEmails, ...toList, ...ccList, ...bccList])];
-            console.log('Total targets including To/CC/BCC: ' + allTargetEmails.length + ' (Contacts: ' + targetEmails.length + ', To: ' + toList.length + ', CC: ' + ccList.length + ', BCC: ' + bccList.length + ')');
-            console.log('Sample emails:', allTargetEmails.slice(0, 5));
+            
+            console.log('Primary targets (contacts + To): ' + primaryTargetEmails.length + ' (Contacts: ' + targetEmails.length + ', To: ' + toList.length + ')');
+            console.log('Total recipients including CC/BCC: ' + allTargetEmails.length + ' (CC: ' + ccList.length + ', BCC: ' + bccList.length + ')');
+            console.log('Sample primary targets:', primaryTargetEmails.slice(0, 5));
             
             if (allTargetEmails.length === 0) {{
-                throw new Error('No valid email addresses found. Please check that your contacts have valid email addresses or add To/CC/BCC recipients.');
+                throw new Error('No recipients specified. Please select contacts or add To/CC/BCC recipients.');
+            }}
+            
+            if (primaryTargetEmails.length === 0 && ccList.length === 0 && bccList.length === 0) {{
+                throw new Error('No recipients specified. Please select contacts or add To/CC/BCC recipients.');
             }}
 
             // CONFIRMATION POPUP - Show total recipient count and ask for confirmation
@@ -5010,13 +5019,26 @@ Click OK to proceed or Cancel to abort.
                 filter_type: Object.keys(selectedCampaignFilterValues).length > 0 ? 'custom' : null,
                 filter_values: Object.keys(selectedCampaignFilterValues).length > 0 ? JSON.stringify(selectedCampaignFilterValues): null,
                 filter_description: filterDescription,
-                // Provide explicit To list (if given) and final target contacts
+                // Send only primary targets (contacts + To) - CC/BCC handled separately by backend
                 to: toList,
-                target_contacts: allTargetEmails,  // Send combined email list (contacts + CC + BCC or explicit To) to backend
-                cc: ccList,   // array of CC emails (for display/tracking)
-                bcc: bccList, // array of BCC emails (for display/tracking)
+                target_contacts: primaryTargetEmails,  // Send only contacts + To addresses (NOT CC/BCC)
+                cc: ccList,   // array of CC emails (backend will queue these separately)
+                bcc: bccList, // array of BCC emails (backend will queue these separately)
                 attachments: campaignAttachments  // Include attachments
             }};
+            
+            // 📡 CAMPAIGN DATA LOGGING
+            console.log('📡 CAMPAIGN DATA PREPARED:');
+            console.log('   Campaign Name:', campaign.campaign_name);
+            console.log('   Subject:', campaign.subject);
+            console.log('   Body Length:', campaign.body ? campaign.body.length : 0, 'characters');
+            console.log('   Filter Description:', campaign.filter_description);
+            console.log('   Target Contacts:', campaign.target_contacts.length, 'addresses');
+            console.log('   To Recipients:', campaign.to.length, 'addresses');
+            console.log('   CC Recipients:', campaign.cc.length, 'addresses');
+            console.log('   BCC Recipients:', campaign.bcc.length, 'addresses');
+            console.log('   Attachments:', campaign.attachments.length, 'files');
+            console.log('   Full Campaign Object:', campaign);
                 
                 // Validate required fields
                 if (!campaign.campaign_name || !campaign.subject || !campaign.body) {{
@@ -5080,23 +5102,44 @@ Click OK to proceed or Cancel to abort.
             console.log(`📤 Sending campaign to backend: ${{API_URL}}/campaign`);
             console.log(`   Campaign JSON size: ${{campaignJSON.length}} characters (${{(campaignJSON.length / 1024).toFixed(2)}} KB)`);
             
+            // 📡 ENHANCED REQUEST LOGGING
+            console.log('📡 SENDING CAMPAIGN REQUEST:');
+            console.log('   URL:', `${{API_URL}}/campaign`);
+            console.log('   Method: POST');
+            console.log('   Headers:', {{'Content-Type': 'application/json'}});
+            console.log('   Body size:', campaignJSON.length, 'characters');
+            
             const response = await fetch(`${{API_URL}}/campaign`, {{
                 method: 'POST',
                 headers: {{'Content-Type': 'application/json'}},
                 body: campaignJSON
             }});
             
-            console.log(`Response status: ${{response.status}} ${{response.statusText}}`);
+            // 📡 ENHANCED RESPONSE LOGGING
+            console.log('📡 CAMPAIGN RESPONSE RECEIVED:');
+            console.log('   Status:', response.status, response.statusText);
+            console.log('   Headers:', Object.fromEntries(response.headers.entries()));
+            console.log('   OK:', response.ok);
+            console.log('   Type:', response.type);
+            console.log('   URL:', response.url);
             
             // Get response as text first to handle HTML error pages
             const responseText = await response.text();
-            console.log(`Response length: ${{responseText.length}} characters`);
-            console.log(`Response preview: ${{responseText.substring(0, 100)}}`);
+            console.log('   Response length:', responseText.length, 'characters');
+            console.log('   Response preview (first 200 chars):', responseText.substring(0, 200));
+            
+            // 📡 DETAILED RESPONSE ANALYSIS
+            if (!response.ok) {{
+                console.error('📡 ERROR RESPONSE DETAILS:');
+                console.error('   Status Code:', response.status);
+                console.error('   Status Text:', response.statusText);
+                console.error('   Full Response Body:', responseText);
+            }}
             
             // Check if response is HTML (error page) instead of JSON
             if (responseText.trim().startsWith('<')) {{
-                console.error('Server returned HTML instead of JSON:');
-                console.error(responseText.substring(0, 1000));
+                console.error('📡 SERVER ERROR: HTML response instead of JSON');
+                console.error('   Full HTML response:', responseText);
                 throw new Error(
                     `Campaign Failed: Server returned an error page instead of JSON response\\n\\n` +
                     `Status: ${{response.status}} ${{response.statusText}}\\n\\n` +
@@ -5109,11 +5152,22 @@ Click OK to proceed or Cancel to abort.
                 );
             }}
             
+            // 📡 JSON PARSING
             let result;
             try {{
+                console.log('📡 PARSING RESPONSE AS JSON...');
                 result = JSON.parse(responseText);
+                console.log('📡 JSON PARSE SUCCESS:');
+                console.log('   Parsed result:', result);
+                console.log('   Result keys:', Object.keys(result));
+                if (result.error) {{
+                    console.error('📡 API ERROR IN RESPONSE:', result.error);
+                }}
+                if (result.success) {{
+                    console.log('📡 API SUCCESS:', result.success);
+                }}
             }} catch (parseError) {{
-                console.error('Failed to parse response as JSON:', parseError);
+                console.error('📡 JSON PARSE ERROR:', parseError);
                 console.error('Response text:', responseText.substring(0, 500));
                 throw new Error(
                     `Campaign Failed: Invalid server response\\n\\n` +
@@ -6922,11 +6976,17 @@ def send_campaign(body, headers, event=None):
         print(f"   Regular contacts created: {len(contacts)}")
         print(f"   Excluded (CC/BCC/To): {excluded_count}")
         
-        print(f"Campaign targeting {len(contacts)} valid email addresses ({filter_description})")
+        # Check if we have any recipients at all (regular contacts + CC + BCC + To)
+        total_recipients = len(contacts) + len(cc_list) + len(bcc_list) + len(to_list)
         
-        if not contacts:
-            error_msg = f'No valid email addresses found. Received {len(target_contact_emails)} entries but none are valid emails. Please check email format (must contain @).'
+        print(f"Campaign targeting {len(contacts)} regular contacts + {len(cc_list)} CC + {len(bcc_list)} BCC + {len(to_list)} To = {total_recipients} total recipients ({filter_description})")
+        
+        if not contacts and not cc_list and not bcc_list and not to_list:
+            error_msg = f'No recipients specified. Please add target contacts, or specify To/CC/BCC recipients.'
             return {'statusCode': 400, 'headers': headers, 'body': json.dumps({'error': error_msg})}
+        
+        if not contacts and (cc_list or bcc_list or to_list):
+            print(f"✅ CC/BCC/To-only campaign: {len(cc_list)} CC + {len(bcc_list)} BCC + {len(to_list)} To recipients")
         
         campaign_id = f"campaign_{int(datetime.now().timestamp())}"
         
