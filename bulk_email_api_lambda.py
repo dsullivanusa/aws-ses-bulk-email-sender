@@ -4890,10 +4890,10 @@ def serve_web_ui(event):
             }}
             
             // 📧 TOAST NOTIFICATION: Show recipients summary
-            if (toList.length > 0 || ccList.length > 0 || bccList.length > 0) {{
-                const recipientSummary = `To: ${{toList.length}}, CC: ${{ccList.length}}, BCC: ${{bccList.length}}`;
-                Toast.info(`📧 Recipients: ${{recipientSummary}}`, 4000);
-            }}
+            // if (toList.length > 0 || ccList.length > 0 || bccList.length > 0) {{
+            //     const recipientSummary = `To: ${{toList.length}}, CC: ${{ccList.length}}, BCC: ${{bccList.length}}`;
+            //     Toast.info(`📧 Recipients: ${{recipientSummary}}`, 4000);
+            // }}
             
             // Extract and validate email addresses from contacts (normalize to lowercase)
             const targetEmails = targetContacts.map(c => c?.email).filter(email => email && email.includes('@')).map(e => e.toLowerCase());
@@ -7155,17 +7155,49 @@ def send_campaign(body, headers, event=None):
                 print(f"Failed to queue {role} email for {recipient_email}: {str(e)}")
                 failed_to_queue += 1
 
-        # Enqueue CC addresses (single-send each)
-        for cc in cc_list:
-            enqueue_special(cc, 'cc')
-
-        # Enqueue BCC addresses (single-send each)
-        for bcc in bcc_list:
-            enqueue_special(bcc, 'bcc')
+        # CC and BCC addresses are stored in campaign data and will be included in every email
+        # No need to queue them individually - they'll be retrieved from campaign by email_worker
+        # for cc in cc_list:
+        #     enqueue_special(cc, 'cc')
+        # for bcc in bcc_list:
+        #     enqueue_special(bcc, 'bcc')
         
         # Enqueue explicit To addresses (single-send each) - skip addresses already in target contacts
         for to_addr in to_list:
             enqueue_special(to_addr, 'to')
+        
+        # If no messages were queued but we have CC/BCC recipients, queue one dummy message
+        # so the email worker will process the campaign and send to CC/BCC
+        if queued_count == 0 and (cc_list or bcc_list):
+            print(f"⚠️ CC/BCC-only campaign with no regular contacts - queuing one message for CC/BCC delivery")
+            try:
+                # Queue a message with the first CC or BCC as the "To" recipient
+                # They'll receive the email as both To and CC/BCC
+                dummy_recipient = cc_list[0] if cc_list else bcc_list[0]
+                message_body = {
+                    'campaign_id': campaign_id,
+                    'contact_email': dummy_recipient
+                }
+                sqs_client.send_message(
+                    QueueUrl=queue_url,
+                    MessageBody=json.dumps(message_body),
+                    MessageAttributes={
+                        'campaign_id': {
+                            'StringValue': campaign_id,
+                            'DataType': 'String'
+                        },
+                        'contact_email': {
+                            'StringValue': dummy_recipient,
+                            'DataType': 'String'
+                        }
+                    }
+                )
+                queued_count += 1
+                print(f"✅ Queued CC/BCC delivery message to {dummy_recipient}")
+            except Exception as e:
+                print(f"❌ Failed to queue CC/BCC delivery message: {str(e)}")
+                failed_to_queue += 1
+        
         # Update campaign status
         campaigns_table.update_item(
             Key={'campaign_id': campaign_id},

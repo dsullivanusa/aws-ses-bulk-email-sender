@@ -340,6 +340,9 @@ def lambda_handler(event, context):
 
                 campaign_id = message.get("campaign_id")
                 contact_email = message.get("contact_email")
+                
+                # Print SQS data retrieved
+                print(f"📨📥🔍 SQS Data: MessageID={message_id}, CampaignID={campaign_id}, Contact={contact_email}, Role={message.get('role', 'N/A')}")
 
                 if not campaign_id or not contact_email:
                     raise ValueError("Missing campaign_id or contact_email in message")
