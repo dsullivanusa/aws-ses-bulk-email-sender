@@ -156,6 +156,11 @@ def serve_web_ui(event):
     <!-- Font Awesome Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     
+    <!-- Google Fonts for Outlook-optimized selection -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&family=Open+Sans:wght@300;400;600;700&family=Lato:wght@300;400;700&family=Montserrat:wght@300;400;500;600;700&family=Poppins:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600;700&family=Source+Sans+Pro:wght@300;400;600;700&family=Nunito:wght@300;400;600;700&family=Raleway:wght@300;400;500;600;700&family=Ubuntu:wght@300;400;500;700&family=Playfair+Display:wght@400;500;600;700&family=Merriweather:wght@300;400;700&family=Oswald:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
     <!-- Quill Rich Text Editor -->
     <link href="https://cdn.quilljs.com/1.3.6/quill.snow.css" rel="stylesheet">
     <script src="https://cdn.quilljs.com/1.3.6/quill.js"></script>
@@ -518,6 +523,95 @@ def serve_web_ui(event):
             min-height: 200px;
             font-size: 16px;
             line-height: 1.6;
+        }}
+        
+        /* Outlook-Optimized Font Definitions */
+        /* Core Outlook-safe system fonts */
+        .ql-font-arial {{ font-family: Arial, sans-serif; }}
+        .ql-font-calibri {{ font-family: Calibri, Arial, sans-serif; }}
+        .ql-font-cambria {{ font-family: Cambria, Georgia, serif; }}
+        .ql-font-georgia {{ font-family: Georgia, serif; }}
+        .ql-font-times-new-roman {{ font-family: "Times New Roman", serif; }}
+        .ql-font-courier-new {{ font-family: "Courier New", monospace; }}
+        .ql-font-verdana {{ font-family: Verdana, Arial, sans-serif; }}
+        .ql-font-tahoma {{ font-family: Tahoma, Arial, sans-serif; }}
+        .ql-font-trebuchet-ms {{ font-family: "Trebuchet MS", Arial, sans-serif; }}
+        .ql-font-helvetica {{ font-family: Helvetica, Arial, sans-serif; }}
+        
+        /* Limited web fonts with strong Outlook fallbacks */
+        .ql-font-segoe-ui {{ font-family: "Segoe UI", Tahoma, Arial, sans-serif; }}
+        .ql-font-open-sans {{ font-family: "Open Sans", Arial, sans-serif; }}
+        .ql-font-roboto {{ font-family: "Roboto", Arial, sans-serif; }}
+        
+        /* Outlook-Optimized Font Dropdown Styling */
+        .ql-picker.ql-font .ql-picker-label::before,
+        .ql-picker.ql-font .ql-picker-item::before {{
+            content: 'Font Family';
+        }}
+        .ql-picker.ql-font .ql-picker-label[data-value=arial]::before,
+        .ql-picker.ql-font .ql-picker-item[data-value=arial]::before {{
+            content: 'Arial (Recommended)';
+            font-family: Arial, sans-serif;
+        }}
+        .ql-picker.ql-font .ql-picker-label[data-value=calibri]::before,
+        .ql-picker.ql-font .ql-picker-item[data-value=calibri]::before {{
+            content: 'Calibri (Outlook Default)';
+            font-family: Calibri, Arial, sans-serif;
+        }}
+        .ql-picker.ql-font .ql-picker-label[data-value=cambria]::before,
+        .ql-picker.ql-font .ql-picker-item[data-value=cambria]::before {{
+            content: 'Cambria (Elegant Serif)';
+            font-family: Cambria, Georgia, serif;
+        }}
+        .ql-picker.ql-font .ql-picker-label[data-value=georgia]::before,
+        .ql-picker.ql-font .ql-picker-item[data-value=georgia]::before {{
+            content: 'Georgia (Classic Serif)';
+            font-family: Georgia, serif;
+        }}
+        .ql-picker.ql-font .ql-picker-label[data-value=times-new-roman]::before,
+        .ql-picker.ql-font .ql-picker-item[data-value=times-new-roman]::before {{
+            content: 'Times New Roman';
+            font-family: "Times New Roman", serif;
+        }}
+        .ql-picker.ql-font .ql-picker-label[data-value=courier-new]::before,
+        .ql-picker.ql-font .ql-picker-item[data-value=courier-new]::before {{
+            content: 'Courier New (Monospace)';
+            font-family: "Courier New", monospace;
+        }}
+        .ql-picker.ql-font .ql-picker-label[data-value=verdana]::before,
+        .ql-picker.ql-font .ql-picker-item[data-value=verdana]::before {{
+            content: 'Verdana (Web Safe)';
+            font-family: Verdana, Arial, sans-serif;
+        }}
+        .ql-picker.ql-font .ql-picker-label[data-value=tahoma]::before,
+        .ql-picker.ql-font .ql-picker-item[data-value=tahoma]::before {{
+            content: 'Tahoma (Compact)';
+            font-family: Tahoma, Arial, sans-serif;
+        }}
+        .ql-picker.ql-font .ql-picker-label[data-value=trebuchet-ms]::before,
+        .ql-picker.ql-font .ql-picker-item[data-value=trebuchet-ms]::before {{
+            content: 'Trebuchet MS (Modern)';
+            font-family: "Trebuchet MS", Arial, sans-serif;
+        }}
+        .ql-picker.ql-font .ql-picker-label[data-value=helvetica]::before,
+        .ql-picker.ql-font .ql-picker-item[data-value=helvetica]::before {{
+            content: 'Helvetica (Mac/iOS)';
+            font-family: Helvetica, Arial, sans-serif;
+        }}
+        .ql-picker.ql-font .ql-picker-label[data-value=segoe-ui]::before,
+        .ql-picker.ql-font .ql-picker-item[data-value=segoe-ui]::before {{
+            content: 'Segoe UI (Windows)';
+            font-family: "Segoe UI", Tahoma, Arial, sans-serif;
+        }}
+        .ql-picker.ql-font .ql-picker-label[data-value=open-sans]::before,
+        .ql-picker.ql-font .ql-picker-item[data-value=open-sans]::before {{
+            content: 'Open Sans (Web Font)';
+            font-family: "Open Sans", Arial, sans-serif;
+        }}
+        .ql-picker.ql-font .ql-picker-label[data-value=roboto]::before,
+        .ql-picker.ql-font .ql-picker-item[data-value=roboto]::before {{
+            content: 'Roboto (Web Font)';
+            font-family: "Roboto", Arial, sans-serif;
         }}
         .ql-toolbar {{
             border-top: 1px solid #e5e7eb;
@@ -1854,11 +1948,47 @@ def serve_web_ui(event):
             console.log('✅ Quill Font module registered with custom fonts:', Font.whitelist);
             console.log('✅ Font dropdown labels customized');
             
+            // Verify fonts are available on the system
+            const testFonts = [
+                {{ name: 'Arial', family: 'Arial, sans-serif' }},
+                {{ name: 'Times New Roman', family: "'Times New Roman', Times, serif" }},
+                {{ name: 'Courier New', family: "'Courier New', Courier, monospace" }},
+                {{ name: 'Georgia', family: 'Georgia, serif' }},
+                {{ name: 'Verdana', family: 'Verdana, sans-serif' }},
+                {{ name: 'Comic Sans MS', family: "'Comic Sans MS', cursive" }},
+                {{ name: 'Trebuchet MS', family: "'Trebuchet MS', sans-serif" }},
+                {{ name: 'Impact', family: 'Impact, sans-serif' }}
+            ];
+            
+            console.log('🔍 Testing font availability:');
+            testFonts.forEach(font => {{
+                const testDiv = document.createElement('div');
+                testDiv.style.fontFamily = font.family;
+                testDiv.style.fontSize = '12px';
+                testDiv.textContent = 'test';
+                document.body.appendChild(testDiv);
+                const computedFont = window.getComputedStyle(testDiv).fontFamily;
+                document.body.removeChild(testDiv);
+                console.log(`  ${{font.name}}: ${{computedFont.includes(font.name.replace(/'/g, '')) ? '✅ Available' : '⚠️ Fallback used'}}`);
+            }});
+            
             // Configure font sizes
             const Size = Quill.import('formats/size');
             Size.whitelist = ['small', 'large', 'huge'];
             Quill.register(Size, true);
             console.log('✅ Quill Size module registered:', Size.whitelist);
+            
+            // Register Outlook-optimized fonts for Quill
+            const Font = Quill.import('formats/font');
+            Font.whitelist = [
+                // Outlook-safe system fonts (100% compatible)
+                'arial', 'calibri', 'cambria', 'georgia', 'times-new-roman', 
+                'courier-new', 'verdana', 'tahoma', 'trebuchet-ms', 'helvetica',
+                // Limited web fonts that work in Outlook with strong fallbacks
+                'segoe-ui', 'open-sans', 'roboto'
+            ];
+            Quill.register(Font, true);
+            console.log('✅ Outlook-optimized fonts registered:', Font.whitelist);
             
             quillEditor = new Quill('#body', {{
                 theme: 'snow',
@@ -1866,7 +1996,13 @@ def serve_web_ui(event):
                 modules: {{
                     toolbar: [
                         [{{ 'header': [1, 2, 3, false] }}],
-                        [{{ 'font': [] }}],  // Font family selector
+                        [{{ 'font': [
+                            // Outlook-safe system fonts (100% compatible)
+                            'arial', 'calibri', 'cambria', 'georgia', 'times-new-roman', 
+                            'courier-new', 'verdana', 'tahoma', 'trebuchet-ms', 'helvetica',
+                            // Limited web fonts with strong Outlook fallbacks
+                            'segoe-ui', 'open-sans', 'roboto'
+                        ] }}],  // Outlook-optimized font family selector
                         [{{ 'size': ['small', false, 'large', 'huge'] }}],  // Font size selector
                         ['bold', 'italic', 'underline', 'strike'],
                         [{{ 'color': [] }}, {{ 'background': [] }}],
@@ -6999,7 +7135,28 @@ def save_preview(body, headers):
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Email Preview: {subject}</title>
+    
+    <!-- Google Fonts for Outlook-optimized preview -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&family=Open+Sans:wght@300;400;600;700&family=Lato:wght@300;400;700&family=Montserrat:wght@300;400;500;600;700&family=Poppins:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600;700&family=Source+Sans+Pro:wght@300;400;600;700&family=Nunito:wght@300;400;600;700&family=Raleway:wght@300;400;500;600;700&family=Ubuntu:wght@300;400;500;700&family=Playfair+Display:wght@400;500;600;700&family=Merriweather:wght@300;400;700&family=Oswald:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
     <style>
+        /* Outlook-Optimized Font Definitions for Preview */
+        .ql-font-arial {{ font-family: Arial, sans-serif !important; }}
+        .ql-font-calibri {{ font-family: Calibri, Arial, sans-serif !important; }}
+        .ql-font-cambria {{ font-family: Cambria, Georgia, serif !important; }}
+        .ql-font-georgia {{ font-family: Georgia, serif !important; }}
+        .ql-font-times-new-roman {{ font-family: "Times New Roman", serif !important; }}
+        .ql-font-courier-new {{ font-family: "Courier New", monospace !important; }}
+        .ql-font-verdana {{ font-family: Verdana, Arial, sans-serif !important; }}
+        .ql-font-tahoma {{ font-family: Tahoma, Arial, sans-serif !important; }}
+        .ql-font-trebuchet-ms {{ font-family: "Trebuchet MS", Arial, sans-serif !important; }}
+        .ql-font-helvetica {{ font-family: Helvetica, Arial, sans-serif !important; }}
+        .ql-font-segoe-ui {{ font-family: "Segoe UI", Tahoma, Arial, sans-serif !important; }}
+        .ql-font-open-sans {{ font-family: "Open Sans", Arial, sans-serif !important; }}
+        .ql-font-roboto {{ font-family: "Roboto", Arial, sans-serif !important; }}
+        
         body {{
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
             line-height: 1.6;
