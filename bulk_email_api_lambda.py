@@ -165,8 +165,13 @@ def serve_web_ui(event):
     <link href="https://cdn.quilljs.com/1.3.6/quill.snow.css" rel="stylesheet">
     <script src="https://cdn.quilljs.com/1.3.6/quill.js"></script>
     
-    <!-- Quill Image Resize Module -->
-    <script src="https://cdn.jsdelivr.net/npm/quill-image-resize-module@3.0.0/image-resize.min.js"></script>
+    <!-- Quill Image Resize Module with fallback -->
+    <script src="https://cdn.jsdelivr.net/npm/quill-image-resize-module@3.0.0/image-resize.min.js" 
+            onerror="console.error('Primary CDN failed for image-resize module, trying fallback...'); 
+                     var script = document.createElement('script'); 
+                     script.src = 'https://unpkg.com/quill-image-resize-module@3.0.0/image-resize.min.js'; 
+                     script.onerror = function() {{ console.error('Fallback CDN also failed for image-resize module'); }}; 
+                     document.head.appendChild(script);"></script>
     
     <style>
         /* Modern CSS Variables for Consistent Theming */
@@ -1887,10 +1892,15 @@ def serve_web_ui(event):
             
             // Register Image Resize module AFTER formats are configured
             if (typeof ImageResize !== 'undefined') {{
-                Quill.register('modules/imageResize', ImageResize.default);
-                console.log('✅ Quill Image Resize module registered');
+                // Try both with and without .default (different CDN versions export differently)
+                const ImageResizeModule = ImageResize.default || ImageResize;
+                Quill.register('modules/imageResize', ImageResizeModule);
+                console.log('✅ Quill Image Resize module registered successfully');
+                console.log('   ImageResize object type:', typeof ImageResize);
+                console.log('   Using:', ImageResize.default ? 'ImageResize.default' : 'ImageResize');
             }} else {{
                 console.warn('⚠️ ImageResize module not found - image resizing will not be available');
+                console.warn('   Check if the CDN script loaded: https://cdn.jsdelivr.net/npm/quill-image-resize-module@3.0.0/image-resize.min.js');
             }}
             
             quillEditor = new Quill('#body', {{
@@ -1935,7 +1945,15 @@ def serve_web_ui(event):
                 }}
             }});
             
-            console.log('✅ Quill editor initialized with image resize support');
+            console.log('✅ Quill editor initialized');
+            
+            // Verify imageResize module is working
+            if (quillEditor.getModule('imageResize')) {{
+                console.log('✅ Image resize module is active and available');
+            }} else {{
+                console.warn('⚠️ Image resize module did not initialize properly');
+                console.warn('   This may cause issues with image resizing functionality');
+            }}
             
             // Add tooltips to Quill toolbar buttons
             setTimeout(() => {{
@@ -6673,29 +6691,49 @@ def send_campaign(body, headers, event=None):
         target_contact_emails = body.get('target_contacts', [])
         filter_description = body.get('filter_description', 'All Contacts')
         
-        print(f"Received campaign request with {len(target_contact_emails)} email addresses")
-        print(f"Sample emails: {target_contact_emails[:5]}")
+        # Get CC and BCC lists to exclude from primary recipients
+        cc_list = body.get('cc', []) or []
+        bcc_list = body.get('bcc', []) or []
         
-        if not target_contact_emails:
+        # Create normalized sets for comparison (lowercase, trimmed)
+        cc_set = set([email.lower().strip() for email in cc_list if email])
+        bcc_set = set([email.lower().strip() for email in bcc_list if email])
+        cc_bcc_combined = cc_set | bcc_set
+        
+        print(f"Received campaign request with {len(target_contact_emails)} email addresses")
+        print(f"CC list has {len(cc_list)} addresses: {cc_list}")
+        print(f"BCC list has {len(bcc_list)} addresses: {bcc_list}")
+        print(f"Sample target emails: {target_contact_emails[:5]}")
+        
+        if not target_contact_emails and not cc_list and not bcc_list:
             return {'statusCode': 400, 'headers': headers, 'body': json.dumps({'error': 'No target email addresses specified. Please select recipients in the Campaign tab.'})}
         
         # Create contact objects directly from email addresses (independent of Contacts table)
-        # This allows campaigns to work without requiring emails to exist in the Contacts table
+        # IMPORTANT: Exclude anyone who is ONLY on CC or BCC list - they'll be queued separately
         contacts = []
+        excluded_count = 0
         for email in target_contact_emails:
             if email and '@' in email:  # Basic email validation
-                contacts.append({
-                    'email': email,
-                    'first_name': '',
-                    'last_name': '',
-                    'company': ''
-                })
+                normalized_email = email.lower().strip()
+                # Exclude if this email is on CC or BCC list
+                if normalized_email in cc_bcc_combined:
+                    print(f"Excluding {email} from primary recipients (on CC/BCC list)")
+                    excluded_count += 1
+                else:
+                    contacts.append({
+                        'email': email,
+                        'first_name': '',
+                        'last_name': '',
+                        'company': ''
+                    })
             else:
                 print(f"Invalid email format, skipping: {email}")
         
-        print(f"Campaign targeting {len(contacts)} valid email addresses ({filter_description})")
+        print(f"Campaign targeting {len(contacts)} primary recipients ({filter_description})")
+        print(f"Excluded {excluded_count} addresses that are on CC/BCC lists")
         
-        if not contacts:
+        # Validate that we have at least one recipient (primary, CC, or BCC)
+        if not contacts and not cc_list and not bcc_list:
             error_msg = f'No valid email addresses found. Received {len(target_contact_emails)} entries but none are valid emails. Please check email format (must contain @).'
             return {'statusCode': 400, 'headers': headers, 'body': json.dumps({'error': error_msg})}
         
@@ -6826,12 +6864,11 @@ def send_campaign(body, headers, event=None):
         # Enqueue one message per CC and BCC recipient (single-send), avoid duplicates
         # Normalize to lowercase for case-insensitive comparison
         all_target_emails = set([c.get('email').lower().strip() for c in contacts if c.get('email')])
-        cc_list = body.get('cc', []) or []
-        bcc_list = body.get('bcc', []) or []
         to_list = body.get('to', []) or []
+        # cc_list and bcc_list already retrieved at top of function (lines 6677-6678)
         
         # Track all sent emails to prevent duplicates across To/CC/BCC
-        sent_emails = set(all_target_emails)  # Start with target contacts
+        sent_emails = set(all_target_emails)  # Start with target contacts (already excludes CC/BCC)
         
         print(f"Deduplication: Starting with {len(sent_emails)} target contact(s)")
         print(f"Deduplication: To list has {len(to_list)} recipient(s)")
