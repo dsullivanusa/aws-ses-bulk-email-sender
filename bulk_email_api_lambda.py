@@ -7213,14 +7213,10 @@ def send_campaign(body, headers, event=None):
 def send_ses_email(config, contact, subject, body):
     """Send email via AWS SES"""
     try:
-        # Get credentials from Secrets Manager
-        credentials = get_aws_credentials_from_secrets_manager(config.get('aws_secret_name'))
         
         ses_client = boto3.client(
             'ses',
-            region_name=config.get('aws_region', 'us-gov-west-1'),
-            aws_access_key_id=credentials['aws_access_key_id'],
-            aws_secret_access_key=credentials['aws_secret_access_key']
+            region_name=config.get('aws_region', 'us-gov-west-1')
         )
         
         personalized_subject = personalize_content(subject, contact)
