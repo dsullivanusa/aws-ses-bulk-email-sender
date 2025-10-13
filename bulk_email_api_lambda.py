@@ -5730,8 +5730,17 @@ Click OK to proceed or Cancel to abort.
                     body: JSON.stringify(previewData)
                 }});
                 
+                // Check content type before parsing
+                const contentType = response.headers.get('content-type');
+                if (!contentType || !contentType.includes('application/json')) {{
+                    const text = await response.text();
+                    console.error('Non-JSON response received:', text.substring(0, 200));
+                    throw new Error('Server returned invalid response (expected JSON, got HTML)');
+                }}
+                
                 if (!response.ok) {{
-                    throw new Error(`Preview generation failed: ${{response.status}} ${{response.statusText}}`);
+                    const errorData = await response.json();
+                    throw new Error(`Preview generation failed: ${{errorData.error || response.statusText}}`);
                 }}
                 
                 const result = await response.json();
@@ -7602,9 +7611,13 @@ def save_preview(body, headers):
         })
         print(f"   ✅ Saved preview metadata to DynamoDB")
         
+        response_headers = {
+            **headers,
+            'Content-Type': 'application/json'
+        }
         return {
             'statusCode': 200,
-            'headers': headers,
+            'headers': response_headers,
             'body': json.dumps({
                 'success': True,
                 'preview_id': preview_id,
@@ -7617,9 +7630,13 @@ def save_preview(body, headers):
     except Exception as e:
         print(f"Preview save error: {str(e)}")
         traceback.print_exc()
+        error_headers = {
+            **headers,
+            'Content-Type': 'application/json'
+        }
         return {
             'statusCode': 500,
-            'headers': headers,
+            'headers': error_headers,
             'body': json.dumps({'error': str(e)})
         }
 
