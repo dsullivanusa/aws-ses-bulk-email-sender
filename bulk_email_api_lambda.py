@@ -550,22 +550,22 @@ def serve_web_ui(event):
         }}
         .ql-picker.ql-font .ql-picker-label[data-value=arial]::before,
         .ql-picker.ql-font .ql-picker-item[data-value=arial]::before {{
-            content: 'Arial (Recommended)';
+            content: 'Arial';
             font-family: Arial, sans-serif;
         }}
         .ql-picker.ql-font .ql-picker-label[data-value=calibri]::before,
         .ql-picker.ql-font .ql-picker-item[data-value=calibri]::before {{
-            content: 'Calibri (Outlook Default)';
+            content: 'Calibri';
             font-family: Calibri, Arial, sans-serif;
         }}
         .ql-picker.ql-font .ql-picker-label[data-value=cambria]::before,
         .ql-picker.ql-font .ql-picker-item[data-value=cambria]::before {{
-            content: 'Cambria (Elegant Serif)';
+            content: 'Cambria';
             font-family: Cambria, Georgia, serif;
         }}
         .ql-picker.ql-font .ql-picker-label[data-value=georgia]::before,
         .ql-picker.ql-font .ql-picker-item[data-value=georgia]::before {{
-            content: 'Georgia (Classic Serif)';
+            content: 'Georgia';
             font-family: Georgia, serif;
         }}
         .ql-picker.ql-font .ql-picker-label[data-value=times-new-roman]::before,
@@ -575,42 +575,42 @@ def serve_web_ui(event):
         }}
         .ql-picker.ql-font .ql-picker-label[data-value=courier-new]::before,
         .ql-picker.ql-font .ql-picker-item[data-value=courier-new]::before {{
-            content: 'Courier New (Monospace)';
+            content: 'Courier New';
             font-family: "Courier New", monospace;
         }}
         .ql-picker.ql-font .ql-picker-label[data-value=verdana]::before,
         .ql-picker.ql-font .ql-picker-item[data-value=verdana]::before {{
-            content: 'Verdana (Web Safe)';
+            content: 'Verdana';
             font-family: Verdana, Arial, sans-serif;
         }}
         .ql-picker.ql-font .ql-picker-label[data-value=tahoma]::before,
         .ql-picker.ql-font .ql-picker-item[data-value=tahoma]::before {{
-            content: 'Tahoma (Compact)';
+            content: 'Tahoma';
             font-family: Tahoma, Arial, sans-serif;
         }}
         .ql-picker.ql-font .ql-picker-label[data-value=trebuchet-ms]::before,
         .ql-picker.ql-font .ql-picker-item[data-value=trebuchet-ms]::before {{
-            content: 'Trebuchet MS (Modern)';
+            content: 'Trebuchet MS';
             font-family: "Trebuchet MS", Arial, sans-serif;
         }}
         .ql-picker.ql-font .ql-picker-label[data-value=helvetica]::before,
         .ql-picker.ql-font .ql-picker-item[data-value=helvetica]::before {{
-            content: 'Helvetica (Mac/iOS)';
+            content: 'Helvetica';
             font-family: Helvetica, Arial, sans-serif;
         }}
         .ql-picker.ql-font .ql-picker-label[data-value=segoe-ui]::before,
         .ql-picker.ql-font .ql-picker-item[data-value=segoe-ui]::before {{
-            content: 'Segoe UI (Windows)';
+            content: 'Segoe UI';
             font-family: "Segoe UI", Tahoma, Arial, sans-serif;
         }}
         .ql-picker.ql-font .ql-picker-label[data-value=open-sans]::before,
         .ql-picker.ql-font .ql-picker-item[data-value=open-sans]::before {{
-            content: 'Open Sans (Web Font)';
+            content: 'Open Sans';
             font-family: "Open Sans", Arial, sans-serif;
         }}
         .ql-picker.ql-font .ql-picker-label[data-value=roboto]::before,
         .ql-picker.ql-font .ql-picker-item[data-value=roboto]::before {{
-            content: 'Roboto (Web Font)';
+            content: 'Roboto';
             font-family: "Roboto", Arial, sans-serif;
         }}
         .ql-toolbar {{
