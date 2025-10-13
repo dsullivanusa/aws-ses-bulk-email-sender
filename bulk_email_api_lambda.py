@@ -1867,21 +1867,13 @@ def serve_web_ui(event):
         // Initialize Quill Rich Text Editor
         let quillEditor;
         document.addEventListener('DOMContentLoaded', function() {{
-            // Register Image Resize module if available
-            if (typeof ImageResize !== 'undefined') {{
-                Quill.register('modules/imageResize', ImageResize.default);
-                console.log('✅ Quill Image Resize module registered');
-            }}
-            
-            // Old font configuration removed - using Outlook-optimized version below
-            
-            // Configure font sizes
+            // Configure font sizes BEFORE registering modules
             const Size = Quill.import('formats/size');
             Size.whitelist = ['small', 'large', 'huge'];
             Quill.register(Size, true);
-            console.log('✅ Quill Size module registered:', Size.whitelist);
+            console.log('✅ Quill Size format registered:', Size.whitelist);
             
-            // Register Outlook-optimized fonts for Quill
+            // Register Outlook-optimized fonts BEFORE registering modules
             const Font = Quill.import('formats/font');
             Font.whitelist = [
                 // Outlook-safe system fonts (100% compatible)
@@ -1892,6 +1884,14 @@ def serve_web_ui(event):
             ];
             Quill.register(Font, true);
             console.log('✅ Outlook-optimized fonts registered:', Font.whitelist);
+            
+            // Register Image Resize module AFTER formats are configured
+            if (typeof ImageResize !== 'undefined') {{
+                Quill.register('modules/imageResize', ImageResize.default);
+                console.log('✅ Quill Image Resize module registered');
+            }} else {{
+                console.warn('⚠️ ImageResize module not found - image resizing will not be available');
+            }}
             
             quillEditor = new Quill('#body', {{
                 theme: 'snow',
@@ -4843,12 +4843,17 @@ def serve_web_ui(event):
             }}
             console.log('Extracted ' + targetEmails.length + ' valid emails from ' + targetContacts.length + ' contacts');
             
-            // Combine contact-derived targets with any explicit To addresses plus CC/BCC (dedupe with case-insensitive comparison)
-            let allTargetEmails = [...new Set([...targetEmails, ...toList, ...ccList, ...bccList])];
-            console.log('Total targets including To/CC/BCC: ' + allTargetEmails.length + ' (Contacts: ' + targetEmails.length + ', To: ' + toList.length + ', CC: ' + ccList.length + ', BCC: ' + bccList.length + ')');
-            console.log('Sample emails:', allTargetEmails.slice(0, 5));
+            // IMPORTANT: Only combine contact-derived targets with explicit To addresses
+            // CC and BCC should NOT be in this list - they'll be sent separately to backend
+            let recipientEmails = [...new Set([...targetEmails, ...toList])];
+            console.log('Primary recipients (Contacts + To): ' + recipientEmails.length);
             
-            if (allTargetEmails.length === 0) {{
+            // Calculate total unique recipients for display (including CC/BCC)
+            let allUniqueRecipients = [...new Set([...recipientEmails, ...ccList, ...bccList])];
+            console.log('Total unique recipients including To/CC/BCC: ' + allUniqueRecipients.length + ' (Primary: ' + recipientEmails.length + ', To: ' + toList.length + ', CC: ' + ccList.length + ', BCC: ' + bccList.length + ')');
+            console.log('Sample emails:', allUniqueRecipients.slice(0, 5));
+            
+            if (allUniqueRecipients.length === 0) {{
                 throw new Error('No valid email addresses found. Please check that your contacts have valid email addresses or add To/CC/BCC recipients.');
             }}
 
@@ -4858,7 +4863,7 @@ def serve_web_ui(event):
 
 You are about to send this campaign to:
 
-📊 Total Recipients: ${{allTargetEmails.length}}
+📊 Total Unique Recipients: ${{allUniqueRecipients.length}}
 
 Breakdown:
 • Contacts from database: ${{targetEmails.length}}
@@ -4867,6 +4872,8 @@ Breakdown:
 • BCC recipients: ${{bccList.length}}
 
 Filter: ${{filterDescription}}
+
+Note: Duplicates across To/CC/BCC are automatically removed - each person gets only one email.
 
 ⚠️ Are you sure you want to send this campaign?
 
@@ -4920,9 +4927,9 @@ Click OK to proceed or Cancel to abort.
                 filter_description: filterDescription,
                 // Provide explicit To list (if given) and final target contacts
                 to: toList,
-                target_contacts: allTargetEmails,  // Send combined email list (contacts + CC + BCC or explicit To) to backend
-                cc: ccList,   // array of CC emails (for display/tracking)
-                bcc: bccList, // array of BCC emails (for display/tracking)
+                target_contacts: recipientEmails,  // Send only primary recipients (contacts + To) - CC/BCC handled separately
+                cc: ccList,   // array of CC emails (backend will queue these separately and dedupe)
+                bcc: bccList, // array of BCC emails (backend will queue these separately and dedupe)
                 attachments: campaignAttachments  // Include attachments
             }};
                 
@@ -6816,23 +6823,38 @@ def send_campaign(body, headers, event=None):
                 print(f"Failed to queue email for {contact.get('email')}: {str(e)}")
                 failed_to_queue += 1
         
-        # Enqueue one message per CC and BCC recipient (single-send), avoid duplicates with target contacts
+        # Enqueue one message per CC and BCC recipient (single-send), avoid duplicates
         # Normalize to lowercase for case-insensitive comparison
         all_target_emails = set([c.get('email').lower().strip() for c in contacts if c.get('email')])
         cc_list = body.get('cc', []) or []
         bcc_list = body.get('bcc', []) or []
         to_list = body.get('to', []) or []
+        
+        # Track all sent emails to prevent duplicates across To/CC/BCC
+        sent_emails = set(all_target_emails)  # Start with target contacts
+        
+        print(f"Deduplication: Starting with {len(sent_emails)} target contact(s)")
+        print(f"Deduplication: To list has {len(to_list)} recipient(s)")
+        print(f"Deduplication: CC list has {len(cc_list)} recipient(s)")
+        print(f"Deduplication: BCC list has {len(bcc_list)} recipient(s)")
 
-        # Helper to enqueue additional recipients
+        # Helper to enqueue additional recipients with comprehensive deduplication
         def enqueue_special(recipient_email, role):
             nonlocal queued_count, failed_to_queue
             if not recipient_email or '@' not in recipient_email:
                 print(f"Skipping invalid {role} email: {recipient_email}")
                 return
-            # Case-insensitive comparison to avoid duplicates
-            if recipient_email.lower().strip() in all_target_emails:
-                print(f"Skipping {role} {recipient_email} because it is already in target contacts")
+            
+            # Normalize email for comparison
+            normalized_email = recipient_email.lower().strip()
+            
+            # Check if already sent
+            if normalized_email in sent_emails:
+                print(f"Skipping {role.upper()} {recipient_email} - already queued as another recipient type")
                 return
+            
+            # Add to sent set to prevent future duplicates
+            sent_emails.add(normalized_email)
 
             try:
                 special_message = {
@@ -6865,17 +6887,17 @@ def send_campaign(body, headers, event=None):
                 print(f"Failed to queue {role} email for {recipient_email}: {str(e)}")
                 failed_to_queue += 1
 
-        # Enqueue CC addresses (single-send each)
+        # Enqueue explicit To addresses first (highest priority)
+        for to_addr in to_list:
+            enqueue_special(to_addr, 'to')
+        
+        # Enqueue CC addresses (will skip if already in To list)
         for cc in cc_list:
             enqueue_special(cc, 'cc')
 
-        # Enqueue BCC addresses (single-send each)
+        # Enqueue BCC addresses (will skip if already in To or CC lists)
         for bcc in bcc_list:
             enqueue_special(bcc, 'bcc')
-        
-        # Enqueue explicit To addresses (single-send each) - skip addresses already in target contacts
-        for to_addr in to_list:
-            enqueue_special(to_addr, 'to')
         # Update campaign status
         campaigns_table.update_item(
             Key={'campaign_id': campaign_id},
