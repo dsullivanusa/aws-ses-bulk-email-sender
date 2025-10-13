@@ -6700,6 +6700,13 @@ def send_campaign(body, headers, event=None):
         bcc_set = set([email.lower().strip() for email in bcc_list if email])
         cc_bcc_combined = cc_set | bcc_set
         
+        # DEBUG: Enhanced logging for CC duplication diagnosis
+        print(f"🔍 CC DUPLICATION DEBUG - EXCLUSION SETS:")
+        print(f"   CC set: {cc_set}")
+        print(f"   BCC set: {bcc_set}")
+        print(f"   Combined exclusion set: {cc_bcc_combined}")
+        print(f"   Exclusion set size: {len(cc_bcc_combined)}")
+        
         print(f"Received campaign request with {len(target_contact_emails)} email addresses")
         print(f"CC list has {len(cc_list)} addresses: {cc_list}")
         print(f"BCC list has {len(bcc_list)} addresses: {bcc_list}")
@@ -6712,14 +6719,20 @@ def send_campaign(body, headers, event=None):
         # IMPORTANT: Exclude anyone who is ONLY on CC or BCC list - they'll be queued separately
         contacts = []
         excluded_count = 0
+        
+        print(f"🔍 CC DUPLICATION DEBUG - CONTACT PROCESSING:")
+        
         for email in target_contact_emails:
             if email and '@' in email:  # Basic email validation
                 normalized_email = email.lower().strip()
                 # Exclude if this email is on CC or BCC list
                 if normalized_email in cc_bcc_combined:
-                    print(f"Excluding {email} from primary recipients (on CC/BCC list)")
+                    print(f"   ✅ EXCLUDING {email} from primary recipients (found in CC/BCC list)")
+                    print(f"      Normalized: {normalized_email}")
+                    print(f"      In exclusion set: {normalized_email in cc_bcc_combined}")
                     excluded_count += 1
                 else:
+                    print(f"   ➕ ADDING {email} as regular contact")
                     contacts.append({
                         'email': email,
                         'first_name': '',
