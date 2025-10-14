@@ -1728,12 +1728,12 @@ def serve_web_ui(event):
             
             <div style="display: flex; gap: 15px; margin-top: 20px;">
                 <button class="btn-success" onclick="sendCampaign(event)">🚀 Send Campaign</button>
-                <button class="btn-primary" onclick="previewCampaign(event)" style="background: #3b82f6;">👁️ Preview Email</button>
+                <!-- <button class="btn-primary" onclick="previewCampaign(event)" style="background: #3b82f6;">👁️ Preview Email</button> -->
                 <button onclick="clearCampaignForm()">🗑️ Clear Form</button>
             </div>
-            <small style="color: #6b7280; display: block; margin-top: 8px;">
+            <!-- <small style="color: #6b7280; display: block; margin-top: 8px;">
                 💡 Use Preview to see exactly what recipients will receive before sending
-            </small>
+            </small> -->
             
             <div id="campaignResult" class="result hidden"></div>
         </div>
