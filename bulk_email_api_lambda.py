@@ -6420,7 +6420,9 @@ Click OK to proceed or Cancel to abort.
                 '</style>';
             
             if (emailBody) {{
-                document.getElementById('detailBody').innerHTML = quillCSS + emailBody;
+                // Resolve inline images to presigned URLs before rendering
+                const processedBody = await resolveInlineImages(emailBody, campaign.attachments || []);
+                document.getElementById('detailBody').innerHTML = quillCSS + processedBody;
             }} else {{
                 document.getElementById('detailBody').innerHTML = '<span style="color: #9ca3af; font-style: italic;">No content</span>';
             }}
@@ -6453,6 +6455,56 @@ Click OK to proceed or Cancel to abort.
             
             // Show modal
             document.getElementById('campaignDetailsModal').style.display = 'flex';
+        }}
+
+        async function resolveInlineImages(html, attachments) {{
+            try {{
+                if (!attachments || attachments.length === 0) return html;
+                let output = html;
+                // Fetch presigned URLs in parallel for inline attachments
+                const inlineAttachments = attachments.filter(a => a && a.inline && a.s3_key);
+                if (inlineAttachments.length === 0) return output;
+
+                const urlMap = new Map();
+                await Promise.all(inlineAttachments.map(async (att) => {{
+                    try {{
+                        const url = new URL(`${{API_URL}}/attachment-url`);
+                        url.searchParams.set('s3_key', att.s3_key);
+                        if (att.filename) url.searchParams.set('filename', att.filename);
+                        const resp = await fetch(url.toString());
+                        if (!resp.ok) throw new Error(`URL gen failed (${{resp.status}})`);
+                        const data = await resp.json();
+                        if (data.url) urlMap.set(att, data.url);
+                    }} catch (e) {{
+                        console.warn('Inline image URL generation failed for', att && att.s3_key, e);
+                    }}
+                }}));
+
+                // Replace references for each inline attachment
+                inlineAttachments.forEach((att) => {{
+                    const presigned = urlMap.get(att);
+                    if (!presigned) return;
+                    const s3Key = att.s3_key;
+                    const contentId = att.content_id || att.cid || att.contentId;
+                    // Pattern 1: src="s3_key"
+                    output = output.replace(new RegExp(`src=\\"${{s3Key.replace(/[.*+?^$()|[\\]\\\\]/g, '\\$&')}}\\"`, 'g'), `src=\"${{presigned}}\"`);
+                    // Pattern 2: src='s3_key'
+                    output = output.replace(new RegExp(`src=\'${{s3Key.replace(/[.*+?^$()|[\\]\\\\]/g, '\\$&')}}\'`, 'g'), `src=\"${{presigned}}\"`);
+                    // Pattern 3: bare s3_key
+                    output = output.split(s3Key).join(presigned);
+                    // Pattern 4: cid:content-id
+                    if (contentId) {{
+                        const cidEsc = String(contentId).replace(/[.*+?^$()|[\\]\\\\]/g, '\\$&');
+                        output = output.replace(new RegExp(`src=\\"cid:${{cidEsc}}\\"`, 'g'), `src=\"${{presigned}}\"`);
+                        output = output.replace(new RegExp(`src=\'cid:${{cidEsc}}\'`, 'g'), `src=\"${{presigned}}\"`);
+                    }}
+                }});
+
+                return output;
+            }} catch (err) {{
+                console.warn('resolveInlineImages failed:', err);
+                return html;
+            }}
         }}
         
         async function downloadAttachment(s3Key, filename) {{
