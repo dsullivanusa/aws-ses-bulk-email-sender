@@ -38,6 +38,28 @@ ATTACHMENTS_BUCKET = 'jcdc-ses-contact-list'
 CUSTOM_API_URL = os.environ.get('CUSTOM_API_URL', None)
 
 
+# Helper function to convert DynamoDB Decimal types to JSON-serializable types
+def convert_decimals(obj):
+    """
+    Recursively convert Decimal objects to int or float for JSON serialization.
+    This handles nested dictionaries, lists, and sets.
+    """
+    if isinstance(obj, list):
+        return [convert_decimals(item) for item in obj]
+    elif isinstance(obj, dict):
+        return {key: convert_decimals(value) for key, value in obj.items()}
+    elif isinstance(obj, set):
+        return {convert_decimals(item) for item in obj}
+    elif isinstance(obj, Decimal):
+        # Convert to int if it's a whole number, otherwise float
+        if obj % 1 == 0:
+            return int(obj)
+        else:
+            return float(obj)
+    else:
+        return obj
+
+
 # Cognito configuration (optional authentication)
 def load_cognito_config():
     """Load Cognito configuration if available"""
@@ -6633,15 +6655,8 @@ def get_contacts(headers, event=None):
         # Scan contacts table with pagination
         response = contacts_table.scan(**scan_params)
         
-        contacts = []
-        for item in response.get('Items', []):
-            contact = {}
-            for key, value in item.items():
-                if isinstance(value, Decimal):
-                    contact[key] = int(value)
-                else:
-                    contact[key] = value
-            contacts.append(contact)
+        # Convert Decimal types recursively
+        contacts = convert_decimals(response.get('Items', []))
         
         # Build response with pagination info
         result = {
@@ -6879,15 +6894,9 @@ def filter_contacts(body, headers):
             
             response = contacts_table.scan(**scan_params)
             
-            # Convert Decimal types to int/float
-            for item in response.get('Items', []):
-                contact = {}
-                for key, value in item.items():
-                    if isinstance(value, Decimal):
-                        contact[key] = int(value) if value % 1 == 0 else float(value)
-                    else:
-                        contact[key] = value
-                filtered_contacts.append(contact)
+            # Convert Decimal types recursively and add to filtered list
+            items = convert_decimals(response.get('Items', []))
+            filtered_contacts.extend(items)
             
             scan_count += 1
             print(f"Scan iteration {scan_count}: Found {len(response.get('Items', []))} items, {len(filtered_contacts)} total so far")
@@ -6930,6 +6939,9 @@ def search_contacts(body, headers):
             response = contacts_table.scan(ExclusiveStartKey=response['LastEvaluatedKey'])
             all_contacts.extend(response.get('Items', []))
         
+        # Convert all contacts first (handles Decimal types)
+        all_contacts = convert_decimals(all_contacts)
+        
         # Filter contacts by name
         matched_contacts = []
         for contact in all_contacts:
@@ -6940,14 +6952,7 @@ def search_contacts(body, headers):
             if (search_term in first_name or 
                 search_term in last_name or 
                 search_term in full_name):
-                # Convert Decimal types to appropriate Python types
-                clean_contact = {}
-                for key, value in contact.items():
-                    if isinstance(value, Decimal):
-                        clean_contact[key] = int(value) if value % 1 == 0 else float(value)
-                    else:
-                        clean_contact[key] = value
-                matched_contacts.append(clean_contact)
+                matched_contacts.append(contact)
         
         print(f"Name search '{search_term}': found {len(matched_contacts)} contacts")
         
@@ -8118,11 +8123,8 @@ def get_campaigns(headers):
             
             items = response.get('Items', [])
             
-            # Convert Decimal types to int/float
-            for campaign in items:
-                for key, value in campaign.items():
-                    if isinstance(value, Decimal):
-                        campaign[key] = int(value) if value % 1 == 0 else float(value)
+            # Convert Decimal types to int/float recursively (handles nested structures)
+            items = convert_decimals(items)
             
             campaigns.extend(items)
             

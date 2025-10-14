@@ -149,10 +149,51 @@ The API Gateway configuration was incomplete. When you access the Campaign Histo
 
 The Lambda function HAS the code to handle `/campaigns` requests, but API Gateway never forwards those requests to Lambda because the route isn't configured.
 
+## Additional Fix: Decimal Serialization Error
+
+If after adding the `/campaigns` endpoint you get an error:
+```
+Object of type Decimal is not JSON serializable
+```
+
+This is because DynamoDB returns numbers as `Decimal` objects which can't be JSON serialized.
+
+### Fix Applied
+The code has been updated with:
+1. ✅ Added `convert_decimals()` helper function (recursive converter)
+2. ✅ Updated `get_campaigns()` to use it
+3. ✅ Updated `get_contacts()` to use it
+4. ✅ Updated `filter_contacts()` to use it
+5. ✅ Updated `search_contacts()` to use it
+
+### Deploy the Fix
+```bash
+python fix_decimal_serialization.py
+```
+
+This will update your Lambda function with the Decimal conversion fixes.
+
 ## Files Modified
 - ✅ Created: `add_missing_api_endpoints.py` - Script to add missing endpoints
+- ✅ Created: `fix_decimal_serialization.py` - Script to fix Decimal serialization
 - ✅ Created: `FIX_CAMPAIGN_HISTORY_403.md` - This documentation
+- ✅ Modified: `bulk_email_api_lambda.py` - Added convert_decimals() function
 
 ## No New API Gateway Needed! ✅
 You do **NOT** need to create a new API Gateway. The script updates your existing one.
+
+## Complete Fix Steps
+
+### Step 1: Add Missing API Endpoint
+```bash
+python add_missing_api_endpoints.py
+```
+
+### Step 2: Fix Decimal Serialization
+```bash
+python fix_decimal_serialization.py
+```
+
+### Step 3: Test
+Open your UI and go to the History tab - it should work! 🎉
 
