@@ -301,6 +301,12 @@ def add_missing_endpoints():
             'parent_path': '/',
             'methods': ['POST']
         },
+        # Attachment presigned URL endpoint
+        {
+            'path': '/attachment-url',
+            'parent_path': '/',
+            'methods': ['GET']
+        },
         # Preview endpoints
         {
             'path': '/preview',
