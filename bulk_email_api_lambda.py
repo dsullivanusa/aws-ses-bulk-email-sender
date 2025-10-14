@@ -7445,3 +7445,221 @@ def send_smtp_email(config, contact, subject, body):
         return False
 
 
+def get_attachment_url(event, headers):
+    """Generate a short-lived presigned URL to download an attachment from S3"""
+    try:
+        print("🔗 Generating presigned URL for attachment download")
+        # Support both HTTP API (queryStringParameters) and REST API (multiValueQueryStringParameters)
+        qs = event.get('queryStringParameters') or {}
+        s3_key = (qs.get('s3_key') or '').strip()
+        filename = (qs.get('filename') or '').strip()
+        disposition = (qs.get('disposition') or qs.get('inline') or '').strip().lower()
+        print(f"   → Query params: s3_key='{s3_key}', filename='{filename}', disposition='{disposition}'")
+
+        if not s3_key:
+            return {
+                'statusCode': 400,
+                'headers': headers,
+                'body': json.dumps({'error': 'Missing required query parameter: s3_key'})
+            }
+
+        # Basic safety: prevent directory traversal (S3 keys are flat but be cautious)
+        if '..' in s3_key:
+            return {
+                'statusCode': 400,
+                'headers': headers,
+                'body': json.dumps({'error': 'Invalid s3_key'})
+            }
+
+        # Default filename from key if not provided
+        if not filename:
+            filename = s3_key.split('/')[-1] or 'attachment'
+
+        # Determine desired Content-Disposition
+        inline_requested = disposition in ('1', 'true', 'yes', 'inline')
+        response_content_disposition = (
+            f'inline; filename="{filename}"' if inline_requested else f'attachment; filename="{filename}"'
+        )
+        print(f"   → Content-Disposition selected: '{response_content_disposition}'")
+
+        # Generate presigned URL for GET
+        url = s3_client.generate_presigned_url(
+            'get_object',
+            Params={
+                'Bucket': ATTACHMENTS_BUCKET,
+                'Key': s3_key,
+                'ResponseContentDisposition': response_content_disposition
+            },
+            ExpiresIn=3600  # 1 hour
+        )
+        print(f"   ✅ Presigned URL generated (truncated): {str(url)[:120]}...")
+
+        return {
+            'statusCode': 200,
+            'headers': {**headers, 'Content-Type': 'application/json'},
+            'body': json.dumps({'url': url})
+        }
+    except Exception as e:
+        print(f"ERROR generating presigned URL: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return {
+            'statusCode': 500,
+            'headers': headers,
+            'body': json.dumps({'error': 'Failed to generate download URL'})
+        }
+
+
+def get_campaign_status(campaign_id, headers):
+    """Get campaign status"""
+    try:
+        # Log view event for CloudWatch when this endpoint is hit (used by UI View button)
+        print(f"👁️ CAMPAIGN VIEWED: campaign_id={campaign_id}")
+        response = campaigns_table.get_item(Key={'campaign_id': campaign_id})
+        if 'Item' not in response:
+            return {'statusCode': 404, 'headers': headers, 'body': json.dumps({'error': 'Campaign not found'})}
+        
+        # Convert Decimal types recursively
+        campaign = convert_decimals(response['Item'])
+        
+        return {'statusCode': 200, 'headers': headers, 'body': json.dumps(campaign, default=_json_default)}
+    except Exception as e:
+        return {'statusCode': 500, 'headers': headers, 'body': json.dumps({'error': str(e)})}
+
+
+def get_campaigns(headers, event=None):
+    """Get campaigns page from DynamoDB with server-side pagination (limit=50) and optional search (q)."""
+    try:
+        qs = (event or {}).get('queryStringParameters') or {}
+        limit = 50
+        next_token = qs.get('next') if qs else None
+        search_query = (qs.get('q') or qs.get('query') or '').strip()
+        print(f"Fetching campaigns page (limit={limit}) next_token={next_token} q='{search_query}'")
+
+        scan_kwargs = {
+            'Limit': limit if not search_query else 100,  # when searching, fetch larger pages to find matches
+        }
+        if next_token:
+            try:
+                scan_kwargs['ExclusiveStartKey'] = json.loads(next_token)
+            except Exception as tok_err:
+                print(f"Invalid next token provided: {tok_err}")
+
+        # If no search, return single page from DynamoDB
+        if not search_query:
+            response = campaigns_table.scan(**scan_kwargs)
+            items = response.get('Items', [])
+            items = convert_decimals(items)
+            last_evaluated_key = response.get('LastEvaluatedKey')
+            next_token_out = json.dumps(last_evaluated_key) if last_evaluated_key else None
+            print(f"Page retrieved: {len(items)} items, has_more={bool(last_evaluated_key)}")
+        else:
+            # Case-insensitive search across campaign_name and subject
+            ql = search_query.lower()
+            results = []
+            last_evaluated_key = None
+            scanned_pages = 0
+            while True:
+                scanned_pages += 1
+                response = campaigns_table.scan(**scan_kwargs)
+                page_items = convert_decimals(response.get('Items', []))
+                # Exclude previews and filter by substring
+                for it in page_items:
+                    if it.get('status') == 'preview' or it.get('type') == 'preview':
+                        continue
+                    name = str(it.get('campaign_name') or '').lower()
+                    subj = str(it.get('subject') or '').lower()
+                    if ql in name or ql in subj:
+                        results.append(it)
+                        if len(results) >= limit:
+                            break
+                last_evaluated_key = response.get('LastEvaluatedKey')
+                if len(results) >= limit or not last_evaluated_key:
+                    break
+                # Keep scanning with new start key
+                scan_kwargs['ExclusiveStartKey'] = last_evaluated_key
+            items = results
+            next_token_out = json.dumps(last_evaluated_key) if last_evaluated_key else None
+            print(f"Search '{search_query}' matched {len(items)} item(s) on this page; has_more={bool(last_evaluated_key)}; scanned_pages={scanned_pages}")
+
+        response_headers = {
+            **headers,
+            'Content-Type': 'application/json'
+        }
+
+        return {
+            'statusCode': 200,
+            'headers': response_headers,
+            'body': json.dumps({
+                'success': True,
+                'campaigns': items,
+                'count': len(items),
+                'next': next_token_out
+            }, default=_json_default)
+        }
+
+    except Exception as e:
+        print(f"Error fetching campaigns: {str(e)}")
+        import traceback
+        traceback.print_exc()
+
+        error_headers = {
+            **headers,
+            'Content-Type': 'application/json'
+        }
+
+        return {
+            'statusCode': 500,
+            'headers': error_headers,
+            'body': json.dumps({'error': str(e)}, default=_json_default)
+        }
+
+
+def mark_campaign_viewed(body, headers):
+    """Record a campaign view event for CloudWatch visibility."""
+    try:
+        campaign_id = (body or {}).get('campaign_id')
+        timestamp = (body or {}).get('timestamp')
+        print(f"👁️ CAMPAIGN VIEWED: campaign_id={campaign_id}, ts={timestamp}")
+        # Optionally increment a view counter in DynamoDB in the future
+        return {
+            'statusCode': 200,
+            'headers': headers,
+            'body': json.dumps({'ok': True})
+        }
+    except Exception as e:
+        print(f"ERROR logging campaign view: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return {
+            'statusCode': 500,
+            'headers': headers,
+            'body': json.dumps({'error': 'Failed to log campaign view'})
+        }
+
+
+def get_aws_credentials_from_secrets_manager(secret_name):
+    """Retrieve AWS credentials from Secrets Manager"""
+    try:
+        print(f"Retrieving credentials from secret: {secret_name}")
+        response = secrets_client.get_secret_value(SecretId=secret_name)
+        
+        # Parse the secret (assuming it's stored as JSON)
+        secret_data = json.loads(response['SecretString'])
+        
+        credentials = {
+            'aws_access_key_id': secret_data.get('aws_access_key_id'),
+            'aws_secret_access_key': secret_data.get('aws_secret_access_key')
+        }
+        
+        if not credentials['aws_access_key_id'] or not credentials['aws_secret_access_key']:
+            raise ValueError("Missing aws_access_key_id or aws_secret_access_key in secret")
+        
+        print("Successfully retrieved AWS credentials from Secrets Manager")
+        return credentials
+        
+    except Exception as e:
+        print(f"Error retrieving credentials from Secrets Manager: {str(e)}")
+        raise
+
+
