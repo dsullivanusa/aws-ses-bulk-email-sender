@@ -158,6 +158,9 @@ def lambda_handler(event, context):
             preview_id = event['pathParameters']['preview_id']
             print(f"   → Calling get_preview({preview_id})")
             return get_preview(preview_id, headers)
+        elif path == '/attachment-url' and method == 'GET':
+            print("   → Calling get_attachment_url()")
+            return get_attachment_url(event, headers)
         elif path == '/campaigns' and method == 'GET':
             print("   → Calling get_campaigns()")
             return get_campaigns(headers)
@@ -236,6 +239,20 @@ def serve_web_ui(event):
             --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
         }}
         
+        /* Campaign History Table Styles */
+        #historyTable tbody tr:nth-child(odd) {{
+            background: #ffffff;
+        }}
+        #historyTable tbody tr:nth-child(even) {{
+            background: #f9fafb;
+        }}
+        #historyTable tbody tr:hover {{
+            background: #f3f4f6;
+        }}
+        #historyTable td {{
+            color: #1f2937;
+        }}
+
         /* Reset and Base Styles */
         * {{ box-sizing: border-box; }}
         body {{ 
@@ -6286,7 +6303,6 @@ Click OK to proceed or Cancel to abort.
                 allCampaigns.forEach(campaign => {{
                     const row = document.createElement('tr');
                     row.style.borderBottom = '1px solid #e5e7eb';
-                    row.style.backgroundColor = '#ffffff';
                     row.style.transition = 'all 0.2s ease';
                     row.onmouseover = function() {{ 
                         this.style.backgroundColor = '#f8fafc'; 
@@ -6294,14 +6310,11 @@ Click OK to proceed or Cancel to abort.
                         this.style.boxShadow = '0 2px 8px rgba(0,0,0,0.1)';
                     }};
                     row.onmouseout = function() {{ 
-                        this.style.backgroundColor = '#ffffff'; 
+                        this.style.backgroundColor = ''; 
                         this.style.transform = 'scale(1)';
                         this.style.boxShadow = 'none';
                     }};
                     row.style.cursor = 'pointer';
-                    row.style.transition = 'background 0.2s';
-                    row.onmouseenter = () => row.style.background = '#f9fafb';
-                    row.onmouseleave = () => row.style.background = 'white';
                     
                     const date = new Date(campaign.created_at || campaign.sent_at);
                     const formattedDate = date.toLocaleString();
@@ -6424,7 +6437,12 @@ Click OK to proceed or Cancel to abort.
                 attachments.forEach(att => {{
                     const isInline = att.inline ? ' (Inline Image)' : '';
                     const fileSize = att.size ? ' - ' + (att.size / 1024).toFixed(1) + ' KB' : '';
-                    attachmentsHTML += `<li style="margin: 5px 0;">${{att.filename}}${{fileSize}}${{isInline}}</li>`;
+                    const safeFile = (att.filename || 'attachment').replace(/`/g, '');
+                    const safeKey = (att.s3_key || '').replace(/`/g, '');
+                    attachmentsHTML += `<li style="margin: 6px 0; display: flex; align-items: center; justify-content: space-between; gap: 10px;">
+                        <span>${{att.filename}}${{fileSize}}${{isInline}}</span>
+                        <button onclick="downloadAttachment(\`${{safeKey}}\`, \`${{safeFile}}\`)" style="padding: 6px 12px; background: linear-gradient(135deg, #10b981, #059669); color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 600;">⬇️ Download</button>
+                    </li>`;
                 }});
                 
                 attachmentsHTML += '</ul></div>';
@@ -6437,6 +6455,29 @@ Click OK to proceed or Cancel to abort.
             document.getElementById('campaignDetailsModal').style.display = 'flex';
         }}
         
+        async function downloadAttachment(s3Key, filename) {{
+            try {{
+                const url = new URL(`${{API_URL}}/attachment-url`);
+                url.searchParams.set('s3_key', s3Key);
+                if (filename) url.searchParams.set('filename', filename);
+                const response = await fetch(url.toString());
+                if (!response.ok) throw new Error(`Failed to get URL (${{response.status}})`);
+                const data = await response.json();
+                if (!data.url) throw new Error('No URL returned');
+
+                // Trigger download in browser
+                const a = document.createElement('a');
+                a.href = data.url;
+                a.download = filename || 'attachment';
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+            }} catch (err) {{
+                console.error('Download failed:', err);
+                Toast.error(`Download failed: ${{err.message}}`);
+            }}
+        }}
+
         function closeCampaignDetailsModal() {{
             document.getElementById('campaignDetailsModal').style.display = 'none';
             currentCampaignId = null;
@@ -8056,6 +8097,60 @@ def save_preview(body, headers):
             'body': json.dumps({'error': str(e)})
         }
 
+
+def get_attachment_url(event, headers):
+    """Generate a short-lived presigned URL to download an attachment from S3"""
+    try:
+        print("🔗 Generating presigned URL for attachment download")
+        # Support both HTTP API (queryStringParameters) and REST API (multiValueQueryStringParameters)
+        qs = event.get('queryStringParameters') or {}
+        s3_key = (qs.get('s3_key') or '').strip()
+        filename = (qs.get('filename') or '').strip()
+
+        if not s3_key:
+            return {
+                'statusCode': 400,
+                'headers': headers,
+                'body': json.dumps({'error': 'Missing required query parameter: s3_key'})
+            }
+
+        # Basic safety: prevent directory traversal (S3 keys are flat but be cautious)
+        if '..' in s3_key:
+            return {
+                'statusCode': 400,
+                'headers': headers,
+                'body': json.dumps({'error': 'Invalid s3_key'})
+            }
+
+        # Default filename from key if not provided
+        if not filename:
+            filename = s3_key.split('/')[-1] or 'attachment'
+
+        # Generate presigned URL for GET
+        url = s3_client.generate_presigned_url(
+            'get_object',
+            Params={
+                'Bucket': ATTACHMENTS_BUCKET,
+                'Key': s3_key,
+                'ResponseContentDisposition': f'attachment; filename="{filename}"'
+            },
+            ExpiresIn=3600  # 1 hour
+        )
+
+        return {
+            'statusCode': 200,
+            'headers': {**headers, 'Content-Type': 'application/json'},
+            'body': json.dumps({'url': url})
+        }
+    except Exception as e:
+        print(f"ERROR generating presigned URL: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return {
+            'statusCode': 500,
+            'headers': headers,
+            'body': json.dumps({'error': 'Failed to generate download URL'})
+        }
 
 def get_preview(preview_id, headers):
     """Retrieve and serve email preview HTML"""
