@@ -4817,12 +4817,13 @@ def serve_web_ui(event):
                             inline: true  // Mark as inline image
                         }});
                         
-                        // Store S3 key as data attribute for reference, but KEEP the data URI for display
-                        // The browser needs the data: URI to display the image in the editor
-                        // Email worker will use the S3 key to fetch and embed the image
+                        // IMPORTANT: Replace the data URI with the S3 key so the campaign body stores the S3 key
+                        // This allows the viewer to later resolve S3 keys to presigned URLs for display
                         img.setAttribute('data-s3-key', uploadResult.s3_key);
                         img.setAttribute('data-inline', 'true');
-                        // Keep img.src as data URI so image still displays in editor
+                        // Replace src with S3 key instead of keeping data URI
+                        img.src = uploadResult.s3_key;
+                        console.log(`  🔄 Replaced data URI with S3 key in img.src: ${{uploadResult.s3_key}}`)
                         
                     }} catch (uploadError) {{
                         console.error(`Failed to upload embedded image ${{index}}:`, uploadError);
