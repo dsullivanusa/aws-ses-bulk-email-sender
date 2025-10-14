@@ -31,14 +31,31 @@ python add_missing_api_endpoints.py
 - Deploys changes to `prod` stage
 
 ### Step 2: Deploy Decimal Serialization Fix
+
+**IMPORTANT:** You must deploy the updated Lambda code to AWS!
+
+```bash
+python deploy_lambda_fix.py
+```
+
+**What this does:**
+- Creates a zip package with updated `bulk_email_api_lambda.py`
+- Uploads to AWS Lambda function
+- Verifies deployment
+- Fixes Decimal → JSON conversion
+
+**Alternative (if script fails):**
 ```bash
 python fix_decimal_serialization.py
 ```
 
-**What this does:**
-- Packages updated `bulk_email_api_lambda.py`
-- Uploads to Lambda function
-- Fixes Decimal → JSON conversion
+**Manual deployment (if both scripts fail):**
+1. Create zip file: `zip lambda_deployment.zip bulk_email_api_lambda.py`
+2. Rename inside zip: `bulk_email_api_lambda.py` → `lambda_function.py`
+3. Go to AWS Console → Lambda → `bulk-email-api-function`
+4. Click "Upload from" → ".zip file"
+5. Upload `lambda_deployment.zip`
+6. Click "Save"
 
 ### Step 3: Test
 1. Open your bulk email UI

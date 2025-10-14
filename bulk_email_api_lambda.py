@@ -49,7 +49,11 @@ def convert_decimals(obj):
     elif isinstance(obj, dict):
         return {key: convert_decimals(value) for key, value in obj.items()}
     elif isinstance(obj, set):
-        return {convert_decimals(item) for item in obj}
+        # JSON doesn't support sets; convert to list
+        return [convert_decimals(item) for item in obj]
+    elif isinstance(obj, tuple):
+        # Tuples are converted to lists for JSON compatibility
+        return [convert_decimals(item) for item in obj]
     elif isinstance(obj, Decimal):
         # Convert to int if it's a whole number, otherwise float
         if obj % 1 == 0:
@@ -58,6 +62,15 @@ def convert_decimals(obj):
             return float(obj)
     else:
         return obj
+
+
+def _json_default(o):
+    """Fallback JSON serializer for unsupported types like Decimal and set."""
+    if isinstance(o, Decimal):
+        return int(o) if o % 1 == 0 else float(o)
+    if isinstance(o, set):
+        return list(o)
+    return str(o)
 
 
 # Cognito configuration (optional authentication)
@@ -6606,12 +6619,8 @@ def get_email_config(headers):
     try:
         response = email_config_table.get_item(Key={'config_id': 'default'})
         if 'Item' in response:
-            config = response['Item']
-            
-            # Convert Decimal types to appropriate Python types
-            for key, value in config.items():
-                if isinstance(value, Decimal):
-                    config[key] = int(value) if value % 1 == 0 else float(value)
+            # Convert Decimal types recursively
+            config = convert_decimals(response['Item'])
             
             # Don't return secret name for security (it's stored in Secrets Manager)
             if 'aws_secret_name' in config:
@@ -6666,14 +6675,8 @@ def get_contacts(headers, event=None):
         
         # Include lastEvaluatedKey if there are more items
         if 'LastEvaluatedKey' in response:
-            # Convert Decimal types in lastEvaluatedKey
-            last_key = {}
-            for key, value in response['LastEvaluatedKey'].items():
-                if isinstance(value, Decimal):
-                    last_key[key] = int(value) if value % 1 == 0 else float(value)
-                else:
-                    last_key[key] = value
-            result['lastEvaluatedKey'] = last_key
+            # Convert Decimal types in lastEvaluatedKey recursively
+            result['lastEvaluatedKey'] = convert_decimals(response['LastEvaluatedKey'])
         
         return {'statusCode': 200, 'headers': headers, 'body': json.dumps(result)}
     
@@ -6972,7 +6975,7 @@ def search_contacts(body, headers):
         return {
             'statusCode': 500,
             'headers': headers,
-            'body': json.dumps({'error': str(e)})
+            'body': json.dumps({'error': str(e)}, default=_json_default)
         }
 
 def get_groups(headers):
@@ -8096,12 +8099,10 @@ def get_campaign_status(campaign_id, headers):
         if 'Item' not in response:
             return {'statusCode': 404, 'headers': headers, 'body': json.dumps({'error': 'Campaign not found'})}
         
-        campaign = response['Item']
-        for key, value in campaign.items():
-            if isinstance(value, Decimal):
-                campaign[key] = int(value)
+        # Convert Decimal types recursively
+        campaign = convert_decimals(response['Item'])
         
-        return {'statusCode': 200, 'headers': headers, 'body': json.dumps(campaign)}
+        return {'statusCode': 200, 'headers': headers, 'body': json.dumps(campaign, default=_json_default)}
     except Exception as e:
         return {'statusCode': 500, 'headers': headers, 'body': json.dumps({'error': str(e)})}
 
@@ -8147,7 +8148,7 @@ def get_campaigns(headers):
                 'success': True,
                 'campaigns': campaigns,
                 'count': len(campaigns)
-            })
+            }, default=_json_default)
         }
         
     except Exception as e:
@@ -8163,7 +8164,7 @@ def get_campaigns(headers):
         return {
             'statusCode': 500,
             'headers': error_headers,
-            'body': json.dumps({'error': str(e)})
+            'body': json.dumps({'error': str(e)}, default=_json_default)
         }
 
 
