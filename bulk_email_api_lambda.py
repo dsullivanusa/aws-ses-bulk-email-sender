@@ -5839,15 +5839,23 @@ Click OK to proceed or Cancel to abort.
                 
                 // Check content type before parsing
                 const contentType = response.headers.get('content-type');
-                if (!contentType || !contentType.includes('application/json')) {{
-                    const text = await response.text();
-                    console.error('Non-JSON response received:', text.substring(0, 200));
-                    throw new Error('Server returned invalid response (expected JSON, got HTML)');
-                }}
                 
                 if (!response.ok) {{
-                    const errorData = await response.json();
-                    throw new Error(`Preview generation failed: ${{errorData.error || response.statusText}}`);
+                    // Handle error response
+                    if (contentType && contentType.includes('application/json')) {{
+                        const errorData = await response.json();
+                        throw new Error(`Preview generation failed: ${{errorData.error || response.statusText}}`);
+                    }} else {{
+                        const errorText = await response.text();
+                        console.error('Non-JSON error response:', errorText.substring(0, 200));
+                        throw new Error(`Server returned invalid response (status ${{response.status}})`);
+                    }}
+                }}
+                
+                if (!contentType || !contentType.includes('application/json')) {{
+                    const responseText = await response.text();
+                    console.error('Non-JSON response received:', responseText.substring(0, 200));
+                    throw new Error('Server returned invalid response (expected JSON, got HTML)');
                 }}
                 
                 const result = await response.json();
@@ -6386,11 +6394,10 @@ Click OK to proceed or Cancel to abort.
             document.getElementById('campaignDetailsModal').style.display = 'none';
             currentCampaignId = null;
             
-            // Clear any dynamically added attachments info
-            const bodyContainer = document.getElementById('detailBody');
-            const attachmentsDiv = bodyContainer.previousElementSibling;
-            if (attachmentsDiv && attachmentsDiv.innerHTML.includes('📎 Attachments')) {{
-                attachmentsDiv.remove();
+            // Clear attachments container
+            const attachmentsContainer = document.getElementById('detailAttachments');
+            if (attachmentsContainer) {{
+                attachmentsContainer.innerHTML = '';
             }}
         }}
         
