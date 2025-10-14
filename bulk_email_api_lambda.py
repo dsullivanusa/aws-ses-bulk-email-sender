@@ -1792,16 +1792,16 @@ def serve_web_ui(event):
             </div>
             
             <div id="historyContent" style="overflow-x: auto;">
-                <table id="historyTable" style="width: 100%; border-collapse: collapse;">
+                <table id="historyTable" style="width: 100%; border-collapse: collapse; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1); border-radius: 8px; overflow: hidden;">
                     <thead>
                         <tr>
-                            <th style="padding: 12px; text-align: left; background: #f3f4f6; border-bottom: 2px solid #e5e7eb;">Campaign Name</th>
-                            <th style="padding: 12px; text-align: left; background: #f3f4f6; border-bottom: 2px solid #e5e7eb;">Subject</th>
-                            <th style="padding: 12px; text-align: left; background: #f3f4f6; border-bottom: 2px solid #e5e7eb;">Date</th>
-                            <th style="padding: 12px; text-align: left; background: #f3f4f6; border-bottom: 2px solid #e5e7eb;">Recipients</th>
-                            <th style="padding: 12px; text-align: left; background: #f3f4f6; border-bottom: 2px solid #e5e7eb;">Status</th>
-                            <th style="padding: 12px; text-align: left; background: #f3f4f6; border-bottom: 2px solid #e5e7eb;">Launched By</th>
-                            <th style="padding: 12px; text-align: left; background: #f3f4f6; border-bottom: 2px solid #e5e7eb;">Actions</th>
+                            <th style="padding: 16px; text-align: left; background: linear-gradient(135deg, #1e40af, #1e3a8a); color: white; font-weight: 700; font-size: 14px; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 3px solid #3b82f6;">Campaign Name</th>
+                            <th style="padding: 16px; text-align: left; background: linear-gradient(135deg, #1e40af, #1e3a8a); color: white; font-weight: 700; font-size: 14px; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 3px solid #3b82f6;">Subject</th>
+                            <th style="padding: 16px; text-align: left; background: linear-gradient(135deg, #1e40af, #1e3a8a); color: white; font-weight: 700; font-size: 14px; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 3px solid #3b82f6;">Date</th>
+                            <th style="padding: 16px; text-align: left; background: linear-gradient(135deg, #1e40af, #1e3a8a); color: white; font-weight: 700; font-size: 14px; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 3px solid #3b82f6;">Recipients</th>
+                            <th style="padding: 16px; text-align: left; background: linear-gradient(135deg, #1e40af, #1e3a8a); color: white; font-weight: 700; font-size: 14px; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 3px solid #3b82f6;">Status</th>
+                            <th style="padding: 16px; text-align: left; background: linear-gradient(135deg, #1e40af, #1e3a8a); color: white; font-weight: 700; font-size: 14px; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 3px solid #3b82f6;">Launched By</th>
+                            <th style="padding: 16px; text-align: left; background: linear-gradient(135deg, #1e40af, #1e3a8a); color: white; font-weight: 700; font-size: 14px; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 3px solid #3b82f6;">Actions</th>
                         </tr>
                     </thead>
                     <tbody id="historyBody">
@@ -6286,6 +6286,18 @@ Click OK to proceed or Cancel to abort.
                 allCampaigns.forEach(campaign => {{
                     const row = document.createElement('tr');
                     row.style.borderBottom = '1px solid #e5e7eb';
+                    row.style.backgroundColor = '#ffffff';
+                    row.style.transition = 'all 0.2s ease';
+                    row.onmouseover = function() {{ 
+                        this.style.backgroundColor = '#f8fafc'; 
+                        this.style.transform = 'scale(1.01)';
+                        this.style.boxShadow = '0 2px 8px rgba(0,0,0,0.1)';
+                    }};
+                    row.onmouseout = function() {{ 
+                        this.style.backgroundColor = '#ffffff'; 
+                        this.style.transform = 'scale(1)';
+                        this.style.boxShadow = 'none';
+                    }};
                     row.style.cursor = 'pointer';
                     row.style.transition = 'background 0.2s';
                     row.onmouseenter = () => row.style.background = '#f9fafb';
@@ -6298,21 +6310,21 @@ Click OK to proceed or Cancel to abort.
                     const launchedBy = campaign.launched_by || 'Unknown';
                     
                     row.innerHTML = `
-                        <td style="padding: 12px;">${{campaign.campaign_name || 'Unnamed Campaign'}}</td>
-                        <td style="padding: 12px;">${{campaign.subject || 'No Subject'}}</td>
-                        <td style="padding: 12px;">${{formattedDate}}</td>
-                        <td style="padding: 12px;">${{recipients}}</td>
-                        <td style="padding: 12px;">
-                            <span style="padding: 4px 12px; border-radius: 12px; font-size: 12px; font-weight: 600; 
+                        <td style="padding: 16px; color: #1f2937; font-size: 14px; font-weight: 600;">${{campaign.campaign_name || 'Unnamed Campaign'}}</td>
+                        <td style="padding: 16px; color: #374151; font-size: 14px; font-weight: 500; max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${{campaign.subject || 'No Subject'}}">${{campaign.subject || 'No Subject'}}</td>
+                        <td style="padding: 16px; color: #1f2937; font-size: 14px; font-weight: 500; font-family: 'Monaco', monospace;">${{formattedDate}}</td>
+                        <td style="padding: 16px; color: #059669; font-size: 14px; font-weight: 600; text-align: center;">${{recipients}}</td>
+                        <td style="padding: 16px; text-align: center;">
+                            <span style="padding: 6px 16px; border-radius: 20px; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); 
                                 background: ${{status === 'completed' ? '#d1fae5' : status === 'processing' ? '#fef3c7' : '#e5e7eb'}};
                                 color: ${{status === 'completed' ? '#059669' : status === 'processing' ? '#d97706' : '#6b7280'}};">
                                 ${{status.toUpperCase()}}
                             </span>
                         </td>
-                        <td style="padding: 12px;">${{launchedBy}}</td>
-                        <td style="padding: 12px;">
+                        <td style="padding: 16px; color: #1f2937; font-size: 14px; font-weight: 500;">${{launchedBy}}</td>
+                        <td style="padding: 16px; text-align: center;">
                             <button onclick="viewCampaignDetails('${{campaign.campaign_id}}'); event.stopPropagation();" 
-                                style="padding: 6px 12px; background: #3b82f6; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px;">
+                                style="padding: 8px 16px; background: linear-gradient(135deg, #3b82f6, #2563eb); color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: 600; transition: all 0.2s ease; box-shadow: 0 2px 4px rgba(59, 130, 246, 0.3);">
                                 👁️ View
                             </button>
                         </td>
