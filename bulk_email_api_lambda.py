@@ -6334,29 +6334,29 @@ Click OK to proceed or Cancel to abort.
             
             // Add Quill CSS styles for proper rendering
             const quillCSS = '<style type="text/css">' +
-                '.ql-align-center { text-align: center; }' +
-                '.ql-align-right { text-align: right; }' +
-                '.ql-align-left { text-align: left; }' +
-                '.ql-align-justify { text-align: justify; }' +
-                '.ql-indent-1 { padding-left: 3em; }' +
-                '.ql-indent-2 { padding-left: 6em; }' +
-                '.ql-indent-3 { padding-left: 9em; }' +
-                '.ql-size-small { font-size: 0.75em; }' +
-                '.ql-size-large { font-size: 1.5em; }' +
-                '.ql-size-huge { font-size: 2.5em; }' +
-                '.ql-font-arial { font-family: Arial, sans-serif; }' +
-                '.ql-font-calibri { font-family: Calibri, Arial, sans-serif; }' +
-                '.ql-font-cambria { font-family: Cambria, Georgia, serif; }' +
-                '.ql-font-times-new-roman { font-family: "Times New Roman", serif; }' +
-                '.ql-font-courier-new { font-family: "Courier New", monospace; }' +
-                '.ql-font-georgia { font-family: Georgia, serif; }' +
-                '.ql-font-verdana { font-family: Verdana, sans-serif; }' +
-                '.ql-font-tahoma { font-family: Tahoma, sans-serif; }' +
-                '.ql-font-trebuchet-ms { font-family: "Trebuchet MS", sans-serif; }' +
-                '.ql-font-helvetica { font-family: Helvetica, Arial, sans-serif; }' +
-                '.ql-font-segoe-ui { font-family: "Segoe UI", Tahoma, Arial, sans-serif; }' +
-                '.ql-font-open-sans { font-family: "Open Sans", Arial, sans-serif; }' +
-                '.ql-font-roboto { font-family: "Roboto", Arial, sans-serif; }' +
+                '.ql-align-center {{ text-align: center; }}' +
+                '.ql-align-right {{ text-align: right; }}' +
+                '.ql-align-left {{ text-align: left; }}' +
+                '.ql-align-justify {{ text-align: justify; }}' +
+                '.ql-indent-1 {{ padding-left: 3em; }}' +
+                '.ql-indent-2 {{ padding-left: 6em; }}' +
+                '.ql-indent-3 {{ padding-left: 9em; }}' +
+                '.ql-size-small {{ font-size: 0.75em; }}' +
+                '.ql-size-large {{ font-size: 1.5em; }}' +
+                '.ql-size-huge {{ font-size: 2.5em; }}' +
+                '.ql-font-arial {{ font-family: Arial, sans-serif; }}' +
+                '.ql-font-calibri {{ font-family: Calibri, Arial, sans-serif; }}' +
+                '.ql-font-cambria {{ font-family: Cambria, Georgia, serif; }}' +
+                '.ql-font-times-new-roman {{ font-family: "Times New Roman", serif; }}' +
+                '.ql-font-courier-new {{ font-family: "Courier New", monospace; }}' +
+                '.ql-font-georgia {{ font-family: Georgia, serif; }}' +
+                '.ql-font-verdana {{ font-family: Verdana, sans-serif; }}' +
+                '.ql-font-tahoma {{ font-family: Tahoma, sans-serif; }}' +
+                '.ql-font-trebuchet-ms {{ font-family: "Trebuchet MS", sans-serif; }}' +
+                '.ql-font-helvetica {{ font-family: Helvetica, Arial, sans-serif; }}' +
+                '.ql-font-segoe-ui {{ font-family: "Segoe UI", Tahoma, Arial, sans-serif; }}' +
+                '.ql-font-open-sans {{ font-family: "Open Sans", Arial, sans-serif; }}' +
+                '.ql-font-roboto {{ font-family: "Roboto", Arial, sans-serif; }}' +
                 '</style>';
             
             if (emailBody) {{
