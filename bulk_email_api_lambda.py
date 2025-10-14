@@ -151,19 +151,15 @@ def lambda_handler(event, context):
         elif path == '/campaign/{campaign_id}' and method == 'GET':
             campaign_id = event['pathParameters']['campaign_id']
             return get_campaign_status(campaign_id, headers)
-        elif path == '/preview' and method == 'POST':
-            print("   → Calling save_preview()")
-            return save_preview(body, headers)
-        elif path == '/preview/{preview_id}' and method == 'GET':
-            preview_id = event['pathParameters']['preview_id']
-            print(f"   → Calling get_preview({preview_id})")
-            return get_preview(preview_id, headers)
         elif path == '/attachment-url' and method == 'GET':
             print("   → Calling get_attachment_url()")
             return get_attachment_url(event, headers)
         elif path == '/campaigns' and method == 'GET':
             print("   → Calling get_campaigns()")
-            return get_campaigns(headers)
+            return get_campaigns(headers, event)
+        elif path == '/campaign-viewed' and method == 'POST':
+            print("   → Calling mark_campaign_viewed()")
+            return mark_campaign_viewed(body, headers)
         else:
             print(f"   → Route not found: {method} {path}")
             print("   Available routes: /config, /contacts, /campaign, /upload-attachment, /campaigns, etc.")
@@ -239,6 +235,10 @@ def serve_web_ui(event):
             --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
         }}
         
+        function performHistorySearch() {{
+            loadCampaignHistory(null);
+        }}
+
         /* Campaign History Table Styles */
         #historyTable tbody tr:nth-child(odd) {{
             background: #ffffff;
@@ -491,7 +491,6 @@ def serve_web_ui(event):
         .btn-warning:hover {{ 
             box-shadow: 0 10px 25px rgba(245, 158, 11, 0.4); 
         }}
-        
         /* Table Action Buttons - Consistent Sizing */
         table button {{
             padding: 8px 16px;
@@ -990,7 +989,6 @@ def serve_web_ui(event):
                 opacity: 0;
             }}
         }}
-        
         /* ============================================
            SKELETON LOADING STATES
            ============================================ */
@@ -1784,7 +1782,6 @@ def serve_web_ui(event):
             
             <div style="display: flex; gap: 15px; margin-top: 20px;">
                 <button class="btn-success" onclick="sendCampaign(event)">🚀 Send Campaign</button>
-                <!-- <button class="btn-primary" onclick="previewCampaign(event)" style="background: #3b82f6;">👁️ Preview Email</button> -->
                 <button onclick="clearCampaignForm()">🗑️ Clear Form</button>
             </div>
             <!-- <small style="color: #6b7280; display: block; margin-top: 8px;">
@@ -1793,14 +1790,17 @@ def serve_web_ui(event):
             
             <div id="campaignResult" class="result hidden"></div>
         </div>
-        
         <div id="history" class="tab-content">
             <h2>📜 Campaign History</h2>
             <p style="color: #6b7280; margin-bottom: 20px;">View and manage past email campaigns</p>
             
-            <div style="display: flex; gap: 10px; margin-bottom: 20px;">
+            <div style="display: flex; gap: 10px; margin-bottom: 20px; align-items: center;">
                 <button onclick="loadCampaignHistory()" class="btn-primary">🔄 Refresh History</button>
                 <button onclick="exportAllCampaigns()" class="btn-success">📥 Export All to CSV</button>
+                <input id="historySearch" type="text" placeholder="Search campaign name or subject" 
+                    style="flex: 1; min-width: 240px; padding: 10px; border: 1px solid #e5e7eb; border-radius: 6px;" 
+                    onkeydown="if (event.key === 'Enter') performHistorySearch()" />
+                <button onclick="performHistorySearch()" class="btn-secondary">🔎 Search</button>
             </div>
             
             <div id="historyLoading" style="display: none; text-align: center; padding: 40px;">
@@ -1829,6 +1829,11 @@ def serve_web_ui(event):
                         </tr>
                     </tbody>
                 </table>
+                <div id="historyPager" style="display: flex; justify-content: space-between; align-items: center; padding: 12px 0;">
+                    <button id="historyPrevBtn" onclick="paginateHistory('prev')" class="btn-secondary" disabled>◀ Previous</button>
+                    <span id="historyPageInfo" style="color: #6b7280;">Showing up to 50 campaigns</span>
+                    <button id="historyNextBtn" onclick="paginateHistory('next')" class="btn-secondary" disabled>Next ▶</button>
+                </div>
             </div>
         </div>
     </div>
@@ -2263,8 +2268,6 @@ def serve_web_ui(event):
                 loadCampaignHistory();
             }}
         }}
-        
-        
         async function saveConfig() {{
             const button = event.target;
             const originalText = button.textContent;
@@ -2751,7 +2754,6 @@ def serve_web_ui(event):
             // Legacy function - filter count is now displayed in the tags area
             // This is kept for compatibility with old code
         }}
-        
         async function searchContactsByName() {{
             const searchTerm = document.getElementById('nameSearch').value.trim();
             const searchResults = document.getElementById('searchResults');
@@ -3211,7 +3213,6 @@ def serve_web_ui(event):
                 Toast.error('Failed to delete contact. Please try again.');
             }}
         }}
-        
         async function saveContactRow(email) {{
             try {{
                 // Find the row with this email
@@ -3707,7 +3708,6 @@ def serve_web_ui(event):
                 }}
                 
                 alert(message);
-                
             loadContacts();
                 // loadGroupsFromDB(); // Disabled - groups feature removed
                 
@@ -4202,7 +4202,6 @@ def serve_web_ui(event):
             displayAttachments();
             fileInput.value = ''; // Clear input
         }}
-        
         async function uploadAttachmentToS3(file) {{
             const timestamp = Date.now();
             const randomStr = Math.random().toString(36).substring(7);
@@ -4688,7 +4687,6 @@ def serve_web_ui(event):
                 const dataS3Key = img.getAttribute('data-s3-key');
                 console.log(`  Image ${{i + 1}}: src type=${{src ? src.substring(0, 20) : 'NO SRC'}}..., has data-s3-key=${{!!dataS3Key}}`);
             }});
-            
             // IMPORTANT: Convert embedded images (base64 data URIs) to attachments
             // This allows inline images in the email body
             const allImgTags = tempDiv.querySelectorAll('img[src^="data:"], img[src^="blob:"]');
@@ -5083,7 +5081,6 @@ def serve_web_ui(event):
             // CONFIRMATION POPUP - Show total recipient count and ask for confirmation
             const confirmationMessage = `
 📧 Campaign Confirmation
-
 You are about to send this campaign to:
 
 📊 Total Recipients: ${{allTargetEmails.length}}
@@ -5402,537 +5399,6 @@ Click OK to proceed or Cancel to abort.
                 resultDiv.classList.remove('hidden');
                 
                 button.textContent = 'Error';
-                button.style.background = 'linear-gradient(135deg, var(--danger-color), #dc2626)';
-                setTimeout(() => {{
-                    button.textContent = originalText;
-                    button.style.background = '';
-                }}, 3000);
-            }} finally {{
-                button.classList.remove('loading');
-                button.disabled = false;
-            }}
-        }}
-        
-        // PREVIEW EMAIL FUNCTION - Shows what recipients will receive
-        async function previewCampaign(event) {{
-            // Check form availability first
-            if (!checkFormAvailability()) {{
-                alert('Form is currently unavailable. Please refresh the page and try again.');
-                return;
-            }}
-            
-            const button = event?.target || document.querySelector('.btn-primary');
-            const originalText = button?.textContent || '👁️ Preview Email';
-            
-            try {{
-                // IMPORTANT: Deactivate any active image resize handles first
-                // This ensures images are in their final state before processing
-                const resizeOverlays = document.querySelectorAll('.image-resize-overlay, .ql-image-resize-overlay');
-                const resizeHandles = document.querySelectorAll('.image-resize-handle, .ql-image-resize-handle');
-                
-                if (resizeOverlays.length > 0 || resizeHandles.length > 0) {{
-                    console.log(`🔧 PREVIEW: Detected ${{resizeOverlays.length + resizeHandles.length}} active resize handle(s) - deactivating...`);
-                    // Click elsewhere in the editor to deactivate resize handles
-                    quillEditor.root.blur();
-                    quillEditor.root.focus();
-                    // Small delay to let resize module clean up
-                    await new Promise(resolve => setTimeout(resolve, 100));
-                    console.log(`   ✅ Resize handles deactivated`);
-                }} else {{
-                    console.log(`✅ PREVIEW: No active resize handles detected`);
-                }}
-                
-                // Show loading state
-                button.textContent = 'Generating Preview...';
-                button.classList.add('loading');
-                button.disabled = true;
-                
-                // Get content from Quill editor and process it (same as sendCampaign)
-                let emailBody = quillEditor.root.innerHTML;
-                
-                // Create a temporary div to parse and clean the HTML
-                const tempDiv = document.createElement('div');
-                tempDiv.innerHTML = emailBody;
-                
-                // IMPORTANT: LOCK IMAGE SIZE & POSITION (same logic as sendCampaign)
-                const editorImages = quillEditor.root.querySelectorAll('img');
-                const imageComputedStyles = new Map();
-                
-                console.log('👁️ PREVIEW: Locking image sizes and positions...');
-                editorImages.forEach((editorImg, idx) => {{
-                    const computedStyle = window.getComputedStyle(editorImg);
-                    const lockedStyles = {{
-                        width: computedStyle.width,
-                        height: computedStyle.height,
-                        display: computedStyle.display,
-                        marginLeft: computedStyle.marginLeft,
-                        marginRight: computedStyle.marginRight,
-                        marginTop: computedStyle.marginTop,
-                        marginBottom: computedStyle.marginBottom,
-                        float: computedStyle.float,
-                        verticalAlign: computedStyle.verticalAlign,
-                        maxWidth: computedStyle.maxWidth,
-                        maxHeight: computedStyle.maxHeight
-                    }};
-                    
-                    const src = editorImg.getAttribute('src');
-                    if (src) {{
-                        imageComputedStyles.set(src.substring(0, 100), lockedStyles);
-                        console.log(`🔒 PREVIEW: Locked image ${{idx + 1}} size/position`);
-                    }}
-                }});
-                
-                // Apply locked styles and unwrap images (same as sendCampaign)
-                const allImageElements = tempDiv.querySelectorAll('img');
-                let unwrappedCount = 0;
-                
-                allImageElements.forEach((img, idx) => {{
-                    const imgSrc = img.getAttribute('src');
-                    if (imgSrc && imageComputedStyles.has(imgSrc.substring(0, 100))) {{
-                        const lockedStyles = imageComputedStyles.get(imgSrc.substring(0, 100));
-                        let styleString = '';
-                        
-                        if (lockedStyles.width && lockedStyles.width !== 'auto') {{
-                            styleString += `width: ${{lockedStyles.width}}; `;
-                        }}
-                        if (lockedStyles.height && lockedStyles.height !== 'auto') {{
-                            styleString += `height: ${{lockedStyles.height}}; `;
-                        }}
-                        if (lockedStyles.display && lockedStyles.display !== 'inline') {{
-                            styleString += `display: ${{lockedStyles.display}}; `;
-                        }}
-                        if (lockedStyles.float && lockedStyles.float !== 'none') {{
-                            styleString += `float: ${{lockedStyles.float}}; `;
-                        }}
-                        if (lockedStyles.verticalAlign && lockedStyles.verticalAlign !== 'baseline') {{
-                            styleString += `vertical-align: ${{lockedStyles.verticalAlign}}; `;
-                        }}
-                        if (lockedStyles.marginTop && lockedStyles.marginTop !== '0px') {{
-                            styleString += `margin-top: ${{lockedStyles.marginTop}}; `;
-                        }}
-                        if (lockedStyles.marginBottom && lockedStyles.marginBottom !== '0px') {{
-                            styleString += `margin-bottom: ${{lockedStyles.marginBottom}}; `;
-                        }}
-                        if (lockedStyles.marginLeft && lockedStyles.marginLeft !== '0px') {{
-                            styleString += `margin-left: ${{lockedStyles.marginLeft}}; `;
-                        }}
-                        if (lockedStyles.marginRight && lockedStyles.marginRight !== '0px') {{
-                            styleString += `margin-right: ${{lockedStyles.marginRight}}; `;
-                        }}
-                        if (lockedStyles.maxWidth && lockedStyles.maxWidth !== 'none') {{
-                            styleString += `max-width: ${{lockedStyles.maxWidth}}; `;
-                        }}
-                        if (lockedStyles.maxHeight && lockedStyles.maxHeight !== 'none') {{
-                            styleString += `max-height: ${{lockedStyles.maxHeight}}; `;
-                        }}
-                        
-                        if (styleString.trim()) {{
-                            img.setAttribute('style', styleString.trim());
-                        }}
-                    }}
-                    
-                    // Unwrap from resize containers
-                    const parent = img.parentElement;
-                    if (parent && parent !== tempDiv && parent.tagName.toLowerCase() !== 'p') {{
-                        const meaningfulChildren = Array.from(parent.childNodes).filter(n => {{
-                            if (n.nodeType === Node.ELEMENT_NODE) return true;
-                            if (n.nodeType === Node.TEXT_NODE && n.textContent.trim() !== '') return true;
-                            return false;
-                        }});
-                        
-                        if (meaningfulChildren.length === 1 && meaningfulChildren[0] === img) {{
-                            const grandParent = parent.parentElement;
-                            if (grandParent) {{
-                                grandParent.insertBefore(img, parent);
-                                parent.remove();
-                                unwrappedCount++;
-                            }}
-                        }}
-                    }}
-                }});
-                
-                console.log(`👁️ PREVIEW: Unwrapped ${{unwrappedCount}} image(s)`);
-                console.log(`👁️ PREVIEW: Locked ${{imageComputedStyles.size}} image(s) to exact editor size/position`);
-                
-                // Clean up HTML (same as sendCampaign)
-                const clipboardElements = tempDiv.querySelectorAll('.ql-clipboard, [id*="ql-clipboard"], [class*="ql-clipboard"]');
-                clipboardElements.forEach(el => el.remove());
-                
-                const hiddenElements = tempDiv.querySelectorAll('[style*="display: none"], [style*="display:none"]');
-                hiddenElements.forEach(el => el.remove());
-                
-                const allElements = tempDiv.querySelectorAll('*');
-                allElements.forEach(element => {{
-                    // PRESERVE all class attributes (Quill classes and user custom classes)
-                    // Remove data-* attributes EXCEPT data-s3-key and data-inline (needed for image processing)
-                    Array.from(element.attributes).forEach(attr => {{
-                        if (attr.name.startsWith('data-') && 
-                            attr.name !== 'data-s3-key' && 
-                            attr.name !== 'data-inline') {{
-                            element.removeAttribute(attr.name);
-                        }}
-                    }});
-                    element.removeAttribute('contenteditable');
-                    element.removeAttribute('spellcheck');
-                    element.removeAttribute('autocorrect');
-                    element.removeAttribute('autocapitalize');
-                }});
-                console.log(`👁️ PREVIEW: Cleaned Quill attributes (preserved ALL CSS classes)`);
-                
-                // Process embedded images (same as sendCampaign)
-                // Check what images exist first
-                const allImages = tempDiv.querySelectorAll('img');
-                console.log(`👁️ PREVIEW: Total images in HTML: ${{allImages.length}}`);
-                allImages.forEach((img, i) => {{
-                    const src = img.getAttribute('src');
-                    const srcType = src.startsWith('data:') ? 'data:' : 
-                                   src.startsWith('blob:') ? 'blob:' : 
-                                   src.startsWith('http') ? 'http' : 
-                                   src.startsWith('campaign-attachments/') ? 'S3 key' : 'other';
-                    console.log(`   Image ${{i + 1}}: type=${{srcType}}, src=${{src.substring(0, 60)}}...`);
-                }});
-                
-                // Also check for images that already have S3 keys (from previous upload)
-                const imagesWithExistingS3Keys = tempDiv.querySelectorAll('img[src^="campaign-attachments/"]');
-                console.log(`👁️ PREVIEW: Found ${{imagesWithExistingS3Keys.length}} image(s) already uploaded to S3`);
-                
-                // Add existing S3 images to campaignAttachments
-                imagesWithExistingS3Keys.forEach((img, idx) => {{
-                    const s3Key = img.getAttribute('src');
-                    console.log(`   ♻️ Using existing S3 image: ${{s3Key}}`);
-                    // Check if this S3 key is already in campaignAttachments
-                    const alreadyExists = campaignAttachments.some(att => att.s3_key === s3Key);
-                    if (!alreadyExists) {{
-                        campaignAttachments.push({{
-                            filename: `ExistingImage${{idx + 1}}.png`,
-                            s3_key: s3Key,
-                            size: 0,  // Unknown size for existing images
-                            type: 'image/png',
-                            inline: true
-                        }});
-                        console.log(`   ✅ Added existing S3 image to attachments`);
-                    }}
-                }});
-                
-                const allImgTags = tempDiv.querySelectorAll('img[src^="data:"], img[src^="blob:"]');
-                console.log(`👁️ PREVIEW: Found ${{allImgTags.length}} embedded image(s) with data:/blob: URIs to upload`);
-                
-                if (allImgTags.length > 0) {{
-                    button.textContent = `Uploading ${{allImgTags.length}} image(s)...`;
-                    
-                    for (let index = 0; index < allImgTags.length; index++) {{
-                        button.textContent = `Uploading image ${{index + 1}}/${{allImgTags.length}}...`;
-                        const img = allImgTags[index];
-                        const dataUri = img.src;
-                        const altText = img.alt || img.title || `PreviewImage${{index + 1}}`;
-                        
-                        try {{
-                            const matches = dataUri.match(/^data:([^;]+);base64,(.+)$/);
-                            if (!matches) continue;
-                            
-                            const mimeType = matches[1];
-                            const base64Data = matches[2];
-                            const extension = mimeType.split('/')[1] || 'png';
-                            const filename = `${{altText.replace(/[^a-zA-Z0-9]/g, '_')}}_${{Date.now()}}_${{index}}.${{extension}}`;
-                            const timestamp = Date.now();
-                            const randomStr = Math.random().toString(36).substring(7);
-                            const s3Key = `campaign-attachments/${{timestamp}}-${{randomStr}}-${{filename}}`;
-                            
-                            const uploadResponse = await fetch(`${{API_URL}}/upload-attachment`, {{
-                                method: 'POST',
-                                headers: {{'Content-Type': 'application/json'}},
-                                body: JSON.stringify({{
-                                    filename: filename,
-                                    content_type: mimeType,
-                                    s3_key: s3Key,
-                                    data: base64Data
-                                }})
-                            }});
-                            
-                            if (!uploadResponse.ok) {{
-                                throw new Error(`Upload failed: ${{uploadResponse.status}}`);
-                            }}
-                            
-                            const uploadResult = await uploadResponse.json();
-                            campaignAttachments.push({{
-                                filename: uploadResult.filename,
-                                s3_key: uploadResult.s3_key,
-                                size: uploadResult.size,
-                                type: uploadResult.type,
-                                inline: true
-                            }});
-                            
-                            // Store S3 key as data attribute for reference, but KEEP the data URI for display
-                            // This allows preview to work correctly even after upload
-                            img.setAttribute('data-s3-key', uploadResult.s3_key);
-                            img.setAttribute('data-inline', 'true');
-                            // Keep img.src as data URI so image still displays in preview HTML
-                            console.log(`   ✅ Uploaded and stored S3 key: ${{uploadResult.s3_key}}`);
-                        }} catch (uploadError) {{
-                            console.error(`   ❌ Failed to upload image ${{index}}:`, uploadError);
-                            alert(`Failed to upload image: ${{uploadError.message}}`);
-                            img.remove();
-                        }}
-                    }}
-                }}
-                
-                console.log(`👁️ PREVIEW: Finished processing images. Total attachments: ${{campaignAttachments.length}}`);
-                
-                // Replace data URIs with S3 keys
-                emailBody = tempDiv.innerHTML;
-                
-                // DEBUG: Check if tempDiv.innerHTML contains img tags
-                const imgInTempDiv = emailBody.match(/<img[^>]+>/g);
-                if (imgInTempDiv) {{
-                    console.log(`👁️ PREVIEW: tempDiv.innerHTML contains ${{imgInTempDiv.length}} <img> tag(s)`);
-                    imgInTempDiv.forEach((tag, i) => {{
-                        console.log(`   ${{i + 1}}. ${{tag.substring(0, 120)}}...`);
-                    }});
-                }} else {{
-                    console.error(`👁️ PREVIEW: tempDiv.innerHTML has NO <img> tags!`);
-                    console.error(`   Content: ${{emailBody.substring(0, 500)}}...`);
-                }}
-                
-                const imagesWithS3Keys = tempDiv.querySelectorAll('img[data-s3-key]');
-                console.log(`👁️ PREVIEW: Found ${{imagesWithS3Keys.length}} image(s) with S3 keys to replace in HTML`);
-                
-                if (imagesWithS3Keys.length > 0) {{
-                    imagesWithS3Keys.forEach((img, idx) => {{
-                        const s3Key = img.getAttribute('data-s3-key');
-                        const currentSrc = img.getAttribute('src');
-                        console.log(`   Replacing image ${{idx + 1}}: S3 key=${{s3Key}}, current src type=${{currentSrc.substring(0, 20)}}...`);
-                        
-                        if (s3Key && currentSrc && currentSrc.startsWith('data:')) {{
-                            const escapedSrc = currentSrc.replace(/[.*+?^${{}}()|[\\]\\\\]/g, '\\\\$&');
-                            const regex = new RegExp('src="' + escapedSrc + '"', 'g');
-                            const beforeLength = emailBody.length;
-                            emailBody = emailBody.replace(regex, 'src="' + s3Key + '"');
-                            const afterLength = emailBody.length;
-                            
-                            if (beforeLength !== afterLength) {{
-                                console.log(`   ✅ Replaced data: URI with S3 key (length: ${{beforeLength}} → ${{afterLength}})`);
-                            }} else {{
-                                console.warn(`   ⚠️ No replacement made (length unchanged) - trying alternate method`);
-                                // Try simpler replacement
-                                emailBody = emailBody.replace(currentSrc, s3Key);
-                                console.log(`   ✅ Used simple replace method`);
-                            }}
-                        }}
-                    }});
-                }}
-                
-                // Verify no data: URIs remain
-                if (emailBody.includes('data:image')) {{
-                    console.warn(`   ⚠️ WARNING: Email body still contains data:image URIs!`);
-                }} else {{
-                    console.log(`   ✅ All data: URIs replaced with S3 keys`);
-                }}
-                
-                // Remove data-s3-key attributes from HTML after replacement
-                emailBody = emailBody.replace(/\\s+data-s3-key="[^"]*"/g, '');
-                emailBody = emailBody.replace(/\\s+data-inline="[^"]*"/g, '');
-                console.log(`   ✅ Removed data-s3-key attributes from HTML`);
-                
-                // Check img tags after data-attr removal
-                const imgAfterDataAttrRemoval = emailBody.match(/<img[^>]+>/g);
-                if (imgAfterDataAttrRemoval) {{
-                    console.log(`   ✅ After data-attr removal: ${{imgAfterDataAttrRemoval.length}} <img> tag(s) still present`);
-                }} else {{
-                    console.error(`   ❌ After data-attr removal: <img> tags LOST!`);
-                }}
-                
-                // Additional HTML cleanup
-                // IMPORTANT: Preserve blank lines as <p>&nbsp;</p>
-                const bodyBeforeCleanup = emailBody;
-                emailBody = emailBody
-                    .replace(/<p>\\s*<br\\s*\\/?\\s*>\\s*<\\/p>/g, '<p>&nbsp;</p>')  // Preserve blank lines
-                    .replace(/<p>\\s*<\\/p>/g, '')  // Remove truly empty paragraphs
-                    // PRESERVE class attributes (user custom classes and Quill classes)
-                    .replace(/\\s+data-[^=]*="[^"]*"/g, '')  // Remove all remaining data-* attributes
-                    .trim();
-                
-                console.log(`👁️ PREVIEW: Final email body length: ${{emailBody.length}} characters`);
-                
-                // Add margin: 0 to all <p> tags for tight spacing
-                // Line-height is controlled by .ql-size-* classes (0.9 for small, 1.2 for large, 1.3 for huge)
-                emailBody = emailBody.replace(/<p>/g, '<p style="margin: 0;">');
-                emailBody = emailBody.replace(/<p([^>]*?)style="([^"]*)"([^>]*)>/g, function(match, before, style, after) {{
-                    // Only add margin if not already present
-                    if (!style.includes('margin')) {{
-                        return `<p${{before}}style="${{style}}; margin: 0;"${{after}}>`;
-                    }}
-                    return match;
-                }});
-                console.log(`   ✅ Added margin: 0 to <p> tags (line-height controlled by size classes)`);
-                
-                // Add Quill CSS styles so Quill classes work in preview
-                const quillCSS = '<style type="text/css">' +
-    '/* Quill Editor Styles for Email Compatibility */' +
-    '.ql-align-center {{ text-align: center; }}' +
-    '.ql-align-right {{ text-align: right; }}' +
-    '.ql-align-left {{ text-align: left; }}' +
-    '.ql-align-justify {{ text-align: justify; }}' +
-    '.ql-indent-1 {{ padding-left: 3em; }}' +
-    '.ql-indent-2 {{ padding-left: 6em; }}' +
-    '.ql-indent-3 {{ padding-left: 9em; }}' +
-    '.ql-size-small {{ font-size: 0.75em; line-height: 0.9; }}' +
-    '.ql-size-large {{ font-size: 1.5em; line-height: 1.2; }}' +
-    '.ql-size-huge {{ font-size: 2.5em; line-height: 1.3; }}' +
-    '.ql-font-arial {{ font-family: Arial, sans-serif; }}' +
-    '.ql-font-times-new-roman {{ font-family: "Times New Roman", Times, serif; }}' +
-    '.ql-font-courier-new {{ font-family: "Courier New", Courier, monospace; }}' +
-    '.ql-font-georgia {{ font-family: Georgia, serif; }}' +
-    '.ql-font-verdana {{ font-family: Verdana, sans-serif; }}' +
-    '.ql-font-comic-sans {{ font-family: "Comic Sans MS", cursive; }}' +
-    '.ql-font-trebuchet {{ font-family: "Trebuchet MS", sans-serif; }}' +
-    '.ql-font-impact {{ font-family: Impact, sans-serif; }}' +
-    '/* User custom classes preserved */' +
-    'p {{ line-height: 1.0; margin: 0; }}' +
-    '</style>';
-                
-                // Prepend CSS to email body
-                emailBody = quillCSS + emailBody;
-                console.log(`   ✅ Added Quill CSS styles for class rendering`);
-                
-                // Check if img tags survived cleanup
-                const imgAfterCleanup = emailBody.match(/<img[^>]+>/g);
-                if (bodyBeforeCleanup.includes('<img') && !imgAfterCleanup) {{
-                    console.error(`   ❌ PREVIEW: <img> tags REMOVED during cleanup!`);
-                    console.error(`   Before: ${{bodyBeforeCleanup.substring(0, 300)}}...`);
-                    console.error(`   After: ${{emailBody.substring(0, 300)}}...`);
-                }} else if (imgAfterCleanup) {{
-                    console.log(`   ✅ After cleanup: ${{imgAfterCleanup.length}} <img> tag(s) still present`);
-                }}
-                
-                button.textContent = 'Generating preview...';
-                
-                // Get from email from form (use default from email config if not set)
-                const fromEmail = document.getElementById('fromEmail')?.value || 'noreply@example.com';
-                
-                // Parse To, CC, BCC recipients
-                const toList = parseEmails(document.getElementById('campaignTo')?.value || '');
-                const ccList = parseEmails(document.getElementById('campaignCc')?.value || '');
-                const bccList = parseEmails(document.getElementById('campaignBcc')?.value || '');
-                
-                // 📧 PREVIEW LOGGING: Display To/CC/BCC lines for preview
-                console.log('📧 EMAIL RECIPIENTS - PREVIEW LOGGING:');
-                console.log('📬 To Recipients (Preview):', toList.length > 0 ? toList : 'None');
-                console.log('📋 CC Recipients (Preview):', ccList.length > 0 ? ccList : 'None');
-                console.log('🔒 BCC Recipients (Preview):', bccList.length > 0 ? bccList : 'None');
-                
-                // Log font usage in preview
-                console.log('🎨 PREVIEW FONT ANALYSIS: Analyzing fonts in preview...');
-                const previewFontMatches = emailBody.match(/class="[^"]*ql-font-([^"\s]+)/g) || [];
-                const previewFontUsage = {{}};
-                
-                previewFontMatches.forEach(match => {{
-                    const fontMatch = match.match(/ql-font-([^"\s]+)/);
-                    if (fontMatch) {{
-                        const font = fontMatch[1];
-                        previewFontUsage[font] = (previewFontUsage[font] || 0) + 1;
-                    }}
-                }});
-                
-                if (Object.keys(previewFontUsage).length > 0) {{
-                    console.log('🎨 FONTS IN PREVIEW:');
-                    Object.entries(previewFontUsage).forEach(([font, count]) => {{
-                        console.log(`   • ${{font}}: ${{count}} occurrence(s)`);
-                    }});
-                }} else {{
-                    console.log('🎨 FONTS IN PREVIEW: Default font only');
-                }}
-                
-                // Create preview data object
-                const previewData = {{
-                    campaign_name: document.getElementById('campaignName').value || 'Untitled Preview',
-                    subject: document.getElementById('subject').value || 'No Subject',
-                    body: emailBody,
-                    font_usage: previewFontUsage,  // Add font usage to preview data
-                    attachments: campaignAttachments,
-                    from_email: fromEmail,
-                    to: toList,
-                    cc: ccList,
-                    bcc: bccList
-                }};
-                
-                console.log('👁️ PREVIEW: Sending to backend...');
-                console.log(`   From: ${{fromEmail}}`);
-                console.log(`   To: ${{toList.length}} recipients`);
-                console.log(`   CC: ${{ccList.length}} recipients`);
-                console.log(`   BCC: ${{bccList.length}} recipients`);
-                console.log(`   Body length: ${{emailBody.length}} characters`);
-                console.log(`   Attachments: ${{campaignAttachments.length}}`);
-                
-                // Show attachment details
-                if (campaignAttachments.length > 0) {{
-                    console.log(`   📎 Attachment details:`);
-                    campaignAttachments.forEach((att, i) => {{
-                        console.log(`      ${{i + 1}}. ${{att.filename}} (s3_key: ${{att.s3_key}}, inline: ${{att.inline}})`);
-                    }});
-                }}
-                
-                // Show sample of email body HTML with image tags
-                const imgMatches = emailBody.match(/<img[^>]+>/g);
-                if (imgMatches) {{
-                    console.log(`   🖼️ Email body contains ${{imgMatches.length}} <img> tag(s):`);
-                    imgMatches.forEach((tag, i) => {{
-                        console.log(`      ${{i + 1}}. ${{tag.substring(0, 100)}}...`);
-                    }});
-                }} else {{
-                    console.log(`   ⚠️ No <img> tags found in email body!`);
-                }}
-                
-                // Send preview to backend
-                const response = await fetch(`${{API_URL}}/preview`, {{
-                    method: 'POST',
-                    headers: {{'Content-Type': 'application/json'}},
-                    body: JSON.stringify(previewData)
-                }});
-                
-                // Check content type before parsing
-                const contentType = response.headers.get('content-type');
-                
-                if (!response.ok) {{
-                    // Handle error response
-                    if (contentType && contentType.includes('application/json')) {{
-                        const errorData = await response.json();
-                        throw new Error(`Preview generation failed: ${{errorData.error || response.statusText}}`);
-                    }} else {{
-                        const errorText = await response.text();
-                        console.error('Non-JSON error response:', errorText.substring(0, 200));
-                        throw new Error(`Server returned invalid response (status ${{response.status}})`);
-                    }}
-                }}
-                
-                if (!contentType || !contentType.includes('application/json')) {{
-                    const responseText = await response.text();
-                    console.error('Non-JSON response received:', responseText.substring(0, 200));
-                    throw new Error('Server returned invalid response (expected JSON, got HTML)');
-                }}
-                
-                const result = await response.json();
-                console.log('👁️ PREVIEW: Generated successfully!', result);
-                
-                // Open preview in new window
-                const previewUrl = `${{API_URL}}/preview/${{result.preview_id}}`;
-                console.log(`👁️ PREVIEW: Opening in new window: ${{previewUrl}}`);
-                window.open(previewUrl, '_blank', 'width=900,height=800,scrollbars=yes,resizable=yes');
-                
-                // Show success message
-                Toast.success('Preview generated! Opening in new window...', 2000);
-                button.textContent = '✅ Preview Ready!';
-                button.style.background = 'linear-gradient(135deg, var(--success-color), #059669)';
-                setTimeout(() => {{
-                    button.textContent = originalText;
-                    button.style.background = '';
-                }}, 2000);
-                
-            }} catch (error) {{
-                console.error('Preview error:', error);
-                Toast.error(`Preview failed: ${{error.message}}`);
-                alert(`Preview failed: ${{error.message}}`);
-                
-                button.textContent = '❌ Preview Failed';
                 button.style.background = 'linear-gradient(135deg, var(--danger-color), #dc2626)';
                 setTimeout(() => {{
                     button.textContent = originalText;
@@ -6265,34 +5731,68 @@ Click OK to proceed or Cancel to abort.
         
         let currentCampaignId = null;
         let allCampaigns = [];
-        
-        async function loadCampaignHistory() {{
+        window.__historyPrevTokens = [];
+        window.__historyNextToken = null;
+
+        function paginateHistory(direction) {{
+            if (direction === 'next') {{
+                const token = window.__historyNextToken;
+                if (token) {{
+                    loadCampaignHistory(token);
+                }}
+            }} else if (direction === 'prev') {{
+                const stack = window.__historyPrevTokens || [];
+                if (stack.length > 0) {{
+                    // Pop current token
+                    stack.pop();
+                    const prevToken = stack.length > 0 ? stack[stack.length - 1] : null;
+                    loadCampaignHistory(prevToken);
+                }}
+            }}
+        }}
+        async function loadCampaignHistory(nextToken = null) {{
             const loading = document.getElementById('historyLoading');
             const historyBody = document.getElementById('historyBody');
+            const pager = document.getElementById('historyPager');
+            if (!nextToken) {{
+                // Reset pagination state on fresh load
+                window.__historyPrevTokens = [];
+                window.__historyNextToken = null;
+            }}
             
             loading.style.display = 'block';
             historyBody.innerHTML = '<tr><td colspan="7" style="padding: 20px; text-align: center;">Loading...</td></tr>';
             
             try {{
                 // Fetch campaigns from DynamoDB via backend
-                const response = await fetch(`${{API_URL}}/campaigns`);
+                const url = new URL(`${{API_URL}}/campaigns`);
+                if (nextToken) url.searchParams.set('next', nextToken);
+                const searchEl = document.getElementById('historySearch');
+                const q = (searchEl && searchEl.value ? searchEl.value : '').trim();
+                if (q) url.searchParams.set('q', q);
+                const response = await fetch(url.toString());
                 
                 if (!response.ok) {{
                     throw new Error(`Failed to load campaigns: ${{response.statusText}}`);
                 }}
                 
                 const data = await response.json();
-                allCampaigns = data.campaigns || [];
-                
-                // Filter out preview campaigns and sort by date (newest first)
-                allCampaigns = allCampaigns
+                allCampaigns = (data.campaigns || [])
                     .filter(c => c.type !== 'preview' && c.status !== 'preview')
                     .sort((a, b) => {{
-                        const dateA = new Date(a.created_at || 0);
-                        const dateB = new Date(b.created_at || 0);
+                        const dateA = new Date(a.created_at || a.sent_at || 0);
+                        const dateB = new Date(b.created_at || b.sent_at || 0);
                         return dateB - dateA;
                     }});
+                const nextOut = data.next || null;
+                window.__historyNextToken = nextOut; // store for pager
+                window.__historyPrevTokens = window.__historyPrevTokens || [];
+                if (nextToken) {{
+                    // Navigating forward, push current token to prev stack
+                    window.__historyPrevTokens.push(nextToken);
+                }}
                 
+                // Filter out preview campaigns and sort by date (newest first)
                 if (allCampaigns.length === 0) {{
                     historyBody.innerHTML = '<tr><td colspan="7" style="padding: 40px; text-align: center; color: #9ca3af;">No campaigns found</td></tr>';
                     return;
@@ -6347,6 +5847,15 @@ Click OK to proceed or Cancel to abort.
                 }});
                 
                 Toast.success(`Loaded ${{allCampaigns.length}} campaigns`, 2000);
+                // Update pager
+                if (pager) {{
+                    const hasPrev = (window.__historyPrevTokens || []).length > 0;
+                    const hasNext = !!window.__historyNextToken;
+                    const pageNum = (window.__historyPrevTokens || []).length + 1;
+                    document.getElementById('historyPrevBtn').disabled = !hasPrev;
+                    document.getElementById('historyNextBtn').disabled = !hasNext;
+                    document.getElementById('historyPageInfo').textContent = `Page ${{pageNum}} • Showing up to 50 campaigns`;
+                }}
                 
             }} catch (error) {{
                 console.error('Error loading campaign history:', error);
@@ -6359,6 +5868,28 @@ Click OK to proceed or Cancel to abort.
         
         async function viewCampaignDetails(campaignId) {{
             currentCampaignId = campaignId;
+            try {{
+                // Fire-and-forget log to backend so CloudWatch records the view event
+                fetch(`${{API_URL}}/campaign-viewed`, {{
+                    method: 'POST',
+                    headers: {{ 'Content-Type': 'application/json' }},
+                    body: JSON.stringify({{ campaign_id: campaignId, timestamp: Date.now() }})
+                }}).then(async (r) => {{
+                    if (!r.ok) {{
+                        // Fallback to existing endpoint that will log view in backend
+                        try {{
+                            const res2 = await fetch(`${{API_URL}}/campaign/${{campaignId}}`);
+                            console.log('📜 View fallback GET /campaign/{id} status=', res2.status);
+                        }} catch (e2) {{
+                            console.warn('📜 View fallback failed:', e2);
+                        }}
+                    }} else {{
+                        console.log('📜 View log sent for campaign', campaignId, 'status=', r.status);
+                    }}
+                }}).catch(e => console.warn('📜 View log failed for campaign', campaignId, e));
+            }} catch (e) {{
+                console.warn('📜 Failed to send view log:', e);
+            }}
             
             const campaign = allCampaigns.find(c => c.campaign_id === campaignId);
             if (!campaign) {{
@@ -6501,21 +6032,67 @@ Click OK to proceed or Cancel to abort.
                     if (!presigned) return;
                     const s3Key = att.s3_key;
                     const contentId = att.content_id || att.cid || att.contentId;
-                    console.log('🧩 Replacing references for inline image. s3_key=', s3Key, 'cid=', contentId);
+                    if (contentId) {{
+                        console.log('🧩 Replacing inline image by s3_key and cid. s3_key=', s3Key, 'cid=', contentId);
+                    }} else {{
+                        console.log('🧩 Replacing inline image by s3_key only. s3_key=', s3Key);
+                    }}
+
+                    const before = output;
                     // Pattern 1: src="s3_key"
                     output = output.replace(new RegExp(`src=\\"${{s3Key.replace(/[.*+?^$()|[\\]\\\\]/g, '\\$&')}}\\"`, 'g'), `src=\"${{presigned}}\"`);
                     // Pattern 2: src='s3_key'
                     output = output.replace(new RegExp(`src=\'${{s3Key.replace(/[.*+?^$()|[\\]\\\\]/g, '\\$&')}}\'`, 'g'), `src=\"${{presigned}}\"`);
                     // Pattern 3: bare s3_key
                     output = output.split(s3Key).join(presigned);
+                    const afterS3 = output;
+                    if (afterS3 !== before) {{
+                        console.log('🧩 s3_key references replaced for', s3Key);
+                    }} else {{
+                        console.log('🧩 No s3_key references found for', s3Key);
+                    }}
+
                     // Pattern 4: cid:content-id
                     if (contentId) {{
                         const cidEsc = String(contentId).replace(/[.*+?^$()|[\\]\\\\]/g, '\\$&');
                         output = output.replace(new RegExp(`src=\\"cid:${{cidEsc}}\\"`, 'g'), `src=\"${{presigned}}\"`);
                         output = output.replace(new RegExp(`src=\'cid:${{cidEsc}}\'`, 'g'), `src=\"${{presigned}}\"`);
-                        console.log('🧩 cid: reference replaced for', contentId);
+                        if (output !== afterS3) {{
+                            console.log('🧩 cid references replaced for', contentId);
+                        }} else {{
+                            console.log('🧩 No cid references found for', contentId);
+                        }}
                     }}
                 }});
+
+                // Fallback: if no <img> tags remain in output but we have inline attachments,
+                // append a simple inline images block so the viewer still shows them.
+                try {{
+                    const hasImg = /<img\b[^>]*>/i.test(output);
+                    if (!hasImg) {{
+                        console.warn('🧩 No <img> tags found in processed body. Appending inline images block from attachments.');
+                        const imagesHtml = inlineAttachments
+                            .map(att => {{
+                                const u = urlMap.get(att);
+                                if (!u) return '';
+                                const alt = (att.filename || 'Inline Image').replace(/"/g, '');
+                                return `<div style="margin: 6px 0;"><img src="${{u}}" alt="${{alt}}" style="max-width: 100%; height: auto;" /></div>`;
+                            }})
+                            .join('');
+                        if (imagesHtml) {{
+                            const block = `<div style="margin-top: 12px; padding: 10px; background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 6px;">`
+                                + `<div style="font-weight: 600; margin-bottom: 6px;">Inline Images</div>`
+                                + imagesHtml
+                                + `</div>`;
+                            output = output + block;
+                            console.log('🧩 Appended inline images block with', inlineAttachments.length, 'image(s).');
+                        }} else {{
+                            console.warn('🧩 No presigned URLs available to append inline images block.');
+                        }}
+                    }}
+                }} catch (appendErr) {{
+                    console.warn('🧩 Failed to append inline images block:', appendErr);
+                }}
 
                 return output;
             }} catch (err) {{
@@ -6662,7 +6239,6 @@ Click OK to proceed or Cancel to abort.
         'headers': {'Content-Type': 'text/html'},
         'body': html_content
     }
-
 def save_email_config(body, headers):
     """Save email configuration"""
     try:
@@ -7141,7 +6717,6 @@ def get_groups(headers):
             'headers': headers, 
             'body': json.dumps({'error': str(e)})
         }
-
 def upload_attachment(body, headers):
     """Upload attachment to S3 bucket"""
     try:
@@ -7606,7 +7181,6 @@ def send_campaign(body, headers, event=None):
             queue_url = queue_url_response['QueueUrl']
         except sqs_client.exceptions.QueueDoesNotExist:
             return {'statusCode': 500, 'headers': headers, 'body': json.dumps({'error': f'SQS queue "{queue_name}" does not exist. Please create it first.'})}
-        
         queued_count = 0
         failed_to_queue = 0
         
@@ -7768,6 +7342,41 @@ def send_campaign(body, headers, event=None):
         traceback.print_exc()
         return {'statusCode': 500, 'headers': headers, 'body': json.dumps({'error': str(e)})}
 
+def personalize_content(content, contact):
+    """Replace placeholders with contact data - supports all CISA fields"""
+    if not content:
+        return content
+        
+    # Basic contact info
+    content = content.replace('{{first_name}}', contact.get('first_name', ''))
+    content = content.replace('{{last_name}}', contact.get('last_name', ''))
+    content = content.replace('{{email}}', contact.get('email', ''))
+    content = content.replace('{{title}}', contact.get('title', ''))
+    
+    # Organization info
+    content = content.replace('{{entity_type}}', contact.get('entity_type', ''))
+    content = content.replace('{{state}}', contact.get('state', ''))
+    content = content.replace('{{agency_name}}', contact.get('agency_name', ''))
+    content = content.replace('{{sector}}', contact.get('sector', ''))
+    content = content.replace('{{subsection}}', contact.get('subsection', ''))
+    content = content.replace('{{phone}}', contact.get('phone', ''))
+    
+    # CISA-specific fields
+    content = content.replace('{{ms_isac_member}}', contact.get('ms_isac_member', ''))
+    content = content.replace('{{soc_call}}', contact.get('soc_call', ''))
+    content = content.replace('{{fusion_center}}', contact.get('fusion_center', ''))
+    content = content.replace('{{k12}}', contact.get('k12', ''))
+    content = content.replace('{{water_wastewater}}', contact.get('water_wastewater', ''))
+    content = content.replace('{{weekly_rollup}}', contact.get('weekly_rollup', ''))
+    content = content.replace('{{alternate_email}}', contact.get('alternate_email', ''))
+    content = content.replace('{{region}}', contact.get('region', ''))
+    content = content.replace('{{group}}', contact.get('group', ''))
+    
+    # Legacy support
+    content = content.replace('{{company}}', contact.get('agency_name', ''))
+    
+    return content
+
 def send_ses_email(config, contact, subject, body):
     """Send email via AWS SES"""
     try:
@@ -7836,581 +7445,3 @@ def send_smtp_email(config, contact, subject, body):
         return False
 
 
-def save_preview(body, headers):
-    """Save email preview to S3 and DynamoDB for later retrieval"""
-    import uuid
-    import datetime
-    
-    try:
-        print("📧 Saving email preview...")
-        
-        # Generate unique preview ID
-        preview_id = str(uuid.uuid4())
-        timestamp = int(time.time())  # Seconds since epoch (integer)
-        
-        # Extract preview data from request
-        subject = body.get('subject', 'No Subject')
-        email_body = body.get('body', '')
-        campaign_name = body.get('campaign_name', 'Untitled Preview')
-        attachments = body.get('attachments', [])
-        from_email = body.get('from_email', 'noreply@example.com')
-        to_recipients = body.get('to', [])
-        cc_recipients = body.get('cc', [])
-        bcc_recipients = body.get('bcc', [])
-        
-        print(f"   Preview ID: {preview_id}")
-        print(f"   Subject: {subject}")
-        print(f"   From: {from_email}")
-        print(f"   To: {len(to_recipients)} recipients - {to_recipients}")
-        print(f"   CC: {len(cc_recipients)} recipients - {cc_recipients}")
-        print(f"   BCC: {len(bcc_recipients)} recipients - {bcc_recipients}")
-        print(f"   Body length: {len(email_body)} characters")
-        print(f"   Body sample (first 300 chars): {email_body[:300]}...")
-        print(f"   Attachments: {len(attachments)}")
-        
-        # Check for img tags in the received HTML body
-        import re
-        img_tags = re.findall(r'<img[^>]+>', email_body, re.IGNORECASE)
-        if img_tags:
-            print(f"   🖼️ Found {len(img_tags)} <img> tag(s) in received HTML:")
-            for i, tag in enumerate(img_tags):
-                print(f"      {i+1}. {tag[:150]}...")
-        else:
-            print(f"   ⚠️ No <img> tags found in received HTML body!")
-        
-        # Show attachment details
-        if attachments:
-            print(f"   📎 Attachment details:")
-            for i, att in enumerate(attachments):
-                print(f"      {i+1}. {att.get('filename')} - s3_key: {att.get('s3_key')}, inline: {att.get('inline')}")
-        
-        # Clean up the email body HTML for better preview display
-        import re
-        preview_html = email_body
-        
-        # IMPORTANT: Preserve blank lines by keeping <p><br></p> tags
-        # These represent intentional blank lines from the user
-        # Convert them to <p>&nbsp;</p> for better email client compatibility
-        preview_html = re.sub(r'<p>\s*<br\s*/?>\s*</p>', '<p>&nbsp;</p>', preview_html)
-        
-        # Only remove truly empty paragraphs (no content at all)
-        preview_html = re.sub(r'<p>\s*</p>', '', preview_html)
-        
-        # Convert multiple consecutive <br> tags to paragraphs
-        preview_html = re.sub(r'(<br\s*/?>\s*){2,}', '</p><p>&nbsp;</p><p>', preview_html)
-        
-        print(f"   📝 Cleaned HTML for preview (preserved blank lines as <p>&nbsp;</p>)")
-        
-        # Replace S3 keys with actual image URLs for preview display
-        # This converts "campaign-attachments/..." to full S3 URLs
-        print(f"   🖼️ Processing {len(attachments)} attachment(s) for image URL replacement...")
-        
-        for attachment in attachments:
-            if attachment.get('inline'):
-                s3_key = attachment.get('s3_key')
-                if s3_key:
-                    print(f"   📸 Processing inline image: {s3_key}")
-                    # Generate presigned URL for image (valid for 1 hour)
-                    try:
-                        image_url = s3_client.generate_presigned_url(
-                            'get_object',
-                            Params={'Bucket': ATTACHMENTS_BUCKET, 'Key': s3_key},
-                            ExpiresIn=3600  # 1 hour
-                        )
-                        print(f"      Generated presigned URL (first 100 chars): {image_url[:100]}...")
-                        
-                        # Try multiple replacement patterns
-                        replaced = False
-                        
-                        # Pattern 1: src="s3_key"
-                        if f'src="{s3_key}"' in preview_html:
-                            preview_html = preview_html.replace(f'src="{s3_key}"', f'src="{image_url}"')
-                            replaced = True
-                            print(f"      ✅ Replaced S3 key using pattern 1 (double quotes)")
-                        
-                        # Pattern 2: src='s3_key'
-                        elif f"src='{s3_key}'" in preview_html:
-                            preview_html = preview_html.replace(f"src='{s3_key}'", f'src="{image_url}"')
-                            replaced = True
-                            print(f"      ✅ Replaced S3 key using pattern 2 (single quotes)")
-                        
-                        # Pattern 3: Just the s3_key anywhere
-                        elif s3_key in preview_html:
-                            preview_html = preview_html.replace(s3_key, image_url)
-                            replaced = True
-                            print(f"      ✅ Replaced S3 key using pattern 3 (direct replacement)")
-                        
-                        if not replaced:
-                            print(f"      ❌ ERROR: S3 key not found in HTML: {s3_key}")
-                            print(f"      HTML sample: {preview_html[:300]}...")
-                            # Try to find any img tags in the HTML
-                            import re
-                            img_tags = re.findall(r'<img[^>]+>', preview_html)
-                            if img_tags:
-                                print(f"      Found {len(img_tags)} img tag(s):")
-                                for i, tag in enumerate(img_tags[:3]):
-                                    print(f"         {i+1}. {tag[:150]}...")
-                            else:
-                                print(f"      ❌ No <img> tags found in HTML!")
-                            
-                    except Exception as url_error:
-                        print(f"      ❌ Failed to generate presigned URL for {s3_key}: {url_error}")
-                        traceback.print_exc()
-        
-        # Create complete HTML document for preview
-        complete_html = f"""<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Email Preview: {subject}</title>
-    
-    <!-- Google Fonts for Outlook-optimized preview -->
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&family=Open+Sans:wght@300;400;600;700&family=Lato:wght@300;400;700&family=Montserrat:wght@300;400;500;600;700&family=Poppins:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600;700&family=Source+Sans+Pro:wght@300;400;600;700&family=Nunito:wght@300;400;600;700&family=Raleway:wght@300;400;500;600;700&family=Ubuntu:wght@300;400;500;700&family=Playfair+Display:wght@400;500;600;700&family=Merriweather:wght@300;400;700&family=Oswald:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    
-    <style>
-        /* Outlook-Optimized Font Definitions for Preview */
-        .ql-font-arial {{ font-family: Arial, sans-serif !important; }}
-        .ql-font-calibri {{ font-family: Calibri, Arial, sans-serif !important; }}
-        .ql-font-cambria {{ font-family: Cambria, Georgia, serif !important; }}
-        .ql-font-georgia {{ font-family: Georgia, serif !important; }}
-        .ql-font-times-new-roman {{ font-family: "Times New Roman", serif !important; }}
-        .ql-font-courier-new {{ font-family: "Courier New", monospace !important; }}
-        .ql-font-verdana {{ font-family: Verdana, Arial, sans-serif !important; }}
-        .ql-font-tahoma {{ font-family: Tahoma, Arial, sans-serif !important; }}
-        .ql-font-trebuchet-ms {{ font-family: "Trebuchet MS", Arial, sans-serif !important; }}
-        .ql-font-helvetica {{ font-family: Helvetica, Arial, sans-serif !important; }}
-        .ql-font-segoe-ui {{ font-family: "Segoe UI", Tahoma, Arial, sans-serif !important; }}
-        .ql-font-open-sans {{ font-family: "Open Sans", Arial, sans-serif !important; }}
-        .ql-font-roboto {{ font-family: "Roboto", Arial, sans-serif !important; }}
-        
-        body {{
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-            line-height: 1.6;
-            color: #333;
-            max-width: 800px;
-            margin: 0 auto;
-            padding: 20px;
-            background: #f5f5f5;
-        }}
-        .preview-container {{
-            background: white;
-            border-radius: 8px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-            overflow: hidden;
-        }}
-        .preview-header {{
-            background: #6366f1;
-            color: white;
-            padding: 20px;
-            border-bottom: 3px solid #4f46e5;
-        }}
-        .preview-header h1 {{
-            margin: 0 0 10px 0;
-            font-size: 24px;
-        }}
-        .preview-meta {{
-            font-size: 14px;
-            opacity: 0.9;
-            line-height: 1.8;
-        }}
-        .preview-meta .label {{
-            display: inline-block;
-            min-width: 50px;
-            font-weight: 600;
-        }}
-        .preview-body {{
-            padding: 30px;
-            background: white;
-        }}
-        .preview-body p {{
-            margin: 0 0 4px 0;
-            line-height: 1.2;  /* Default spacing, overridden by .ql-size-* classes */
-        }}
-        .preview-body p + p {{
-            margin-top: 0;
-        }}
-        .preview-body img {{
-            max-width: 100%;
-            height: auto;
-            display: block;
-            margin: 10px 0;
-        }}
-        /* Let size classes control line-height for proportional spacing */
-        .preview-body .ql-size-small {{
-            line-height: 0.9;
-        }}
-        .preview-body .ql-size-large {{
-            line-height: 1.2;
-        }}
-        .preview-body .ql-size-huge {{
-            line-height: 1.3;
-        }}
-        .preview-footer {{
-            padding: 15px 20px;
-            background: #f9fafb;
-            border-top: 1px solid #e5e7eb;
-            text-align: center;
-            font-size: 12px;
-            color: #6b7280;
-        }}
-        .attachments-list {{
-            margin-top: 20px;
-            padding: 15px;
-            background: #f9fafb;
-            border-radius: 6px;
-            border-left: 4px solid #3b82f6;
-        }}
-        .attachments-list h3 {{
-            margin: 0 0 10px 0;
-            font-size: 14px;
-            color: #4b5563;
-        }}
-        .attachment-item {{
-            padding: 8px 0;
-            font-size: 13px;
-            color: #6b7280;
-        }}
-    </style>
-</head>
-<body>
-    <div class="preview-container">
-        <div class="preview-header">
-            <h1>📧 Email Preview</h1>
-            <div class="preview-meta">
-                <div><span class="label">From:</span> {from_email}</div>
-                {f'<div><span class="label">To:</span> {", ".join(to_recipients) if to_recipients else "(No recipients)"}</div>' if to_recipients or True else ''}
-                {f'<div><span class="label">CC:</span> {", ".join(cc_recipients)}</div>' if cc_recipients else ''}
-                {f'<div><span class="label">BCC:</span> {", ".join(bcc_recipients)}</div>' if bcc_recipients else ''}
-                <div><span class="label">Subject:</span> {subject}</div>
-            </div>
-        </div>
-        <div class="preview-body">
-            {preview_html}
-        </div>
-        {f'''<div class="attachments-list">
-            <h3>📎 Attachments ({len([att for att in attachments if not att.get("inline")])})</h3>
-            {''.join([f'<div class="attachment-item">• {att.get("filename")} ({att.get("type", "unknown")})</div>' for att in attachments if not att.get("inline")])}
-        </div>''' if any(not att.get("inline") for att in attachments) else ''}
-        <div class="preview-footer">
-            This is a preview of what recipients will see.
-        </div>
-    </div>
-</body>
-</html>"""
-        
-        # Save preview HTML to S3
-        s3_key = f"email-previews/{preview_id}.html"
-        s3_client.put_object(
-            Bucket=ATTACHMENTS_BUCKET,
-            Key=s3_key,
-            Body=complete_html.encode('utf-8'),
-            ContentType='text/html',
-            Metadata={
-                'preview-id': preview_id,
-                'subject': subject[:100],  # Truncate to fit metadata limits
-                'timestamp': str(timestamp)  # S3 metadata must be strings
-            }
-        )
-        print(f"   ✅ Saved preview HTML to S3: {s3_key}")
-        
-        # Save preview metadata to DynamoDB
-        preview_record = {
-            'preview_id': preview_id,
-            'campaign_name': campaign_name,
-            'subject': subject,
-            'body_length': len(email_body),
-            'attachment_count': len(attachments),
-            's3_key': s3_key,
-            'created_at': timestamp,
-            'expires_at': timestamp + (24 * 60 * 60)  # Expire after 24 hours (seconds since epoch)
-        }
-        
-        # Store in campaigns table with type='preview'
-        campaigns_table.put_item(Item={
-            **preview_record,
-            'campaign_id': preview_id,  # Use preview_id as campaign_id for compatibility
-            'status': 'preview',
-            'type': 'preview'
-        })
-        print(f"   ✅ Saved preview metadata to DynamoDB")
-        
-        response_headers = {
-            **headers,
-            'Content-Type': 'application/json'
-        }
-        return {
-            'statusCode': 200,
-            'headers': response_headers,
-            'body': json.dumps({
-                'success': True,
-                'preview_id': preview_id,
-                'message': 'Preview saved successfully',
-                's3_key': s3_key,
-                'timestamp': timestamp
-            })
-        }
-        
-    except Exception as e:
-        print(f"Preview save error: {str(e)}")
-        traceback.print_exc()
-        error_headers = {
-            **headers,
-            'Content-Type': 'application/json'
-        }
-        return {
-            'statusCode': 500,
-            'headers': error_headers,
-            'body': json.dumps({'error': str(e)})
-        }
-
-
-def get_attachment_url(event, headers):
-    """Generate a short-lived presigned URL to download an attachment from S3"""
-    try:
-        print("🔗 Generating presigned URL for attachment download")
-        # Support both HTTP API (queryStringParameters) and REST API (multiValueQueryStringParameters)
-        qs = event.get('queryStringParameters') or {}
-        s3_key = (qs.get('s3_key') or '').strip()
-        filename = (qs.get('filename') or '').strip()
-        disposition = (qs.get('disposition') or qs.get('inline') or '').strip().lower()
-        print(f"   → Query params: s3_key='{s3_key}', filename='{filename}', disposition='{disposition}'")
-
-        if not s3_key:
-            return {
-                'statusCode': 400,
-                'headers': headers,
-                'body': json.dumps({'error': 'Missing required query parameter: s3_key'})
-            }
-
-        # Basic safety: prevent directory traversal (S3 keys are flat but be cautious)
-        if '..' in s3_key:
-            return {
-                'statusCode': 400,
-                'headers': headers,
-                'body': json.dumps({'error': 'Invalid s3_key'})
-            }
-
-        # Default filename from key if not provided
-        if not filename:
-            filename = s3_key.split('/')[-1] or 'attachment'
-
-        # Determine desired Content-Disposition
-        inline_requested = disposition in ('1', 'true', 'yes', 'inline')
-        response_content_disposition = (
-            f'inline; filename="{filename}"' if inline_requested else f'attachment; filename="{filename}"'
-        )
-        print(f"   → Content-Disposition selected: '{response_content_disposition}'")
-
-        # Generate presigned URL for GET
-        url = s3_client.generate_presigned_url(
-            'get_object',
-            Params={
-                'Bucket': ATTACHMENTS_BUCKET,
-                'Key': s3_key,
-                'ResponseContentDisposition': response_content_disposition
-            },
-            ExpiresIn=3600  # 1 hour
-        )
-        print(f"   ✅ Presigned URL generated (truncated): {str(url)[:120]}...")
-
-        return {
-            'statusCode': 200,
-            'headers': {**headers, 'Content-Type': 'application/json'},
-            'body': json.dumps({'url': url})
-        }
-    except Exception as e:
-        print(f"ERROR generating presigned URL: {str(e)}")
-        import traceback
-        traceback.print_exc()
-        return {
-            'statusCode': 500,
-            'headers': headers,
-            'body': json.dumps({'error': 'Failed to generate download URL'})
-        }
-
-def get_preview(preview_id, headers):
-    """Retrieve and serve email preview HTML"""
-    try:
-        print(f"📧 Retrieving preview: {preview_id}")
-        
-        # Get preview metadata from DynamoDB
-        response = campaigns_table.get_item(Key={'campaign_id': preview_id})
-        
-        if 'Item' not in response:
-            print(f"   ❌ Preview not found: {preview_id}")
-            return {
-                'statusCode': 404,
-                'headers': {'Content-Type': 'text/html'},
-                'body': '<h1>Preview Not Found</h1><p>This preview may have expired or does not exist.</p>'
-            }
-        
-        preview_item = response['Item']
-        s3_key = preview_item.get('s3_key')
-        
-        print(f"   Preview found: {preview_item.get('subject')}")
-        print(f"   S3 key: {s3_key}")
-        
-        # Retrieve HTML from S3
-        s3_response = s3_client.get_object(Bucket=ATTACHMENTS_BUCKET, Key=s3_key)
-        html_content = s3_response['Body'].read().decode('utf-8')
-        
-        print(f"   ✅ Retrieved preview HTML ({len(html_content)} characters)")
-        
-        return {
-            'statusCode': 200,
-            'headers': {
-                **headers,
-                'Content-Type': 'text/html'
-            },
-            'body': html_content
-        }
-        
-    except Exception as e:
-        print(f"Preview retrieval error: {str(e)}")
-        traceback.print_exc()
-        return {
-            'statusCode': 500,
-            'headers': {'Content-Type': 'text/html'},
-            'body': f'<h1>Error Loading Preview</h1><p>{str(e)}</p>'
-        }
-
-
-def get_campaign_status(campaign_id, headers):
-    """Get campaign status"""
-    try:
-        response = campaigns_table.get_item(Key={'campaign_id': campaign_id})
-        if 'Item' not in response:
-            return {'statusCode': 404, 'headers': headers, 'body': json.dumps({'error': 'Campaign not found'})}
-        
-        # Convert Decimal types recursively
-        campaign = convert_decimals(response['Item'])
-        
-        return {'statusCode': 200, 'headers': headers, 'body': json.dumps(campaign, default=_json_default)}
-    except Exception as e:
-        return {'statusCode': 500, 'headers': headers, 'body': json.dumps({'error': str(e)})}
-
-
-def get_campaigns(headers):
-    """Get all campaigns from DynamoDB"""
-    try:
-        print("Fetching all campaigns from DynamoDB...")
-        
-        campaigns = []
-        last_evaluated_key = None
-        
-        # Scan the campaigns table with pagination
-        while True:
-            if last_evaluated_key:
-                response = campaigns_table.scan(ExclusiveStartKey=last_evaluated_key)
-            else:
-                response = campaigns_table.scan()
-            
-            items = response.get('Items', [])
-            
-            # Convert Decimal types to int/float recursively (handles nested structures)
-            items = convert_decimals(items)
-            
-            campaigns.extend(items)
-            
-            # Check if there are more items to fetch
-            last_evaluated_key = response.get('LastEvaluatedKey')
-            if not last_evaluated_key:
-                break
-        
-        print(f"Retrieved {len(campaigns)} campaigns from DynamoDB")
-        
-        response_headers = {
-            **headers,
-            'Content-Type': 'application/json'
-        }
-        
-        return {
-            'statusCode': 200,
-            'headers': response_headers,
-            'body': json.dumps({
-                'success': True,
-                'campaigns': campaigns,
-                'count': len(campaigns)
-            }, default=_json_default)
-        }
-        
-    except Exception as e:
-        print(f"Error fetching campaigns: {str(e)}")
-        import traceback
-        traceback.print_exc()
-        
-        error_headers = {
-            **headers,
-            'Content-Type': 'application/json'
-        }
-        
-        return {
-            'statusCode': 500,
-            'headers': error_headers,
-            'body': json.dumps({'error': str(e)}, default=_json_default)
-        }
-
-
-def get_aws_credentials_from_secrets_manager(secret_name):
-    """Retrieve AWS credentials from Secrets Manager"""
-    try:
-        print(f"Retrieving credentials from secret: {secret_name}")
-        response = secrets_client.get_secret_value(SecretId=secret_name)
-        
-        # Parse the secret (assuming it's stored as JSON)
-        secret_data = json.loads(response['SecretString'])
-        
-        credentials = {
-            'aws_access_key_id': secret_data.get('aws_access_key_id'),
-            'aws_secret_access_key': secret_data.get('aws_secret_access_key')
-        }
-        
-        if not credentials['aws_access_key_id'] or not credentials['aws_secret_access_key']:
-            raise ValueError("Missing aws_access_key_id or aws_secret_access_key in secret")
-        
-        print("Successfully retrieved AWS credentials from Secrets Manager")
-        return credentials
-        
-    except Exception as e:
-        print(f"Error retrieving credentials from Secrets Manager: {str(e)}")
-        raise
-
-def personalize_content(content, contact):
-    """Replace placeholders with contact data - supports all CISA fields"""
-    if not content:
-        return content
-        
-    # Basic contact info
-    content = content.replace('{{first_name}}', contact.get('first_name', ''))
-    content = content.replace('{{last_name}}', contact.get('last_name', ''))
-    content = content.replace('{{email}}', contact.get('email', ''))
-    content = content.replace('{{title}}', contact.get('title', ''))
-    
-    # Organization info
-    content = content.replace('{{entity_type}}', contact.get('entity_type', ''))
-    content = content.replace('{{state}}', contact.get('state', ''))
-    content = content.replace('{{agency_name}}', contact.get('agency_name', ''))
-    content = content.replace('{{sector}}', contact.get('sector', ''))
-    content = content.replace('{{subsection}}', contact.get('subsection', ''))
-    content = content.replace('{{phone}}', contact.get('phone', ''))
-    
-    # CISA-specific fields
-    content = content.replace('{{ms_isac_member}}', contact.get('ms_isac_member', ''))
-    content = content.replace('{{soc_call}}', contact.get('soc_call', ''))
-    content = content.replace('{{fusion_center}}', contact.get('fusion_center', ''))
-    content = content.replace('{{k12}}', contact.get('k12', ''))
-    content = content.replace('{{water_wastewater}}', contact.get('water_wastewater', ''))
-    content = content.replace('{{weekly_rollup}}', contact.get('weekly_rollup', ''))
-    content = content.replace('{{alternate_email}}', contact.get('alternate_email', ''))
-    content = content.replace('{{region}}', contact.get('region', ''))
-    content = content.replace('{{group}}', contact.get('group', ''))
-    
-    # Legacy support
-    content = content.replace('{{company}}', contact.get('agency_name', ''))
-    
-    return content
-    return content
-    return content
