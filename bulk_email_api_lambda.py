@@ -6421,8 +6421,11 @@ Click OK to proceed or Cancel to abort.
             
             if (emailBody) {{
                 // Resolve inline images to presigned URLs before rendering
+                console.log('🧩 Starting inline image resolution for campaign:', campaign && campaign.campaign_id);
                 const processedBody = await resolveInlineImages(emailBody, campaign.attachments || []);
+                console.log('🧩 Inline image resolution complete. Processed body length:', (processedBody || '').length);
                 document.getElementById('detailBody').innerHTML = quillCSS + processedBody;
+                console.log('🧩 detailBody updated in Campaign Details modal');
             }} else {{
                 document.getElementById('detailBody').innerHTML = '<span style="color: #9ca3af; font-style: italic;">No content</span>';
             }}
@@ -6459,22 +6462,34 @@ Click OK to proceed or Cancel to abort.
 
         async function resolveInlineImages(html, attachments) {{
             try {{
+                console.log('🧩 resolveInlineImages() called. Attachments total:', (attachments || []).length);
                 if (!attachments || attachments.length === 0) return html;
                 let output = html;
                 // Fetch presigned URLs in parallel for inline attachments
                 const inlineAttachments = attachments.filter(a => a && a.inline && a.s3_key);
+                console.log('🧩 Inline attachments detected:', inlineAttachments.length);
                 if (inlineAttachments.length === 0) return output;
 
                 const urlMap = new Map();
                 await Promise.all(inlineAttachments.map(async (att) => {{
                     try {{
+                        console.log('🧩 Requesting presigned URL for inline image:', att.s3_key, 'filename:', att.filename);
                         const url = new URL(`${{API_URL}}/attachment-url`);
                         url.searchParams.set('s3_key', att.s3_key);
                         if (att.filename) url.searchParams.set('filename', att.filename);
-                        const resp = await fetch(url.toString());
+                        // Request inline content-disposition so browsers render in <img>
+                        url.searchParams.set('disposition', 'inline');
+                        const fullUrl = url.toString();
+                        const resp = await fetch(fullUrl);
+                        console.log('🧩 Presigned URL request status:', resp.status, 'for', att.s3_key);
                         if (!resp.ok) throw new Error(`URL gen failed (${{resp.status}})`);
                         const data = await resp.json();
-                        if (data.url) urlMap.set(att, data.url);
+                        if (data.url) {{
+                            urlMap.set(att, data.url);
+                            console.log('🧩 Received presigned URL (truncated):', String(data.url).slice(0, 120) + '...');
+                        }} else {{
+                            console.warn('🧩 No URL returned for inline image', att && att.s3_key);
+                        }}
                     }} catch (e) {{
                         console.warn('Inline image URL generation failed for', att && att.s3_key, e);
                     }}
@@ -6486,6 +6501,7 @@ Click OK to proceed or Cancel to abort.
                     if (!presigned) return;
                     const s3Key = att.s3_key;
                     const contentId = att.content_id || att.cid || att.contentId;
+                    console.log('🧩 Replacing references for inline image. s3_key=', s3Key, 'cid=', contentId);
                     // Pattern 1: src="s3_key"
                     output = output.replace(new RegExp(`src=\\"${{s3Key.replace(/[.*+?^$()|[\\]\\\\]/g, '\\$&')}}\\"`, 'g'), `src=\"${{presigned}}\"`);
                     // Pattern 2: src='s3_key'
@@ -6497,6 +6513,7 @@ Click OK to proceed or Cancel to abort.
                         const cidEsc = String(contentId).replace(/[.*+?^$()|[\\]\\\\]/g, '\\$&');
                         output = output.replace(new RegExp(`src=\\"cid:${{cidEsc}}\\"`, 'g'), `src=\"${{presigned}}\"`);
                         output = output.replace(new RegExp(`src=\'cid:${{cidEsc}}\'`, 'g'), `src=\"${{presigned}}\"`);
+                        console.log('🧩 cid: reference replaced for', contentId);
                     }}
                 }});
 
@@ -8158,6 +8175,8 @@ def get_attachment_url(event, headers):
         qs = event.get('queryStringParameters') or {}
         s3_key = (qs.get('s3_key') or '').strip()
         filename = (qs.get('filename') or '').strip()
+        disposition = (qs.get('disposition') or qs.get('inline') or '').strip().lower()
+        print(f"   → Query params: s3_key='{s3_key}', filename='{filename}', disposition='{disposition}'")
 
         if not s3_key:
             return {
@@ -8178,16 +8197,24 @@ def get_attachment_url(event, headers):
         if not filename:
             filename = s3_key.split('/')[-1] or 'attachment'
 
+        # Determine desired Content-Disposition
+        inline_requested = disposition in ('1', 'true', 'yes', 'inline')
+        response_content_disposition = (
+            f'inline; filename="{filename}"' if inline_requested else f'attachment; filename="{filename}"'
+        )
+        print(f"   → Content-Disposition selected: '{response_content_disposition}'")
+
         # Generate presigned URL for GET
         url = s3_client.generate_presigned_url(
             'get_object',
             Params={
                 'Bucket': ATTACHMENTS_BUCKET,
                 'Key': s3_key,
-                'ResponseContentDisposition': f'attachment; filename="{filename}"'
+                'ResponseContentDisposition': response_content_disposition
             },
             ExpiresIn=3600  # 1 hour
         )
+        print(f"   ✅ Presigned URL generated (truncated): {str(url)[:120]}...")
 
         return {
             'statusCode': 200,
