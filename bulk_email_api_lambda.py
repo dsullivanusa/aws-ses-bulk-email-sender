@@ -3439,8 +3439,8 @@ def serve_web_ui(event):
             document.getElementById('csvUploadProgress').classList.remove('hidden');
             
             try {{
-            const text = await file.text();
-            const lines = text.split('\\n').filter(line => line.trim());
+                const text = await file.text();
+                const lines = text.split('\\n').filter(line => line.trim());
                 
                 console.log('Total lines in CSV:', lines.length);
             
