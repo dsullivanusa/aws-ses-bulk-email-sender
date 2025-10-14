@@ -123,9 +123,12 @@ def lambda_handler(event, context):
             preview_id = event['pathParameters']['preview_id']
             print(f"   → Calling get_preview({preview_id})")
             return get_preview(preview_id, headers)
+        elif path == '/campaigns' and method == 'GET':
+            print("   → Calling get_campaigns()")
+            return get_campaigns(headers)
         else:
             print(f"   → Route not found: {method} {path}")
-            print("   Available routes: /config, /contacts, /campaign, /upload-attachment, etc.")
+            print("   Available routes: /config, /contacts, /campaign, /upload-attachment, /campaigns, etc.")
             return {'statusCode': 404, 'headers': headers, 'body': json.dumps({'error': f'Route not found: {method} {path}'})}
             
     except Exception as e:
@@ -1296,6 +1299,7 @@ def serve_web_ui(event):
             <div class="tab active" onclick="showTab('config', this)">⚙️ Email Config</div>
             <div class="tab" onclick="showTab('contacts', this)">👥 Contacts</div>
             <div class="tab" onclick="showTab('campaign', this)">📧 Send Campaign</div>
+            <div class="tab" onclick="showTab('history', this)">📜 Campaign History</div>
         </div>
         
         <div id="config" class="tab-content active">
@@ -1737,6 +1741,44 @@ def serve_web_ui(event):
             
             <div id="campaignResult" class="result hidden"></div>
         </div>
+        
+        <div id="history" class="tab-content">
+            <h2>📜 Campaign History</h2>
+            <p style="color: #6b7280; margin-bottom: 20px;">View and manage past email campaigns</p>
+            
+            <div style="display: flex; gap: 10px; margin-bottom: 20px;">
+                <button onclick="loadCampaignHistory()" class="btn-primary">🔄 Refresh History</button>
+                <button onclick="exportAllCampaigns()" class="btn-success">📥 Export All to CSV</button>
+            </div>
+            
+            <div id="historyLoading" style="display: none; text-align: center; padding: 40px;">
+                <div style="font-size: 24px;">⏳</div>
+                <p>Loading campaign history...</p>
+            </div>
+            
+            <div id="historyContent" style="overflow-x: auto;">
+                <table id="historyTable" style="width: 100%; border-collapse: collapse;">
+                    <thead>
+                        <tr>
+                            <th style="padding: 12px; text-align: left; background: #f3f4f6; border-bottom: 2px solid #e5e7eb;">Campaign Name</th>
+                            <th style="padding: 12px; text-align: left; background: #f3f4f6; border-bottom: 2px solid #e5e7eb;">Subject</th>
+                            <th style="padding: 12px; text-align: left; background: #f3f4f6; border-bottom: 2px solid #e5e7eb;">Date</th>
+                            <th style="padding: 12px; text-align: left; background: #f3f4f6; border-bottom: 2px solid #e5e7eb;">Recipients</th>
+                            <th style="padding: 12px; text-align: left; background: #f3f4f6; border-bottom: 2px solid #e5e7eb;">Status</th>
+                            <th style="padding: 12px; text-align: left; background: #f3f4f6; border-bottom: 2px solid #e5e7eb;">Launched By</th>
+                            <th style="padding: 12px; text-align: left; background: #f3f4f6; border-bottom: 2px solid #e5e7eb;">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="historyBody">
+                        <tr>
+                            <td colspan="7" style="padding: 40px; text-align: center; color: #9ca3af;">
+                                Click "Refresh History" to load campaigns
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
     </div>
     
     <!-- Target Contacts Modal -->
@@ -1783,6 +1825,65 @@ def serve_web_ui(event):
                     <button id="modalNextBtn" onclick="loadTargetContactsPage('next')" style="padding: 8px 16px; background: #3b82f6; color: white; border: none; border-radius: 6px; font-weight: 600; cursor: pointer;">
                         Next <i class="fas fa-chevron-right"></i>
                     </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Campaign Details Modal -->
+    <div id="campaignDetailsModal" class="modal" style="display: none;">
+        <div class="modal-content" style="max-width: 1200px; width: 90%;">
+            <div class="modal-header">
+                <h2>📧 Campaign Details</h2>
+                <button class="modal-close" onclick="closeCampaignDetailsModal()">×</button>
+            </div>
+            <div class="modal-body">
+                <div id="campaignDetailsContent">
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px;">
+                        <div>
+                            <strong>Campaign Name:</strong>
+                            <div id="detailCampaignName" style="padding: 8px; background: #f3f4f6; border-radius: 4px; margin-top: 4px;"></div>
+                        </div>
+                        <div>
+                            <strong>Subject:</strong>
+                            <div id="detailSubject" style="padding: 8px; background: #f3f4f6; border-radius: 4px; margin-top: 4px;"></div>
+                        </div>
+                        <div>
+                            <strong>Date Sent:</strong>
+                            <div id="detailDate" style="padding: 8px; background: #f3f4f6; border-radius: 4px; margin-top: 4px;"></div>
+                        </div>
+                        <div>
+                            <strong>Launched By:</strong>
+                            <div id="detailLaunchedBy" style="padding: 8px; background: #f3f4f6; border-radius: 4px; margin-top: 4px;"></div>
+                        </div>
+                    </div>
+                    
+                    <div style="margin-bottom: 20px;">
+                        <strong>To Recipients:</strong>
+                        <div id="detailToRecipients" style="padding: 8px; background: #f0f9ff; border-radius: 4px; margin-top: 4px; min-height: 30px;"></div>
+                    </div>
+                    
+                    <div style="margin-bottom: 20px;">
+                        <strong>CC Recipients:</strong>
+                        <div id="detailCcRecipients" style="padding: 8px; background: #f0fdf4; border-radius: 4px; margin-top: 4px; min-height: 30px;"></div>
+                    </div>
+                    
+                    <div style="margin-bottom: 20px;">
+                        <strong>BCC Recipients:</strong>
+                        <div id="detailBccRecipients" style="padding: 8px; background: #fef3c7; border-radius: 4px; margin-top: 4px; min-height: 30px;"></div>
+                    </div>
+                    
+                    <div id="detailAttachments" style="margin-bottom: 20px;"></div>
+                    
+                    <div style="margin-bottom: 20px;">
+                        <strong>Email Body:</strong>
+                        <div id="detailBody" style="padding: 15px; background: white; border: 1px solid #e5e7eb; border-radius: 4px; margin-top: 4px; max-height: 400px; overflow-y: auto;"></div>
+                    </div>
+                    
+                    <div style="display: flex; gap: 10px; margin-top: 20px;">
+                        <button onclick="exportCampaignTargets()" class="btn-success">📥 Export Targets to CSV</button>
+                        <button onclick="closeCampaignDetailsModal()" class="btn-secondary">Close</button>
+                    </div>
                 </div>
             </div>
         </div>
@@ -2102,6 +2203,12 @@ def serve_web_ui(event):
                 // Auto-load contacts when first switching to Contacts tab
                 console.log('Auto-loading contacts...');
                 loadContacts();
+            }}
+            
+            if (tabName === 'history' && allCampaigns.length === 0) {{
+                // Auto-load campaign history when first switching to History tab
+                console.log('Auto-loading campaign history...');
+                loadCampaignHistory();
             }}
         }}
         
@@ -6092,6 +6199,288 @@ Click OK to proceed or Cancel to abort.
             }}, 5000);
         }}
         
+        // ============================================
+        // CAMPAIGN HISTORY FUNCTIONS
+        // ============================================
+        
+        let currentCampaignId = null;
+        let allCampaigns = [];
+        
+        async function loadCampaignHistory() {{
+            const loading = document.getElementById('historyLoading');
+            const historyBody = document.getElementById('historyBody');
+            
+            loading.style.display = 'block';
+            historyBody.innerHTML = '<tr><td colspan="7" style="padding: 20px; text-align: center;">Loading...</td></tr>';
+            
+            try {{
+                // Fetch campaigns from DynamoDB via backend
+                const response = await fetch(`${{API_URL}}/campaigns`);
+                
+                if (!response.ok) {{
+                    throw new Error(`Failed to load campaigns: ${{response.statusText}}`);
+                }}
+                
+                const data = await response.json();
+                allCampaigns = data.campaigns || [];
+                
+                // Filter out preview campaigns and sort by date (newest first)
+                allCampaigns = allCampaigns
+                    .filter(c => c.type !== 'preview' && c.status !== 'preview')
+                    .sort((a, b) => {{
+                        const dateA = new Date(a.created_at || 0);
+                        const dateB = new Date(b.created_at || 0);
+                        return dateB - dateA;
+                    }});
+                
+                if (allCampaigns.length === 0) {{
+                    historyBody.innerHTML = '<tr><td colspan="7" style="padding: 40px; text-align: center; color: #9ca3af;">No campaigns found</td></tr>';
+                    return;
+                }}
+                
+                // Display campaigns
+                historyBody.innerHTML = '';
+                allCampaigns.forEach(campaign => {{
+                    const row = document.createElement('tr');
+                    row.style.borderBottom = '1px solid #e5e7eb';
+                    row.style.cursor = 'pointer';
+                    row.style.transition = 'background 0.2s';
+                    row.onmouseenter = () => row.style.background = '#f9fafb';
+                    row.onmouseleave = () => row.style.background = 'white';
+                    
+                    const date = new Date(campaign.created_at || campaign.sent_at);
+                    const formattedDate = date.toLocaleString();
+                    const recipients = campaign.total_contacts || 0;
+                    const status = campaign.status || 'unknown';
+                    const launchedBy = campaign.launched_by || 'Unknown';
+                    
+                    row.innerHTML = `
+                        <td style="padding: 12px;">${{campaign.campaign_name || 'Unnamed Campaign'}}</td>
+                        <td style="padding: 12px;">${{campaign.subject || 'No Subject'}}</td>
+                        <td style="padding: 12px;">${{formattedDate}}</td>
+                        <td style="padding: 12px;">${{recipients}}</td>
+                        <td style="padding: 12px;">
+                            <span style="padding: 4px 12px; border-radius: 12px; font-size: 12px; font-weight: 600; 
+                                background: ${{status === 'completed' ? '#d1fae5' : status === 'processing' ? '#fef3c7' : '#e5e7eb'}};
+                                color: ${{status === 'completed' ? '#059669' : status === 'processing' ? '#d97706' : '#6b7280'}};">
+                                ${{status.toUpperCase()}}
+                            </span>
+                        </td>
+                        <td style="padding: 12px;">${{launchedBy}}</td>
+                        <td style="padding: 12px;">
+                            <button onclick="viewCampaignDetails('${{campaign.campaign_id}}'); event.stopPropagation();" 
+                                style="padding: 6px 12px; background: #3b82f6; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px;">
+                                👁️ View
+                            </button>
+                        </td>
+                    `;
+                    
+                    historyBody.appendChild(row);
+                }});
+                
+                Toast.success(`Loaded ${{allCampaigns.length}} campaigns`, 2000);
+                
+            }} catch (error) {{
+                console.error('Error loading campaign history:', error);
+                Toast.error(`Failed to load campaigns: ${{error.message}}`);
+                historyBody.innerHTML = `<tr><td colspan="7" style="padding: 40px; text-align: center; color: #ef4444;">Error: ${{error.message}}</td></tr>`;
+            }} finally {{
+                loading.style.display = 'none';
+            }}
+        }}
+        
+        async function viewCampaignDetails(campaignId) {{
+            currentCampaignId = campaignId;
+            
+            const campaign = allCampaigns.find(c => c.campaign_id === campaignId);
+            if (!campaign) {{
+                Toast.error('Campaign not found');
+                return;
+            }}
+            
+            // Populate modal with campaign details
+            document.getElementById('detailCampaignName').textContent = campaign.campaign_name || 'Unnamed Campaign';
+            document.getElementById('detailSubject').textContent = campaign.subject || 'No Subject';
+            document.getElementById('detailDate').textContent = new Date(campaign.created_at || campaign.sent_at).toLocaleString();
+            document.getElementById('detailLaunchedBy').textContent = campaign.launched_by || 'Unknown';
+            
+            // Display To, CC, BCC recipients
+            const toRecipients = campaign.to || [];
+            const ccRecipients = campaign.cc || [];
+            const bccRecipients = campaign.bcc || [];
+            
+            document.getElementById('detailToRecipients').innerHTML = toRecipients.length > 0 
+                ? toRecipients.map(email => `<span style="display: inline-block; padding: 4px 8px; margin: 2px; background: #dbeafe; border-radius: 4px; font-size: 12px;">${{email}}</span>`).join('')
+                : '<span style="color: #9ca3af; font-style: italic;">None</span>';
+            
+            document.getElementById('detailCcRecipients').innerHTML = ccRecipients.length > 0
+                ? ccRecipients.map(email => `<span style="display: inline-block; padding: 4px 8px; margin: 2px; background: #dcfce7; border-radius: 4px; font-size: 12px;">${{email}}</span>`).join('')
+                : '<span style="color: #9ca3af; font-style: italic;">None</span>';
+            
+            document.getElementById('detailBccRecipients').innerHTML = bccRecipients.length > 0
+                ? bccRecipients.map(email => `<span style="display: inline-block; padding: 4px 8px; margin: 2px; background: #fef9c3; border-radius: 4px; font-size: 12px;">${{email}}</span>`).join('')
+                : '<span style="color: #9ca3af; font-style: italic;">None</span>';
+            
+            // Display email body with proper CSS styling
+            const emailBody = campaign.body || '';
+            
+            // Add Quill CSS styles for proper rendering
+            const quillCSS = '<style type="text/css">' +
+                '.ql-align-center { text-align: center; }' +
+                '.ql-align-right { text-align: right; }' +
+                '.ql-align-left { text-align: left; }' +
+                '.ql-align-justify { text-align: justify; }' +
+                '.ql-indent-1 { padding-left: 3em; }' +
+                '.ql-indent-2 { padding-left: 6em; }' +
+                '.ql-indent-3 { padding-left: 9em; }' +
+                '.ql-size-small { font-size: 0.75em; }' +
+                '.ql-size-large { font-size: 1.5em; }' +
+                '.ql-size-huge { font-size: 2.5em; }' +
+                '.ql-font-arial { font-family: Arial, sans-serif; }' +
+                '.ql-font-calibri { font-family: Calibri, Arial, sans-serif; }' +
+                '.ql-font-cambria { font-family: Cambria, Georgia, serif; }' +
+                '.ql-font-times-new-roman { font-family: "Times New Roman", serif; }' +
+                '.ql-font-courier-new { font-family: "Courier New", monospace; }' +
+                '.ql-font-georgia { font-family: Georgia, serif; }' +
+                '.ql-font-verdana { font-family: Verdana, sans-serif; }' +
+                '.ql-font-tahoma { font-family: Tahoma, sans-serif; }' +
+                '.ql-font-trebuchet-ms { font-family: "Trebuchet MS", sans-serif; }' +
+                '.ql-font-helvetica { font-family: Helvetica, Arial, sans-serif; }' +
+                '.ql-font-segoe-ui { font-family: "Segoe UI", Tahoma, Arial, sans-serif; }' +
+                '.ql-font-open-sans { font-family: "Open Sans", Arial, sans-serif; }' +
+                '.ql-font-roboto { font-family: "Roboto", Arial, sans-serif; }' +
+                '</style>';
+            
+            if (emailBody) {{
+                document.getElementById('detailBody').innerHTML = quillCSS + emailBody;
+            }} else {{
+                document.getElementById('detailBody').innerHTML = '<span style="color: #9ca3af; font-style: italic;">No content</span>';
+            }}
+            
+            // Display attachments if present
+            const attachments = campaign.attachments || [];
+            const attachmentsContainer = document.getElementById('detailAttachments');
+            
+            if (attachments.length > 0) {{
+                let attachmentsHTML = '<strong style="display: block; margin-bottom: 8px;">📎 Attachments (' + attachments.length + '):</strong>';
+                attachmentsHTML += '<div style="padding: 15px; background: #f9fafb; border-radius: 8px; border: 1px solid #e5e7eb;">';
+                attachmentsHTML += '<ul style="margin: 0; padding-left: 20px;">';
+                
+                attachments.forEach(att => {{
+                    const isInline = att.inline ? ' (Inline Image)' : '';
+                    const fileSize = att.size ? ' - ' + (att.size / 1024).toFixed(1) + ' KB' : '';
+                    attachmentsHTML += `<li style="margin: 5px 0;">${{att.filename}}${{fileSize}}${{isInline}}</li>`;
+                }});
+                
+                attachmentsHTML += '</ul></div>';
+                attachmentsContainer.innerHTML = attachmentsHTML;
+            }} else {{
+                attachmentsContainer.innerHTML = '';
+            }}
+            
+            // Show modal
+            document.getElementById('campaignDetailsModal').style.display = 'flex';
+        }}
+        
+        function closeCampaignDetailsModal() {{
+            document.getElementById('campaignDetailsModal').style.display = 'none';
+            currentCampaignId = null;
+            
+            // Clear any dynamically added attachments info
+            const bodyContainer = document.getElementById('detailBody');
+            const attachmentsDiv = bodyContainer.previousElementSibling;
+            if (attachmentsDiv && attachmentsDiv.innerHTML.includes('📎 Attachments')) {{
+                attachmentsDiv.remove();
+            }}
+        }}
+        
+        function exportCampaignTargets() {{
+            if (!currentCampaignId) {{
+                Toast.error('No campaign selected');
+                return;
+            }}
+            
+            const campaign = allCampaigns.find(c => c.campaign_id === currentCampaignId);
+            if (!campaign) {{
+                Toast.error('Campaign not found');
+                return;
+            }}
+            
+            // Get all target emails
+            const targetEmails = campaign.target_contacts || [];
+            const toEmails = campaign.to || [];
+            const ccEmails = campaign.cc || [];
+            const bccEmails = campaign.bcc || [];
+            
+            // Create CSV content
+            let csvContent = 'Type,Email\\n';
+            
+            targetEmails.forEach(email => {{
+                csvContent += `Target,${{email}}\\n`;
+            }});
+            
+            toEmails.forEach(email => {{
+                csvContent += `To,${{email}}\\n`;
+            }});
+            
+            ccEmails.forEach(email => {{
+                csvContent += `CC,${{email}}\\n`;
+            }});
+            
+            bccEmails.forEach(email => {{
+                csvContent += `BCC,${{email}}\\n`;
+            }});
+            
+            // Download CSV
+            const blob = new Blob([csvContent], {{ type: 'text/csv' }});
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `campaign_${{campaign.campaign_name.replace(/[^a-z0-9]/gi, '_')}}_targets.csv`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            
+            Toast.success('CSV exported successfully', 2000);
+        }}
+        
+        function exportAllCampaigns() {{
+            if (allCampaigns.length === 0) {{
+                Toast.error('No campaigns to export');
+                return;
+            }}
+            
+            // Create CSV with campaign summary
+            let csvContent = 'Campaign Name,Subject,Date,Recipients,Status,Launched By,To Count,CC Count,BCC Count\\n';
+            
+            allCampaigns.forEach(campaign => {{
+                const date = new Date(campaign.created_at || campaign.sent_at).toLocaleString();
+                const toCount = (campaign.to || []).length;
+                const ccCount = (campaign.cc || []).length;
+                const bccCount = (campaign.bcc || []).length;
+                
+                csvContent += `"${{campaign.campaign_name || ''}}","${{campaign.subject || ''}}","${{date}}",${{campaign.total_contacts || 0}},"${{campaign.status || ''}}","${{campaign.launched_by || ''}}",${{toCount}},${{ccCount}},${{bccCount}}\\n`;
+            }});
+            
+            // Download CSV
+            const blob = new Blob([csvContent], {{ type: 'text/csv' }});
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `all_campaigns_${{new Date().toISOString().split('T')[0]}}.csv`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            
+            Toast.success('All campaigns exported to CSV', 2000);
+        }}
+        
+        // ============================================
+        // INITIALIZATION
+        // ============================================
+        
         window.onload = () => {{
             // Initialize UI and load configuration
             loadConfig();
@@ -7703,6 +8092,71 @@ def get_campaign_status(campaign_id, headers):
         return {'statusCode': 200, 'headers': headers, 'body': json.dumps(campaign)}
     except Exception as e:
         return {'statusCode': 500, 'headers': headers, 'body': json.dumps({'error': str(e)})}
+
+
+def get_campaigns(headers):
+    """Get all campaigns from DynamoDB"""
+    try:
+        print("Fetching all campaigns from DynamoDB...")
+        
+        campaigns = []
+        last_evaluated_key = None
+        
+        # Scan the campaigns table with pagination
+        while True:
+            if last_evaluated_key:
+                response = campaigns_table.scan(ExclusiveStartKey=last_evaluated_key)
+            else:
+                response = campaigns_table.scan()
+            
+            items = response.get('Items', [])
+            
+            # Convert Decimal types to int/float
+            for campaign in items:
+                for key, value in campaign.items():
+                    if isinstance(value, Decimal):
+                        campaign[key] = int(value) if value % 1 == 0 else float(value)
+            
+            campaigns.extend(items)
+            
+            # Check if there are more items to fetch
+            last_evaluated_key = response.get('LastEvaluatedKey')
+            if not last_evaluated_key:
+                break
+        
+        print(f"Retrieved {len(campaigns)} campaigns from DynamoDB")
+        
+        response_headers = {
+            **headers,
+            'Content-Type': 'application/json'
+        }
+        
+        return {
+            'statusCode': 200,
+            'headers': response_headers,
+            'body': json.dumps({
+                'success': True,
+                'campaigns': campaigns,
+                'count': len(campaigns)
+            })
+        }
+        
+    except Exception as e:
+        print(f"Error fetching campaigns: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        
+        error_headers = {
+            **headers,
+            'Content-Type': 'application/json'
+        }
+        
+        return {
+            'statusCode': 500,
+            'headers': error_headers,
+            'body': json.dumps({'error': str(e)})
+        }
+
 
 def get_aws_credentials_from_secrets_manager(secret_name):
     """Retrieve AWS credentials from Secrets Manager"""
