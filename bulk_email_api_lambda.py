@@ -6068,6 +6068,25 @@ Click OK to proceed or Cancel to abort.
                 console.log('🧩 resolveInlineImages() called. Attachments total:', (attachments || []).length);
                 if (!attachments || attachments.length === 0) return html;
                 let output = html;
+                
+                // Log sample of HTML to help debug
+                const htmlSample = html.substring(0, 500);
+                console.log('🧩 HTML sample (first 500 chars):', htmlSample);
+                
+                // Check for existing img tags
+                const imgMatches = html.match(/<img[^>]*>/gi);
+                if (imgMatches) {{
+                    console.log('🧩 Found', imgMatches.length, 'img tag(s) in original HTML');
+                    imgMatches.forEach((tag, i) => {{
+                        const srcMatch = tag.match(/src=["']([^"']+)["']/i);
+                        if (srcMatch) {{
+                            console.log(`   Image ${{i+1}} src:`, srcMatch[1].substring(0, 100));
+                        }}
+                    }});
+                }} else {{
+                    console.warn('⚠️ No img tags found in original HTML body!');
+                }}
+                
                 // Fetch presigned URLs in parallel for inline attachments
                 const inlineAttachments = attachments.filter(a => a && a.inline && a.s3_key);
                 console.log('🧩 Inline attachments detected:', inlineAttachments.length);
@@ -6103,37 +6122,40 @@ Click OK to proceed or Cancel to abort.
                     const presigned = urlMap.get(att);
                     if (!presigned) return;
                     const s3Key = att.s3_key;
+                    const filename = att.filename;
                     const contentId = att.content_id || att.cid || att.contentId;
-                    if (contentId) {{
-                        console.log('🧩 Replacing inline image by s3_key and cid. s3_key=', s3Key, 'cid=', contentId);
-                    }} else {{
-                        console.log('🧩 Replacing inline image by s3_key only. s3_key=', s3Key);
-                    }}
+                    console.log('🧩 Replacing inline image:', {{ s3_key: s3Key, filename: filename, cid: contentId }});
 
                     const before = output;
-                    // Pattern 1: src="s3_key"
+                    
+                    // Pattern 1: src="s3_key" (full path)
                     output = output.replace(new RegExp(`src=\\"${{s3Key.replace(/[.*+?^$()|[\\]\\\\]/g, '\\$&')}}\\"`, 'g'), `src=\"${{presigned}}\"`);
-                    // Pattern 2: src='s3_key'
+                    // Pattern 2: src='s3_key' (full path)
                     output = output.replace(new RegExp(`src=\'${{s3Key.replace(/[.*+?^$()|[\\]\\\\]/g, '\\$&')}}\'`, 'g'), `src=\"${{presigned}}\"`);
-                    // Pattern 3: bare s3_key
-                    output = output.split(s3Key).join(presigned);
-                    const afterS3 = output;
-                    if (afterS3 !== before) {{
-                        console.log('🧩 s3_key references replaced for', s3Key);
-                    }} else {{
-                        console.log('🧩 No s3_key references found for', s3Key);
+                    
+                    // Pattern 3: src="filename" (just the filename, common when using Quill)
+                    if (filename) {{
+                        const filenameEsc = filename.replace(/[.*+?^$()|[\\]\\\\]/g, '\\$&');
+                        output = output.replace(new RegExp(`src=\\"[^"]*${{filenameEsc}}\\"`, 'g'), `src=\"${{presigned}}\"`);
+                        output = output.replace(new RegExp(`src=\'[^\']*${{filenameEsc}}\'`, 'g'), `src=\"${{presigned}}\"`);
                     }}
-
-                    // Pattern 4: cid:content-id
+                    
+                    // Pattern 4: bare s3_key anywhere in src
+                    output = output.split(s3Key).join(presigned);
+                    
+                    // Pattern 5: cid:content-id
                     if (contentId) {{
                         const cidEsc = String(contentId).replace(/[.*+?^$()|[\\]\\\\]/g, '\\$&');
                         output = output.replace(new RegExp(`src=\\"cid:${{cidEsc}}\\"`, 'g'), `src=\"${{presigned}}\"`);
                         output = output.replace(new RegExp(`src=\'cid:${{cidEsc}}\'`, 'g'), `src=\"${{presigned}}\"`);
-                        if (output !== afterS3) {{
-                            console.log('🧩 cid references replaced for', contentId);
-                        }} else {{
-                            console.log('🧩 No cid references found for', contentId);
-                        }}
+                    }}
+                    
+                    const afterReplacement = output;
+                    if (afterReplacement !== before) {{
+                        console.log('✅ Successfully replaced image references for:', filename || s3Key);
+                    }} else {{
+                        console.warn('⚠️ No image references found to replace for:', filename || s3Key);
+                        console.log('🧩 Hint: Check if body contains img tags with src matching:', {{ s3Key, filename, contentId }});
                     }}
                 }});
 
