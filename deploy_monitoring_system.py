@@ -182,7 +182,7 @@ def deploy_campaign_monitor_lambda():
             print("  📤 Creating Lambda function...")
             response = lambda_client.create_function(
                 FunctionName=function_name,
-                Runtime='python3.9',
+                Runtime='python3.13',
                 Role=role_arn,
                 Handler='campaign_monitor.lambda_handler',
                 Code={'ZipFile': zip_content},

@@ -135,7 +135,7 @@ def deploy_email_worker_lambda():
         try:
             lambda_client.create_function(
                 FunctionName=function_name,
-                Runtime='python3.9',
+                Runtime='python3.13',
                 Role=role_arn,
                 Handler='lambda_function.lambda_handler',
                 Code={'ZipFile': zip_data},

@@ -22,7 +22,7 @@ def deploy_api_gateway_lambda():
         try:
             response = lambda_client.create_function(
                 FunctionName=function_name,
-                Runtime='python3.9',
+                Runtime='python3.13',
                 Role='arn:aws-us-gov:iam::YOUR_ACCOUNT_ID:role/lambda-email-sender-role',
                 Handler='lambda_function.lambda_handler',
                 Code={'ZipFile': zip_content},

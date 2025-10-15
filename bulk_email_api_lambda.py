@@ -5778,8 +5778,8 @@ Click OK to proceed or Cancel to abort.
                 }}
                 
                 const data = await response.json();
+                // Backend now filters out preview campaigns, so just sort by date (newest first)
                 allCampaigns = (data.campaigns || [])
-                    .filter(c => c.type !== 'preview' && c.status !== 'preview')
                     .sort((a, b) => {{
                         const dateA = new Date(a.created_at || a.sent_at || 0);
                         const dateB = new Date(b.created_at || b.sent_at || 0);
@@ -5793,7 +5793,7 @@ Click OK to proceed or Cancel to abort.
                     window.__historyPrevTokens.push(nextToken);
                 }}
                 
-                // Filter out preview campaigns and sort by date (newest first)
+                // Sort by date (newest first) - preview campaigns already filtered on backend
                 if (allCampaigns.length === 0) {{
                     historyBody.innerHTML = '<tr><td colspan="7" style="padding: 40px; text-align: center; color: #9ca3af;">No campaigns found</td></tr>';
                     return;
@@ -7546,14 +7546,30 @@ def get_campaigns(headers, event=None):
             except Exception as tok_err:
                 print(f"Invalid next token provided: {tok_err}")
 
-        # If no search, return single page from DynamoDB
+        # If no search, return single page from DynamoDB (excluding preview campaigns)
         if not search_query:
-            response = campaigns_table.scan(**scan_kwargs)
-            items = response.get('Items', [])
-            items = convert_decimals(items)
-            last_evaluated_key = response.get('LastEvaluatedKey')
+            results = []
+            last_evaluated_key = None
+            scanned_pages = 0
+            while True:
+                scanned_pages += 1
+                response = campaigns_table.scan(**scan_kwargs)
+                page_items = convert_decimals(response.get('Items', []))
+                # Exclude preview campaigns
+                for it in page_items:
+                    if it.get('status') == 'preview' or it.get('type') == 'preview':
+                        continue
+                    results.append(it)
+                    if len(results) >= limit:
+                        break
+                last_evaluated_key = response.get('LastEvaluatedKey')
+                if len(results) >= limit or not last_evaluated_key:
+                    break
+                # Keep scanning with new start key
+                scan_kwargs['ExclusiveStartKey'] = last_evaluated_key
+            items = results
             next_token_out = json.dumps(last_evaluated_key) if last_evaluated_key else None
-            print(f"Page retrieved: {len(items)} items, has_more={bool(last_evaluated_key)}")
+            print(f"Page retrieved: {len(items)} non-preview items, has_more={bool(last_evaluated_key)}, scanned_pages={scanned_pages}")
         else:
             # Case-insensitive search across campaign_name and subject
             ql = search_query.lower()
