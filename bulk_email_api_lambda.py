@@ -1814,7 +1814,9 @@ def serve_web_ui(event):
                         <tr>
                             <th style="padding: 16px; text-align: left; background: linear-gradient(135deg, #1e40af, #1e3a8a); color: white; font-weight: 700; font-size: 14px; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 3px solid #3b82f6;">Campaign Name</th>
                             <th style="padding: 16px; text-align: left; background: linear-gradient(135deg, #1e40af, #1e3a8a); color: white; font-weight: 700; font-size: 14px; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 3px solid #3b82f6;">Subject</th>
-                            <th style="padding: 16px; text-align: left; background: linear-gradient(135deg, #1e40af, #1e3a8a); color: white; font-weight: 700; font-size: 14px; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 3px solid #3b82f6;">Date</th>
+                            <th style="padding: 16px; text-align: left; background: linear-gradient(135deg, #1e40af, #1e3a8a); color: white; font-weight: 700; font-size: 14px; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 3px solid #3b82f6;">Created</th>
+                            <th style="padding: 16px; text-align: left; background: linear-gradient(135deg, #1e40af, #1e3a8a); color: white; font-weight: 700; font-size: 14px; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 3px solid #3b82f6;">Started</th>
+                            <th style="padding: 16px; text-align: left; background: linear-gradient(135deg, #1e40af, #1e3a8a); color: white; font-weight: 700; font-size: 14px; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 3px solid #3b82f6;">Completed</th>
                             <th style="padding: 16px; text-align: left; background: linear-gradient(135deg, #1e40af, #1e3a8a); color: white; font-weight: 700; font-size: 14px; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 3px solid #3b82f6;">Recipients</th>
                             <th style="padding: 16px; text-align: left; background: linear-gradient(135deg, #1e40af, #1e3a8a); color: white; font-weight: 700; font-size: 14px; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 3px solid #3b82f6;">Status</th>
                             <th style="padding: 16px; text-align: left; background: linear-gradient(135deg, #1e40af, #1e3a8a); color: white; font-weight: 700; font-size: 14px; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 3px solid #3b82f6;">Launched By</th>
@@ -1823,7 +1825,7 @@ def serve_web_ui(event):
                     </thead>
                     <tbody id="historyBody">
                         <tr>
-                            <td colspan="7" style="padding: 40px; text-align: center; color: #9ca3af;">
+                            <td colspan="9" style="padding: 40px; text-align: center; color: #9ca3af;">
                                 Click "Refresh History" to load campaigns
                             </td>
                         </tr>
@@ -5762,7 +5764,7 @@ Click OK to proceed or Cancel to abort.
             }}
             
             loading.style.display = 'block';
-            historyBody.innerHTML = '<tr><td colspan="7" style="padding: 20px; text-align: center;">Loading...</td></tr>';
+            historyBody.innerHTML = '<tr><td colspan="9" style="padding: 20px; text-align: center;">Loading...</td></tr>';
             
             try {{
                 // Fetch campaigns from DynamoDB via backend
@@ -5795,7 +5797,7 @@ Click OK to proceed or Cancel to abort.
                 
                 // Sort by date (newest first) - preview campaigns already filtered on backend
                 if (allCampaigns.length === 0) {{
-                    historyBody.innerHTML = '<tr><td colspan="7" style="padding: 40px; text-align: center; color: #9ca3af;">No campaigns found</td></tr>';
+                    historyBody.innerHTML = '<tr><td colspan="9" style="padding: 40px; text-align: center; color: #9ca3af;">No campaigns found</td></tr>';
                     return;
                 }}
                 
@@ -5817,21 +5819,52 @@ Click OK to proceed or Cancel to abort.
                     }};
                     row.style.cursor = 'pointer';
                     
-                    const date = new Date(campaign.created_at || campaign.sent_at);
-                    const formattedDate = date.toLocaleString();
+                    const createdDate = new Date(campaign.created_at || campaign.sent_at);
+                    const formattedCreatedDate = createdDate.toLocaleString();
+                    
+                    // Format start time
+                    let formattedStartTime = '-';
+                    if (campaign.start_time) {{
+                        const startDate = new Date(campaign.start_time);
+                        formattedStartTime = startDate.toLocaleString();
+                    }}
+                    
+                    // Format completed time
+                    let formattedCompletedTime = '-';
+                    if (campaign.completed_at) {{
+                        const completedDate = new Date(campaign.completed_at);
+                        formattedCompletedTime = completedDate.toLocaleString();
+                    }}
+                    
                     const recipients = campaign.total_contacts || 0;
                     const status = campaign.status || 'unknown';
                     const launchedBy = campaign.launched_by || 'Unknown';
                     
+                    // Status colors
+                    let statusBg = '#e5e7eb';
+                    let statusColor = '#6b7280';
+                    if (status === 'completed') {{
+                        statusBg = '#d1fae5';
+                        statusColor = '#059669';
+                    }} else if (status === 'sending') {{
+                        statusBg = '#dbeafe';
+                        statusColor = '#1d4ed8';
+                    }} else if (status === 'processing' || status === 'queued') {{
+                        statusBg = '#fef3c7';
+                        statusColor = '#d97706';
+                    }}
+                    
                     row.innerHTML = `
                         <td style="padding: 16px; color: #1f2937; font-size: 14px; font-weight: 600;">${{campaign.campaign_name || 'Unnamed Campaign'}}</td>
                         <td style="padding: 16px; color: #374151; font-size: 14px; font-weight: 500; max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${{campaign.subject || 'No Subject'}}">${{campaign.subject || 'No Subject'}}</td>
-                        <td style="padding: 16px; color: #1f2937; font-size: 14px; font-weight: 500; font-family: 'Monaco', monospace;">${{formattedDate}}</td>
+                        <td style="padding: 16px; color: #1f2937; font-size: 13px; font-weight: 500; font-family: 'Monaco', monospace;">${{formattedCreatedDate}}</td>
+                        <td style="padding: 16px; color: #1e40af; font-size: 13px; font-weight: 500; font-family: 'Monaco', monospace;">${{formattedStartTime}}</td>
+                        <td style="padding: 16px; color: #059669; font-size: 13px; font-weight: 500; font-family: 'Monaco', monospace;">${{formattedCompletedTime}}</td>
                         <td style="padding: 16px; color: #059669; font-size: 14px; font-weight: 600; text-align: center;">${{recipients}}</td>
                         <td style="padding: 16px; text-align: center;">
                             <span style="padding: 6px 16px; border-radius: 20px; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); 
-                                background: ${{status === 'completed' ? '#d1fae5' : status === 'processing' ? '#fef3c7' : '#e5e7eb'}};
-                                color: ${{status === 'completed' ? '#059669' : status === 'processing' ? '#d97706' : '#6b7280'}};">
+                                background: ${{statusBg}};
+                                color: ${{statusColor}};">
                                 ${{status.toUpperCase()}}
                             </span>
                         </td>
@@ -5861,7 +5894,7 @@ Click OK to proceed or Cancel to abort.
             }} catch (error) {{
                 console.error('Error loading campaign history:', error);
                 Toast.error(`Failed to load campaigns: ${{error.message}}`);
-                historyBody.innerHTML = `<tr><td colspan="7" style="padding: 40px; text-align: center; color: #ef4444;">Error: ${{error.message}}</td></tr>`;
+                historyBody.innerHTML = `<tr><td colspan="9" style="padding: 40px; text-align: center; color: #ef4444;">Error: ${{error.message}}</td></tr>`;
             }} finally {{
                 loading.style.display = 'none';
             }}
@@ -7143,7 +7176,9 @@ def send_campaign(body, headers, event=None):
                 'sent_count': 0,
                 'failed_count': 0,
             'created_at': datetime.now().isoformat(),
+            'start_time': None,  # Will be set when first email starts sending
             'sent_at': None,  # Will be updated when emails are actually sent
+            'completed_at': None,  # Will be set when campaign completes
             'launched_by': launched_by
         }
         

@@ -640,20 +640,50 @@ def lambda_handler(event, context):
 
                     # Update campaign sent count and timestamp
                     try:
-                        # Update sent_count and set sent_at timestamp if first email
+                        # Update sent_count, set timestamps, and check for completion
+                        current_timestamp = datetime.now().isoformat()
                         campaigns_table.update_item(
                             Key={"campaign_id": campaign_id},
-                            UpdateExpression="SET sent_count = sent_count + :inc, sent_at = if_not_exists(sent_at, :timestamp), #status = :status",
+                            UpdateExpression="SET sent_count = sent_count + :inc, sent_at = if_not_exists(sent_at, :timestamp), start_time = if_not_exists(start_time, :timestamp), #status = :status",
                             ExpressionAttributeNames={"#status": "status"},
                             ExpressionAttributeValues={
                                 ":inc": 1,
-                                ":timestamp": datetime.now().isoformat(),
+                                ":timestamp": current_timestamp,
                                 ":status": "sending",
                             },
                         )
                         logger.debug(
-                            f"[Message {idx}] Campaign stats updated (sent_count incremented, sent_at set)"
+                            f"[Message {idx}] Campaign stats updated (sent_count incremented, start_time/sent_at set)"
                         )
+                        
+                        # Check if campaign is complete (all emails sent or failed)
+                        try:
+                            campaign_response = campaigns_table.get_item(Key={"campaign_id": campaign_id})
+                            if 'Item' in campaign_response:
+                                campaign = campaign_response['Item']
+                                sent_count = int(campaign.get('sent_count', 0))
+                                failed_count = int(campaign.get('failed_count', 0))
+                                queued_count = int(campaign.get('queued_count', 0))
+                                
+                                # Check if all messages have been processed
+                                total_processed = sent_count + failed_count
+                                if queued_count > 0 and total_processed >= queued_count:
+                                    # Campaign is complete!
+                                    campaigns_table.update_item(
+                                        Key={"campaign_id": campaign_id},
+                                        UpdateExpression="SET #status = :completed_status, completed_at = :completed_timestamp",
+                                        ExpressionAttributeNames={"#status": "status"},
+                                        ExpressionAttributeValues={
+                                            ":completed_status": "completed",
+                                            ":completed_timestamp": datetime.now().isoformat(),
+                                        },
+                                    )
+                                    logger.info(
+                                        f"🎉 Campaign {campaign_id} COMPLETED! Sent: {sent_count}, Failed: {failed_count}, Total: {queued_count}"
+                                    )
+                        except Exception as completion_err:
+                            logger.warning(f"[Message {idx}] Could not check campaign completion: {str(completion_err)}")
+                        
                     except Exception as e:
                         logger.warning(
                             f"[Message {idx}] Could not update campaign stats: {str(e)}"
@@ -664,7 +694,7 @@ def lambda_handler(event, context):
                     results["errors"].append(error_msg)
                     logger.error(f"[Message {idx}] FAILED: {error_msg}")
 
-                    # Update campaign failed count
+                    # Update campaign failed count and check for completion
                     try:
                         campaigns_table.update_item(
                             Key={"campaign_id": campaign_id},
@@ -674,6 +704,35 @@ def lambda_handler(event, context):
                         logger.debug(
                             f"[Message {idx}] Campaign stats updated (failed_count incremented)"
                         )
+                        
+                        # Check if campaign is complete (all emails sent or failed)
+                        try:
+                            campaign_response = campaigns_table.get_item(Key={"campaign_id": campaign_id})
+                            if 'Item' in campaign_response:
+                                campaign = campaign_response['Item']
+                                sent_count = int(campaign.get('sent_count', 0))
+                                failed_count = int(campaign.get('failed_count', 0))
+                                queued_count = int(campaign.get('queued_count', 0))
+                                
+                                # Check if all messages have been processed
+                                total_processed = sent_count + failed_count
+                                if queued_count > 0 and total_processed >= queued_count:
+                                    # Campaign is complete!
+                                    campaigns_table.update_item(
+                                        Key={"campaign_id": campaign_id},
+                                        UpdateExpression="SET #status = :completed_status, completed_at = :completed_timestamp",
+                                        ExpressionAttributeNames={"#status": "status"},
+                                        ExpressionAttributeValues={
+                                            ":completed_status": "completed",
+                                            ":completed_timestamp": datetime.now().isoformat(),
+                                        },
+                                    )
+                                    logger.info(
+                                        f"🎉 Campaign {campaign_id} COMPLETED! Sent: {sent_count}, Failed: {failed_count}, Total: {queued_count}"
+                                    )
+                        except Exception as completion_err:
+                            logger.warning(f"[Message {idx}] Could not check campaign completion: {str(completion_err)}")
+                        
                     except Exception as e:
                         logger.warning(
                             f"[Message {idx}] Could not update campaign stats: {str(e)}"
