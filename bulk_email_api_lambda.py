@@ -5811,8 +5811,7 @@ Click OK to proceed or Cancel to abort.
                     window.__historyPrevTokens.push(nextToken);
                 }}
                 
-                // Check if search is active
-                const searchEl = document.getElementById('historySearch');
+                // Check if search is active (reuse searchEl variable from above)
                 const searchActive = searchEl && searchEl.value && searchEl.value.trim() !== '';
                 
                 // Sort by date (newest first) - preview campaigns already filtered on backend
