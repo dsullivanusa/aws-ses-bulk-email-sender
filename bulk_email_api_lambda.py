@@ -5860,7 +5860,10 @@ Click OK to proceed or Cancel to abort.
                     }};
                     row.style.cursor = 'pointer';
                     
-                    // Format timestamps with timezone
+                    // Format timestamps with browser's local timezone
+                    // Detect browser timezone
+                    const browserTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+                    
                     const dateOptions = {{
                         year: 'numeric',
                         month: 'numeric',
@@ -5868,13 +5871,15 @@ Click OK to proceed or Cancel to abort.
                         hour: '2-digit',
                         minute: '2-digit',
                         second: '2-digit',
-                        timeZoneName: 'short'
+                        timeZoneName: 'short',
+                        timeZone: browserTimezone  // Explicitly use browser's local timezone
                     }};
                     
                     // Use created_at, fallback to sent_at for display
                     const createdTimestamp = campaign.created_at || campaign.sent_at || '';
                     let formattedCreatedDate = '-';
                     if (createdTimestamp) {{
+                        // Parse ISO timestamp and convert to local time
                         const createdDate = new Date(createdTimestamp);
                         formattedCreatedDate = createdDate.toLocaleString('en-US', dateOptions);
                     }}
@@ -5882,6 +5887,7 @@ Click OK to proceed or Cancel to abort.
                     // Format completed time
                     let formattedCompletedTime = '-';
                     if (campaign.completed_at) {{
+                        // Parse ISO timestamp and convert to local time
                         const completedDate = new Date(campaign.completed_at);
                         formattedCompletedTime = completedDate.toLocaleString('en-US', dateOptions);
                     }}
