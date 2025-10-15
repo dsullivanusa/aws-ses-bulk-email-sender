@@ -30,6 +30,39 @@ pip install -r requirements.txt
 python bulk_email_sender.py
 ```
 
+## Serverless API Deployment
+
+For serverless deployment with API Gateway and Lambda, use the consolidated deployment script:
+
+### Simple Deployment (API Only)
+Assumes you have an existing IAM role with required permissions:
+```bash
+python deployment/deploy.py --mode simple --account-id YOUR_AWS_ACCOUNT_ID
+```
+
+### Full Deployment (Complete Infrastructure)
+Creates IAM role, Lambda function, and private API Gateway:
+```bash
+python deployment/deploy.py --mode full
+```
+
+### Deployment Options
+- `--mode`: `simple` (API-only) or `full` (complete infrastructure)
+- `--account-id`: Your AWS account ID (required for simple mode)
+- `--lambda-file`: Lambda source file (`api_gateway_lambda.py` or `bulk_email_api_lambda.py`)
+- `--function-name`: Custom Lambda function name
+- `--api-name`: Custom API Gateway name
+
+### Deployment Modes Comparison
+
+| Feature | Simple Mode | Full Mode |
+|---------|-------------|-----------|
+| IAM Role Creation | ❌ Assumes exists | ✅ Creates role |
+| API Gateway Type | Public | Private (IP restricted) |
+| Lambda Function | Basic API | Full web UI + API |
+| Setup Time | Fast | Comprehensive |
+| Use Case | Development/Testing | Production |
+
 ## Usage Guide
 
 ### 1. AWS Configuration Tab
