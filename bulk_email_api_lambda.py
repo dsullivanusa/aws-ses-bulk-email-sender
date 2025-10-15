@@ -5966,24 +5966,20 @@ Click OK to proceed or Cancel to abort.
         async function viewCampaignDetails(campaignId) {{
             currentCampaignId = campaignId;
             try {{
-                // Fire-and-forget log to backend so CloudWatch records the view event
+                // Fire-and-forget log to backend (optional tracking feature)
+                // Silently fail if endpoint doesn't exist (403) - this is non-critical
                 fetch(`${{API_URL}}/campaign-viewed`, {{
                     method: 'POST',
                     headers: {{ 'Content-Type': 'application/json' }},
                     body: JSON.stringify({{ campaign_id: campaignId, timestamp: Date.now() }})
                 }}).then(async (r) => {{
-                    if (!r.ok) {{
-                        // Fallback to existing endpoint that will log view in backend
-                        try {{
-                            const res2 = await fetch(`${{API_URL}}/campaign/${{campaignId}}`);
-                            console.log('📜 View fallback GET /campaign/{id} status=', res2.status);
-                        }} catch (e2) {{
-                            console.warn('📜 View fallback failed:', e2);
-                        }}
-                    }} else {{
-                        console.log('📜 View log sent for campaign', campaignId, 'status=', r.status);
+                    if (r.ok) {{
+                        console.log('✅ Campaign view logged:', campaignId);
                     }}
-                }}).catch(e => console.warn('📜 View log failed for campaign', campaignId, e));
+                    // Silently ignore 403/404 errors - this is optional tracking
+                }}).catch(() => {{
+                    // Silently fail - this is optional tracking, don't show errors to user
+                }});
             }} catch (e) {{
                 console.warn('📜 Failed to send view log:', e);
             }}
