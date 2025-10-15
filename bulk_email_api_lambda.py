@@ -7375,47 +7375,50 @@ def send_campaign(body, headers, event=None):
                 print(f"Failed to queue {role} email for {recipient_email}: {str(e)}")
                 failed_to_queue += 1
 
-        # CC and BCC addresses are stored in campaign data and will be included in every email
-        # No need to queue them individually - they'll be retrieved from campaign by email_worker
-        # for cc in cc_list:
-        #     enqueue_special(cc, 'cc')
-        # for bcc in bcc_list:
-        #     enqueue_special(bcc, 'bcc')
-        
+        # Queue CC recipients individually - each gets one email with their address in CC field
+        for cc in cc_list:
+            enqueue_special(cc, 'cc')
+
+        # Queue BCC recipients individually - each gets one email with their address in BCC field
+        for bcc in bcc_list:
+            enqueue_special(bcc, 'bcc')
+
         # Enqueue explicit To addresses (single-send each) - skip addresses already in target contacts
         for to_addr in to_list:
             enqueue_special(to_addr, 'to')
         
-        # If no messages were queued but we have CC/BCC recipients, queue one dummy message
-        # so the email worker will process the campaign and send to CC/BCC
-        if queued_count == 0 and (cc_list or bcc_list):
-            print(f"⚠️ CC/BCC-only campaign with no regular contacts - queuing one message for CC/BCC delivery")
+        # If no messages were queued at all, we need at least one message for the campaign to be processed
+        if queued_count == 0:
+            print(f"⚠️ No recipients queued - creating a placeholder message for campaign tracking")
             try:
-                # Queue a message with the first CC or BCC as the "To" recipient
-                # They'll receive the email as both To and CC/BCC
-                dummy_recipient = cc_list[0] if cc_list else bcc_list[0]
-                message_body = {
+                # Queue a placeholder message that won't send an email but will allow campaign completion tracking
+                placeholder_message = {
                     'campaign_id': campaign_id,
-                    'contact_email': dummy_recipient
+                    'contact_email': 'placeholder@campaign.invalid',  # Invalid email so it won't send
+                    'role': 'placeholder'
                 }
                 sqs_client.send_message(
                     QueueUrl=queue_url,
-                    MessageBody=json.dumps(message_body),
+                    MessageBody=json.dumps(placeholder_message),
                     MessageAttributes={
                         'campaign_id': {
                             'StringValue': campaign_id,
                             'DataType': 'String'
                         },
                         'contact_email': {
-                            'StringValue': dummy_recipient,
+                            'StringValue': 'placeholder@campaign.invalid',
+                            'DataType': 'String'
+                        },
+                        'role': {
+                            'StringValue': 'placeholder',
                             'DataType': 'String'
                         }
                     }
                 )
                 queued_count += 1
-                print(f"✅ Queued CC/BCC delivery message to {dummy_recipient}")
+                print(f"✅ Queued placeholder message for campaign tracking")
             except Exception as e:
-                print(f"❌ Failed to queue CC/BCC delivery message: {str(e)}")
+                print(f"❌ Failed to queue placeholder message: {str(e)}")
                 failed_to_queue += 1
         
         # Update campaign status
