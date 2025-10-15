@@ -4840,13 +4840,12 @@ def serve_web_ui(event):
                             inline: true  // Mark as inline image
                         }});
                         
-                        // IMPORTANT: Replace the data URI with the S3 key so the campaign body stores the S3 key
-                        // This allows the viewer to later resolve S3 keys to presigned URLs for display
+                        // IMPORTANT: Store the S3 key for later use but keep data URI for editor display
                         img.setAttribute('data-s3-key', uploadResult.s3_key);
                         img.setAttribute('data-inline', 'true');
-                        // Replace src with S3 key instead of keeping data URI
-                        img.src = uploadResult.s3_key;
-                        console.log(`  🔄 Replaced data URI with S3 key in img.src: ${{uploadResult.s3_key}}`)
+                        // Keep the original data URI in src for in-editor display
+                        // When sending campaign, we'll replace src with S3 key
+                        console.log(`  ✅ Uploaded image - S3 key: ${{uploadResult.s3_key}}, keeping data URI for editor display`)
                         
                     }} catch (uploadError) {{
                         console.error(`Failed to upload embedded image ${{index}}:`, uploadError);
@@ -5017,6 +5016,24 @@ def serve_web_ui(event):
     /* Default paragraph spacing - size classes override line-height */
     p {{ line-height: 1.2; margin: 0; }}
 </style>`;
+            
+            // Replace data URIs with S3 keys for uploaded inline images before sending
+            const bodyDiv = document.createElement('div');
+            bodyDiv.innerHTML = emailBody;
+            const uploadedImages = bodyDiv.querySelectorAll('img[data-s3-key]');
+            if (uploadedImages.length > 0) {{
+                console.log(`🔄 Replacing ${{uploadedImages.length}} data URI(s) with S3 keys for campaign body`);
+                uploadedImages.forEach(img => {{
+                    const s3Key = img.getAttribute('data-s3-key');
+                    if (s3Key) {{
+                        console.log(`   Replacing img src with S3 key: ${{s3Key}}`);
+                        img.src = s3Key;  // Replace data URI with S3 key
+                        img.removeAttribute('data-s3-key');  // Clean up
+                        img.removeAttribute('data-inline');  // Clean up
+                    }}
+                }});
+                emailBody = bodyDiv.innerHTML;
+            }}
             
             // Prepend CSS to email body
             emailBody = quillCSS + emailBody;
