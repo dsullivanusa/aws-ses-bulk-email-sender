@@ -5850,14 +5850,12 @@ Click OK to proceed or Cancel to abort.
                         timeZoneName: 'short'
                     }};
                     
-                    const createdDate = new Date(campaign.created_at || campaign.sent_at);
-                    const formattedCreatedDate = createdDate.toLocaleString('en-US', dateOptions);
-                    
-                    // Format start time
-                    let formattedStartTime = '-';
-                    if (campaign.start_time) {{
-                        const startDate = new Date(campaign.start_time);
-                        formattedStartTime = startDate.toLocaleString('en-US', dateOptions);
+                    // Use created_at, fallback to sent_at for display
+                    const createdTimestamp = campaign.created_at || campaign.sent_at || '';
+                    let formattedCreatedDate = '-';
+                    if (createdTimestamp) {{
+                        const createdDate = new Date(createdTimestamp);
+                        formattedCreatedDate = createdDate.toLocaleString('en-US', dateOptions);
                     }}
                     
                     // Format completed time
@@ -5889,7 +5887,6 @@ Click OK to proceed or Cancel to abort.
                         <td style="padding: 16px; color: #1f2937; font-size: 14px; font-weight: 600;">${{campaign.campaign_name || 'Unnamed Campaign'}}</td>
                         <td style="padding: 16px; color: #374151; font-size: 14px; font-weight: 500; max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${{campaign.subject || 'No Subject'}}">${{campaign.subject || 'No Subject'}}</td>
                         <td style="padding: 16px; color: #1f2937; font-size: 13px; font-weight: 500; font-family: 'Monaco', monospace;">${{formattedCreatedDate}}</td>
-                        <td style="padding: 16px; color: #1e40af; font-size: 13px; font-weight: 500; font-family: 'Monaco', monospace;">${{formattedStartTime}}</td>
                         <td style="padding: 16px; color: #059669; font-size: 13px; font-weight: 500; font-family: 'Monaco', monospace;">${{formattedCompletedTime}}</td>
                         <td style="padding: 16px; color: #059669; font-size: 14px; font-weight: 600; text-align: center;">${{recipients}}</td>
                         <td style="padding: 16px; text-align: center;">
@@ -7648,8 +7645,16 @@ def get_campaigns(headers, event=None):
             
             print(f"Scanned {scanned_pages} pages, found {len(all_campaigns)} non-preview campaigns")
             
-            # Sort all campaigns by created_at (newest first)
-            all_campaigns.sort(key=lambda x: x.get('created_at', ''), reverse=True)
+            # Sort all campaigns by created_at, fallback to sent_at, then campaign_id (newest first)
+            # This ensures campaigns without created_at still appear in a reasonable order
+            all_campaigns.sort(key=lambda x: x.get('created_at') or x.get('sent_at') or x.get('campaign_id', ''), reverse=True)
+            
+            # Log campaigns without created_at for debugging
+            missing_created = [c for c in all_campaigns if not c.get('created_at')]
+            if missing_created:
+                print(f"⚠️ Warning: {len(missing_created)} campaigns missing created_at field:")
+                for c in missing_created[:5]:
+                    print(f"   - {c.get('campaign_id')}: status={c.get('status')}, sent_at={c.get('sent_at')}")
             
             # Implement pagination on sorted results
             start_idx = 0
@@ -7701,8 +7706,8 @@ def get_campaigns(headers, event=None):
             
             print(f"Search '{search_query}' found {len(all_results)} matching campaigns after scanning {scanned_pages} pages")
             
-            # Sort search results by created_at (newest first)
-            all_results.sort(key=lambda x: x.get('created_at', ''), reverse=True)
+            # Sort search results by created_at, fallback to sent_at, then campaign_id (newest first)
+            all_results.sort(key=lambda x: x.get('created_at') or x.get('sent_at') or x.get('campaign_id', ''), reverse=True)
             
             # Implement pagination on sorted search results
             start_idx = 0
