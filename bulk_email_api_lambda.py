@@ -5886,7 +5886,13 @@ Click OK to proceed or Cancel to abort.
                         formattedCompletedTime = completedDate.toLocaleString('en-US', dateOptions);
                     }}
                     
-                    const recipients = campaign.total_contacts || 0;
+                    // Calculate total recipients (target_contacts + To + CC + BCC)
+                    const targetContactsCount = campaign.total_contacts || 0;
+                    const toCount = (campaign.to && Array.isArray(campaign.to)) ? campaign.to.length : 0;
+                    const ccCount = (campaign.cc && Array.isArray(campaign.cc)) ? campaign.cc.length : 0;
+                    const bccCount = (campaign.bcc && Array.isArray(campaign.bcc)) ? campaign.bcc.length : 0;
+                    const recipients = targetContactsCount + toCount + ccCount + bccCount;
+                    
                     const status = campaign.status || 'unknown';
                     const launchedBy = campaign.launched_by || 'Unknown';
                     
@@ -6052,9 +6058,12 @@ Click OK to proceed or Cancel to abort.
                 document.getElementById('detailBody').innerHTML = '<span style="color: #9ca3af; font-style: italic;">No content</span>';
             }}
             
-            // Display attachments if present
-            const attachments = campaign.attachments || [];
+            // Display attachments if present (exclude inline images - they're in the body)
+            const allAttachments = campaign.attachments || [];
+            const attachments = allAttachments.filter(att => !att.inline);  // Filter out inline images
             const attachmentsContainer = document.getElementById('detailAttachments');
+            
+            console.log(`📎 Total attachments: ${{allAttachments.length}}, Non-inline: ${{attachments.length}}`);
             
             if (attachments.length > 0) {{
                 let attachmentsHTML = '<strong style="display: block; margin-bottom: 8px;">📎 Attachments (' + attachments.length + '):</strong>';
@@ -6062,12 +6071,11 @@ Click OK to proceed or Cancel to abort.
                 attachmentsHTML += '<ul style="margin: 0; padding-left: 20px;">';
                 
                 attachments.forEach(att => {{
-                    const isInline = att.inline ? ' (Inline Image)' : '';
                     const fileSize = att.size ? ' - ' + (att.size / 1024).toFixed(1) + ' KB' : '';
                     const safeFile = (att.filename || 'attachment').replace(/`/g, '');
                     const safeKey = (att.s3_key || '').replace(/`/g, '');
                     attachmentsHTML += `<li style="margin: 6px 0; display: flex; align-items: center; justify-content: space-between; gap: 10px;">
-                        <span>${{att.filename}}${{fileSize}}${{isInline}}</span>
+                        <span>${{att.filename}}${{fileSize}}</span>
                         <button onclick="downloadAttachment(\`${{safeKey}}\`, \`${{safeFile}}\`)" style="padding: 6px 12px; background: linear-gradient(135deg, #10b981, #059669); color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 600;">⬇️ Download</button>
                     </li>`;
                 }});
