@@ -6186,34 +6186,8 @@ Click OK to proceed or Cancel to abort.
                     }}
                 }});
 
-                // Fallback: if no <img> tags remain in output but we have inline attachments,
-                // append a simple inline images block so the viewer still shows them.
-                try {{
-                    const hasImg = /<img\b[^>]*>/i.test(output);
-                    if (!hasImg) {{
-                        console.warn('🧩 No <img> tags found in processed body. Appending inline images block from attachments.');
-                        const imagesHtml = inlineAttachments
-                            .map(att => {{
-                                const u = urlMap.get(att);
-                                if (!u) return '';
-                                const alt = (att.filename || 'Inline Image').replace(/"/g, '');
-                                return `<div style="margin: 6px 0;"><img src="${{u}}" alt="${{alt}}" style="max-width: 100%; height: auto;" /></div>`;
-                            }})
-                            .join('');
-                        if (imagesHtml) {{
-                            const block = `<div style="margin-top: 12px; padding: 10px; background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 6px;">`
-                                + `<div style="font-weight: 600; margin-bottom: 6px;">Inline Images</div>`
-                                + imagesHtml
-                                + `</div>`;
-                            output = output + block;
-                            console.log('🧩 Appended inline images block with', inlineAttachments.length, 'image(s).');
-                        }} else {{
-                            console.warn('🧩 No presigned URLs available to append inline images block.');
-                        }}
-                    }}
-                }} catch (appendErr) {{
-                    console.warn('🧩 Failed to append inline images block:', appendErr);
-                }}
+                // Images are now properly embedded in the email body, no need for fallback "Inline Images" block
+                console.log('✅ Inline image resolution complete. Images are embedded in email body.');
 
                 return output;
             }} catch (err) {{
