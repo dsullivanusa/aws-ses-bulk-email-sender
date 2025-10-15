@@ -4891,7 +4891,8 @@ def serve_web_ui(event):
             // NOTE: Removed trailing image cleanup code - it was removing legitimate user images
             // Users can have images at the end of their emails intentionally
 
-            // Get cleaned HTML (with data: URIs still intact or S3 keys if already uploaded)
+            // Get cleaned HTML (with data: URIs still intact)
+            // IMPORTANT: Do NOT modify tempDiv.innerHTML directly - keep data URIs for editor display
             emailBody = tempDiv.innerHTML;
             
             // DEBUG: Check if tempDiv.innerHTML contains img tags
@@ -4906,66 +4907,9 @@ def serve_web_ui(event):
                 console.error(`   tempDiv content (first 500 chars): ${{emailBody.substring(0, 500)}}...`);
             }}
             
-            // Replace data: URIs with S3 keys for backend transmission
-            // Do this via string replacement to avoid triggering browser image loads
-            const imagesWithS3Keys = tempDiv.querySelectorAll('img[data-s3-key]');
-            if (imagesWithS3Keys.length > 0) {{
-                console.log(`📸 Replacing ${{imagesWithS3Keys.length}} data: URI(s) with S3 keys in HTML string`);
-                console.log(`Email body length before replacement: ${{emailBody.length}}`);
-                
-                imagesWithS3Keys.forEach((img, idx) => {{
-                    const s3Key = img.getAttribute('data-s3-key');
-                    const currentSrc = img.getAttribute('src');
-                    
-                    console.log(`Image ${{idx + 1}}:`);
-                    console.log(`  Current src: ${{currentSrc.substring(0, 80)}}...`);
-                    console.log(`  S3 key: ${{s3Key}}`);
-                    
-                    if (s3Key && currentSrc && currentSrc.startsWith('data:')) {{
-                        // Use string replacement to avoid browser fetching the image
-                        // Escape special regex characters in the data URI
-                        const escapedSrc = currentSrc.replace(/[.*+?^${{}}()|[\\]\\\\]/g, '\\\\$&');
-                        const regex = new RegExp('src="' + escapedSrc + '"', 'g');
-                        const beforeLength = emailBody.length;
-                        emailBody = emailBody.replace(regex, 'src="' + s3Key + '"');
-                        const afterLength = emailBody.length;
-                        
-                        if (beforeLength !== afterLength) {{
-                            console.log(`  ✅ Replaced in HTML (length changed: ${{beforeLength}} → ${{afterLength}})`);
-                        }} else {{
-                            console.warn(`  ⚠️ No replacement made (length unchanged)`);
-                        }}
-                        
-                        console.log(`  New src will be: ${{s3Key}}`);
-                    }}
-                }});
-                
-                // Show sample of HTML with S3 keys
-                console.log(`Email body sample after S3 replacement: ${{emailBody.substring(0, 300)}}...`);
-                
-                // Verify replacement happened
-                if (emailBody.includes('data:image')) {{
-                    console.error('⚠️ WARNING: Email body still contains data:image URIs after replacement!');
-                    console.error('This will cause issues. The frontend replacement may have failed.');
-                }} else {{
-                    console.log('✅ Confirmed: No data:image URIs in email body (all replaced with S3 keys)');
-                }}
-                
-                // Now remove data-s3-key attributes from final HTML (no longer needed)
-                emailBody = emailBody.replace(/\\s+data-s3-key="[^"]*"/g, '');
-                emailBody = emailBody.replace(/\\s+data-inline="[^"]*"/g, '');
-                console.log('✅ Removed data-s3-key attributes from final HTML');
-                
-                // Verify img tags still exist after cleanup
-                const imgAfterCleanup = emailBody.match(/<img[^>]+>/g);
-                if (imgAfterCleanup) {{
-                    console.log(`✅ After data-attr cleanup: ${{imgAfterCleanup.length}} <img> tag(s) still present`);
-                }} else {{
-                    console.error(`❌ After data-attr cleanup: <img> tags were LOST!`);
-                }}
-            }} else {{
-                console.log('ℹ️ No images with S3 keys to replace');
-            }}
+            // IMPORTANT: Keep data URIs in emailBody for editor display
+            // We'll create a SEPARATE copy for backend transmission with S3 keys
+            console.log('✅ emailBody preserved with data: URIs for editor display (NOT replaced with S3 keys yet)');
             
             // Additional regex cleanup for any remaining artifacts
             // IMPORTANT: Preserve blank lines by converting <p><br></p> to <p>&nbsp;</p>
@@ -5201,7 +5145,7 @@ Click OK to proceed or Cancel to abort.
             const campaign = {{
                 campaign_name: document.getElementById('campaignName').value,
                 subject: document.getElementById('subject').value,
-                body: emailBody,
+                body: emailBody,  // Will be modified below to replace data URIs with S3 keys
                 font_usage: fontUsage,  // Add font usage to campaign data
                 launched_by: userName,                                                                 //Send user identity to backend
                 filter_type: Object.keys(selectedCampaignFilterValues).length > 0 ? 'custom' : null,
@@ -5214,6 +5158,64 @@ Click OK to proceed or Cancel to abort.
                 bcc: bccList, // array of BCC emails (backend will queue these separately)
                 attachments: campaignAttachments  // Include attachments
             }};
+            
+            // 🔧 REPLACE DATA URIs WITH S3 KEYS IN CAMPAIGN.BODY (for backend transmission)
+            // IMPORTANT: This modifies campaign.body ONLY, not emailBody (which keeps data URIs for editor)
+            if (campaignAttachments.length > 0) {{
+                console.log(`📸 Replacing data: URIs with S3 keys in campaign.body for backend transmission`);
+                console.log(`   Campaign body length BEFORE replacement: ${{campaign.body.length}} chars`);
+                
+                let replacementCount = 0;
+                campaignAttachments.forEach((att, idx) => {{
+                    if (att.inline && att.s3_key) {{
+                        console.log(`  Processing attachment ${{idx + 1}}: ${{att.filename}} → ${{att.s3_key}}`);
+                        
+                        // Find the img tag with this S3 key in data-s3-key attribute
+                        // Use regex to find and replace: <img ... data-s3-key="xxx" src="data:..." ... >
+                        // Replace src="data:..." with src="xxx"
+                        
+                        const s3KeyEscaped = att.s3_key.replace(/[.*+?^${{}}()|[\\]\\\\]/g, '\\\\$&');
+                        
+                        // Pattern: data-s3-key="S3KEY" followed by src="data:image/..." or src='data:image/...'
+                        const pattern1 = new RegExp(`(<img[^>]*data-s3-key=["']${{s3KeyEscaped}}["'][^>]*src=["'])data:image/[^"']*["']`, 'g');
+                        const pattern2 = new RegExp(`(<img[^>]*src=["'])data:image/[^"']*["']([^>]*data-s3-key=["']${{s3KeyEscaped}}["'])`, 'g');
+                        
+                        const beforeLength = campaign.body.length;
+                        
+                        // Try pattern 1: data-s3-key comes before src
+                        campaign.body = campaign.body.replace(pattern1, `$1${{att.s3_key}}"`);
+                        
+                        // Try pattern 2: src comes before data-s3-key
+                        campaign.body = campaign.body.replace(pattern2, `$1${{att.s3_key}}"$2`);
+                        
+                        const afterLength = campaign.body.length;
+                        
+                        if (beforeLength !== afterLength) {{
+                            replacementCount++;
+                            console.log(`    ✅ Replaced data URI with S3 key (size changed: ${{beforeLength}} → ${{afterLength}})`);
+                        }} else {{
+                            console.warn(`    ⚠️ No replacement (size unchanged) - img tag might not have data-s3-key attribute`);
+                        }}
+                    }}
+                }});
+                
+                console.log(`   Campaign body length AFTER replacement: ${{campaign.body.length}} chars`);
+                console.log(`   Replaced ${{replacementCount}} data URI(s) with S3 keys`);
+                
+                // Now remove data-s3-key and data-inline attributes from campaign.body
+                campaign.body = campaign.body.replace(/\\s+data-s3-key="[^"]*"/g, '');
+                campaign.body = campaign.body.replace(/\\s+data-inline="[^"]*"/g, '');
+                console.log(`   ✅ Removed data-s3-key attributes from campaign.body`);
+                
+                // Verify no data URIs remain in campaign.body
+                if (campaign.body.includes('data:image/')) {{
+                    console.error('⚠️ WARNING: campaign.body still contains data:image/ URIs after replacement!');
+                }} else {{
+                    console.log('   ✅ Confirmed: No data:image/ URIs in campaign.body');
+                }}
+            }} else {{
+                console.log('ℹ️ No inline attachments to process');
+            }}
             
             // 📡 CAMPAIGN DATA LOGGING
             console.log('📡 CAMPAIGN DATA PREPARED:');
