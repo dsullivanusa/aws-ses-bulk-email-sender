@@ -2,7 +2,7 @@
 
 These tests are lightweight and avoid network calls.
 """
-from lib.aws_clients import get_boto3_session, get_client, get_ses_client
+from lib.aws_clients import get_boto3_session, get_client, get_ses_client, get_sqs_client
 
 
 def test_get_boto3_session():
@@ -18,3 +18,7 @@ def test_get_client_signature():
 
 def test_get_ses_client_callable():
     assert callable(get_ses_client)
+
+
+def test_get_sqs_client_callable():
+    assert callable(get_sqs_client)

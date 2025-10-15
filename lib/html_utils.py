@@ -1,12 +1,13 @@
-"""Shared email utilities for cleaning HTML and preparing inlining helpers.
+"""HTML processing utilities for email content preparation.
 
-This module contains small, pure-Python helpers that can be unit-tested locally.
-Keep heavy AWS/boto3 usage out of import-time code.
+This module contains utilities for cleaning and processing HTML content,
+specifically designed for preparing Quill.js editor output for email sending.
+No AWS dependencies here - pure Python HTML processing.
 """
-from typing import List
+from typing import List, Match
 import re
 
-__all__ = ["clean_quill_html_for_email", "extract_image_srcs", "build_mime_message_stub"]
+__all__ = ["clean_quill_html_for_email", "extract_image_srcs"]
 
 
 def clean_quill_html_for_email(html: str) -> str:
@@ -43,7 +44,7 @@ def clean_quill_html_for_email(html: str) -> str:
     s = re.sub(r"<p(?: [^>]*)?>\s*(?:\u00A0|&nbsp;|<br\s*/?>|\s)*\s*</p>", "", s, flags=re.I)
 
     # Trim whitespace inside <p>...</p>
-    def _trim_p(m: re.Match) -> str:
+    def _trim_p(m: Match[str]) -> str:
         inner = m.group(1).strip()
         return f"<p>{inner}</p>"
 
@@ -65,12 +66,3 @@ def extract_image_srcs(html: str) -> List[str]:
     # Very small, permissive regex to capture src attribute values
     matches = re.findall(r"<img[^>]+src=[\"']([^\"']+)[\"']", html, flags=re.I)
     return matches
-
-
-def build_mime_message_stub(*args, **kwargs):
-    """Placeholder for a future shared MIME assembly routine.
-
-    This stub is intentionally minimal so callers can import it during refactors.
-    Implementing a full, SES-safe MIME builder belongs to a later phase.
-    """
-    raise NotImplementedError("build_mime_message_stub is a placeholder; implement later")

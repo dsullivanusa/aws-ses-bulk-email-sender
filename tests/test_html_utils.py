@@ -1,8 +1,8 @@
-"""Unit tests for lib.email_utils.
+"""Unit tests for lib.html_utils.
 
 Uses pytest-style tests.
 """
-from lib.email_utils import clean_quill_html_for_email, extract_image_srcs
+from lib.html_utils import clean_quill_html_for_email, extract_image_srcs
 
 
 def test_clean_quill_basic():

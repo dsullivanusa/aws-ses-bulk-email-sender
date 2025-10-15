@@ -3,16 +3,16 @@
 Keep import-time overhead minimal so modules that import this file can be used in local tests
 without requiring AWS credentials. Clients are created on demand via the `get_client` helper.
 """
-from typing import Optional
-import boto3
-from boto3.session import Session
-from botocore.client import BaseClient
+from typing import Optional, Dict, Tuple
+import boto3  # type: ignore
+from boto3.session import Session  # type: ignore
+from botocore.client import BaseClient  # type: ignore
 import os
 import threading
 
 
 _session: Optional[Session] = None
-_client_cache: dict = {}
+_client_cache: Dict[Tuple[str, Optional[str], Optional[str]], BaseClient] = {}
 _lock = threading.Lock()
 
 # The client cache is keyed by (service_name, region_name, profile_name).
@@ -53,11 +53,11 @@ def get_client(service_name: str, region_name: Optional[str] = None, profile_nam
             return client
         session = get_boto3_session(profile_name=profile_name)
         if region_name:
-            client = session.client(service_name, region_name=region_name)
+            client = session.client(service_name, region_name=region_name)  # type: ignore
         else:
-            client = session.client(service_name)
+            client = session.client(service_name)  # type: ignore
         _client_cache[key] = client
-        return client
+        return client  # type: ignore
 
 
 def reset_clients() -> None:
@@ -88,4 +88,22 @@ def get_s3_client(region_name: Optional[str] = None) -> BaseClient:
     return get_client("s3", region_name=region)
 
 
-__all__ = ["get_boto3_session", "get_client", "get_ses_client", "get_s3_client"]
+def get_sqs_client(region_name: Optional[str] = None) -> BaseClient:
+    """Convenience for SQS client using environment-based region or default.
+
+    Do not create the client until this function is called.
+    """
+    region = region_name or os.environ.get("AWS_SQS_REGION")
+    return get_client("sqs", region_name=region)
+
+
+def get_dynamodb_client(region_name: Optional[str] = None) -> BaseClient:
+    """Convenience for DynamoDB client using environment-based region or default.
+
+    Do not create the client until this function is called.
+    """
+    region = region_name or os.environ.get("AWS_DYNAMODB_REGION")
+    return get_client("dynamodb", region_name=region)
+
+
+__all__ = ["get_boto3_session", "get_client", "get_ses_client", "get_s3_client", "get_sqs_client", "get_dynamodb_client"]
