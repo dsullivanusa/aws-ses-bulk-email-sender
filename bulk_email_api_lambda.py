@@ -236,6 +236,24 @@ def serve_web_ui(event):
         }}
         
         function performHistorySearch() {{
+            const searchEl = document.getElementById('historySearch');
+            const searchValue = (searchEl && searchEl.value ? searchEl.value : '').trim();
+            
+            if (!searchValue) {{
+                Toast.info('Please enter a search term');
+                return;
+            }}
+            
+            console.log('Performing search for:', searchValue);
+            loadCampaignHistory(null);
+        }}
+        
+        function clearHistorySearch() {{
+            const searchEl = document.getElementById('historySearch');
+            if (searchEl) {{
+                searchEl.value = '';
+            }}
+            console.log('Search cleared, reloading all campaigns');
             loadCampaignHistory(null);
         }}
 
@@ -1801,6 +1819,7 @@ def serve_web_ui(event):
                     style="flex: 1; min-width: 240px; padding: 10px; border: 1px solid #e5e7eb; border-radius: 6px;" 
                     onkeydown="if (event.key === 'Enter') performHistorySearch()" />
                 <button onclick="performHistorySearch()" class="btn-secondary">🔎 Search</button>
+                <button onclick="clearHistorySearch()" class="btn-secondary" style="background: #6b7280;">✖ Clear</button>
             </div>
             
             <div id="historyLoading" style="display: none; text-align: center; padding: 40px;">
@@ -1815,7 +1834,6 @@ def serve_web_ui(event):
                             <th style="padding: 16px; text-align: left; background: linear-gradient(135deg, #1e40af, #1e3a8a); color: white; font-weight: 700; font-size: 14px; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 3px solid #3b82f6;">Campaign Name</th>
                             <th style="padding: 16px; text-align: left; background: linear-gradient(135deg, #1e40af, #1e3a8a); color: white; font-weight: 700; font-size: 14px; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 3px solid #3b82f6;">Subject</th>
                             <th style="padding: 16px; text-align: left; background: linear-gradient(135deg, #1e40af, #1e3a8a); color: white; font-weight: 700; font-size: 14px; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 3px solid #3b82f6;">Created</th>
-                            <th style="padding: 16px; text-align: left; background: linear-gradient(135deg, #1e40af, #1e3a8a); color: white; font-weight: 700; font-size: 14px; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 3px solid #3b82f6;">Started</th>
                             <th style="padding: 16px; text-align: left; background: linear-gradient(135deg, #1e40af, #1e3a8a); color: white; font-weight: 700; font-size: 14px; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 3px solid #3b82f6;">Completed</th>
                             <th style="padding: 16px; text-align: left; background: linear-gradient(135deg, #1e40af, #1e3a8a); color: white; font-weight: 700; font-size: 14px; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 3px solid #3b82f6;">Recipients</th>
                             <th style="padding: 16px; text-align: left; background: linear-gradient(135deg, #1e40af, #1e3a8a); color: white; font-weight: 700; font-size: 14px; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 3px solid #3b82f6;">Status</th>
@@ -1825,7 +1843,7 @@ def serve_web_ui(event):
                     </thead>
                     <tbody id="historyBody">
                         <tr>
-                            <td colspan="9" style="padding: 40px; text-align: center; color: #9ca3af;">
+                            <td colspan="8" style="padding: 40px; text-align: center; color: #9ca3af;">
                                 Click "Refresh History" to load campaigns
                             </td>
                         </tr>
@@ -5764,7 +5782,7 @@ Click OK to proceed or Cancel to abort.
             }}
             
             loading.style.display = 'block';
-            historyBody.innerHTML = '<tr><td colspan="9" style="padding: 20px; text-align: center;">Loading...</td></tr>';
+            historyBody.innerHTML = '<tr><td colspan="8" style="padding: 20px; text-align: center;">Loading...</td></tr>';
             
             try {{
                 // Fetch campaigns from DynamoDB via backend
@@ -5780,13 +5798,8 @@ Click OK to proceed or Cancel to abort.
                 }}
                 
                 const data = await response.json();
-                // Backend now filters out preview campaigns, so just sort by date (newest first)
-                allCampaigns = (data.campaigns || [])
-                    .sort((a, b) => {{
-                        const dateA = new Date(a.created_at || a.sent_at || 0);
-                        const dateB = new Date(b.created_at || b.sent_at || 0);
-                        return dateB - dateA;
-                    }});
+                // Backend now filters preview campaigns AND sorts by created_at (newest first)
+                allCampaigns = data.campaigns || [];
                 const nextOut = data.next || null;
                 window.__historyNextToken = nextOut; // store for pager
                 window.__historyPrevTokens = window.__historyPrevTokens || [];
@@ -5795,9 +5808,16 @@ Click OK to proceed or Cancel to abort.
                     window.__historyPrevTokens.push(nextToken);
                 }}
                 
+                // Check if search is active
+                const searchEl = document.getElementById('historySearch');
+                const searchActive = searchEl && searchEl.value && searchEl.value.trim() !== '';
+                
                 // Sort by date (newest first) - preview campaigns already filtered on backend
                 if (allCampaigns.length === 0) {{
-                    historyBody.innerHTML = '<tr><td colspan="9" style="padding: 40px; text-align: center; color: #9ca3af;">No campaigns found</td></tr>';
+                    const message = searchActive 
+                        ? `No campaigns found matching "${{searchEl.value}}". <a href="#" onclick="clearHistorySearch(); return false;" style="color: #3b82f6; text-decoration: underline;">Clear search</a>` 
+                        : 'No campaigns found';
+                    historyBody.innerHTML = `<tr><td colspan="8" style="padding: 40px; text-align: center; color: #9ca3af;">${{message}}</td></tr>`;
                     return;
                 }}
                 
@@ -5819,21 +5839,32 @@ Click OK to proceed or Cancel to abort.
                     }};
                     row.style.cursor = 'pointer';
                     
+                    // Format timestamps with timezone
+                    const dateOptions = {{
+                        year: 'numeric',
+                        month: 'numeric',
+                        day: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit',
+                        second: '2-digit',
+                        timeZoneName: 'short'
+                    }};
+                    
                     const createdDate = new Date(campaign.created_at || campaign.sent_at);
-                    const formattedCreatedDate = createdDate.toLocaleString();
+                    const formattedCreatedDate = createdDate.toLocaleString('en-US', dateOptions);
                     
                     // Format start time
                     let formattedStartTime = '-';
                     if (campaign.start_time) {{
                         const startDate = new Date(campaign.start_time);
-                        formattedStartTime = startDate.toLocaleString();
+                        formattedStartTime = startDate.toLocaleString('en-US', dateOptions);
                     }}
                     
                     // Format completed time
                     let formattedCompletedTime = '-';
                     if (campaign.completed_at) {{
                         const completedDate = new Date(campaign.completed_at);
-                        formattedCompletedTime = completedDate.toLocaleString();
+                        formattedCompletedTime = completedDate.toLocaleString('en-US', dateOptions);
                     }}
                     
                     const recipients = campaign.total_contacts || 0;
@@ -5880,7 +5911,13 @@ Click OK to proceed or Cancel to abort.
                     historyBody.appendChild(row);
                 }});
                 
-                Toast.success(`Loaded ${{allCampaigns.length}} campaigns`, 2000);
+                // Show success message with search indication
+                if (searchActive) {{
+                    Toast.success(`Found ${{allCampaigns.length}} campaigns matching "${{searchEl.value}}"`, 3000);
+                }} else {{
+                    Toast.success(`Loaded ${{allCampaigns.length}} campaigns`, 2000);
+                }}
+                
                 // Update pager
                 if (pager) {{
                     const hasPrev = (window.__historyPrevTokens || []).length > 0;
@@ -5888,13 +5925,15 @@ Click OK to proceed or Cancel to abort.
                     const pageNum = (window.__historyPrevTokens || []).length + 1;
                     document.getElementById('historyPrevBtn').disabled = !hasPrev;
                     document.getElementById('historyNextBtn').disabled = !hasNext;
-                    document.getElementById('historyPageInfo').textContent = `Page ${{pageNum}} • Showing up to 50 campaigns`;
+                    
+                    const searchInfo = searchActive ? ` • Searching: "${{searchEl.value}}"` : '';
+                    document.getElementById('historyPageInfo').textContent = `Page ${{pageNum}} • Showing up to 50 campaigns${{searchInfo}}`;
                 }}
                 
             }} catch (error) {{
                 console.error('Error loading campaign history:', error);
                 Toast.error(`Failed to load campaigns: ${{error.message}}`);
-                historyBody.innerHTML = `<tr><td colspan="9" style="padding: 40px; text-align: center; color: #ef4444;">Error: ${{error.message}}</td></tr>`;
+                historyBody.innerHTML = `<tr><td colspan="8" style="padding: 40px; text-align: center; color: #ef4444;">Error: ${{error.message}}</td></tr>`;
             }} finally {{
                 loading.style.display = 'none';
             }}
@@ -7581,40 +7620,72 @@ def get_campaigns(headers, event=None):
             except Exception as tok_err:
                 print(f"Invalid next token provided: {tok_err}")
 
-        # If no search, return single page from DynamoDB (excluding preview campaigns)
+        # If no search, scan all campaigns, sort by created_at, then paginate
         if not search_query:
-            results = []
+            # Scan all campaigns from DynamoDB (excluding preview)
+            all_campaigns = []
             last_evaluated_key = None
             scanned_pages = 0
+            
             while True:
                 scanned_pages += 1
-                response = campaigns_table.scan(**scan_kwargs)
+                scan_params = {'Limit': 100}  # Scan in larger chunks
+                if last_evaluated_key:
+                    scan_params['ExclusiveStartKey'] = last_evaluated_key
+                    
+                response = campaigns_table.scan(**scan_params)
                 page_items = convert_decimals(response.get('Items', []))
+                
                 # Exclude preview campaigns
                 for it in page_items:
                     if it.get('status') == 'preview' or it.get('type') == 'preview':
                         continue
-                    results.append(it)
-                    if len(results) >= limit:
-                        break
+                    all_campaigns.append(it)
+                
                 last_evaluated_key = response.get('LastEvaluatedKey')
-                if len(results) >= limit or not last_evaluated_key:
+                if not last_evaluated_key:
                     break
-                # Keep scanning with new start key
-                scan_kwargs['ExclusiveStartKey'] = last_evaluated_key
-            items = results
-            next_token_out = json.dumps(last_evaluated_key) if last_evaluated_key else None
-            print(f"Page retrieved: {len(items)} non-preview items, has_more={bool(last_evaluated_key)}, scanned_pages={scanned_pages}")
+            
+            print(f"Scanned {scanned_pages} pages, found {len(all_campaigns)} non-preview campaigns")
+            
+            # Sort all campaigns by created_at (newest first)
+            all_campaigns.sort(key=lambda x: x.get('created_at', ''), reverse=True)
+            
+            # Implement pagination on sorted results
+            start_idx = 0
+            if next_token:
+                try:
+                    token_data = json.loads(next_token)
+                    start_idx = token_data.get('offset', 0)
+                except Exception:
+                    start_idx = 0
+            
+            end_idx = start_idx + limit
+            items = all_campaigns[start_idx:end_idx]
+            
+            # Create next token if there are more items
+            next_token_out = None
+            if end_idx < len(all_campaigns):
+                next_token_out = json.dumps({'offset': end_idx})
+            
+            print(f"Returning campaigns {start_idx}-{end_idx} of {len(all_campaigns)} total, has_more={next_token_out is not None}")
         else:
             # Case-insensitive search across campaign_name and subject
             ql = search_query.lower()
-            results = []
+            all_results = []
             last_evaluated_key = None
             scanned_pages = 0
+            
+            # Scan all campaigns and filter
             while True:
                 scanned_pages += 1
-                response = campaigns_table.scan(**scan_kwargs)
+                scan_params = {'Limit': 100}  # Scan in larger chunks
+                if last_evaluated_key:
+                    scan_params['ExclusiveStartKey'] = last_evaluated_key
+                    
+                response = campaigns_table.scan(**scan_params)
                 page_items = convert_decimals(response.get('Items', []))
+                
                 # Exclude previews and filter by substring
                 for it in page_items:
                     if it.get('status') == 'preview' or it.get('type') == 'preview':
@@ -7622,17 +7693,35 @@ def get_campaigns(headers, event=None):
                     name = str(it.get('campaign_name') or '').lower()
                     subj = str(it.get('subject') or '').lower()
                     if ql in name or ql in subj:
-                        results.append(it)
-                        if len(results) >= limit:
-                            break
+                        all_results.append(it)
+                
                 last_evaluated_key = response.get('LastEvaluatedKey')
-                if len(results) >= limit or not last_evaluated_key:
+                if not last_evaluated_key:
                     break
-                # Keep scanning with new start key
-                scan_kwargs['ExclusiveStartKey'] = last_evaluated_key
-            items = results
-            next_token_out = json.dumps(last_evaluated_key) if last_evaluated_key else None
-            print(f"Search '{search_query}' matched {len(items)} item(s) on this page; has_more={bool(last_evaluated_key)}; scanned_pages={scanned_pages}")
+            
+            print(f"Search '{search_query}' found {len(all_results)} matching campaigns after scanning {scanned_pages} pages")
+            
+            # Sort search results by created_at (newest first)
+            all_results.sort(key=lambda x: x.get('created_at', ''), reverse=True)
+            
+            # Implement pagination on sorted search results
+            start_idx = 0
+            if next_token:
+                try:
+                    token_data = json.loads(next_token)
+                    start_idx = token_data.get('offset', 0)
+                except Exception:
+                    start_idx = 0
+            
+            end_idx = start_idx + limit
+            items = all_results[start_idx:end_idx]
+            
+            # Create next token if there are more items
+            next_token_out = None
+            if end_idx < len(all_results):
+                next_token_out = json.dumps({'offset': end_idx})
+            
+            print(f"Returning search results {start_idx}-{end_idx} of {len(all_results)} total")
 
         response_headers = {
             **headers,
