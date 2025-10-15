@@ -234,28 +234,6 @@ def serve_web_ui(event):
             --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
             --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
         }}
-        
-        function performHistorySearch() {{
-            const searchEl = document.getElementById('historySearch');
-            const searchValue = (searchEl && searchEl.value ? searchEl.value : '').trim();
-            
-            if (!searchValue) {{
-                Toast.info('Please enter a search term');
-                return;
-            }}
-            
-            console.log('Performing search for:', searchValue);
-            loadCampaignHistory(null);
-        }}
-        
-        function clearHistorySearch() {{
-            const searchEl = document.getElementById('historySearch');
-            if (searchEl) {{
-                searchEl.value = '';
-            }}
-            console.log('Search cleared, reloading all campaigns');
-            loadCampaignHistory(null);
-        }}
 
         /* Campaign History Table Styles */
         #historyTable tbody tr:nth-child(odd) {{
@@ -2026,6 +2004,31 @@ def serve_web_ui(event):
                 }}, 300);
             }}
         }};
+        
+        // ============================================
+        // CAMPAIGN HISTORY SEARCH FUNCTIONS
+        // ============================================
+        function performHistorySearch() {{
+            const searchEl = document.getElementById('historySearch');
+            const searchValue = (searchEl && searchEl.value ? searchEl.value : '').trim();
+            
+            if (!searchValue) {{
+                Toast.info('Please enter a search term');
+                return;
+            }}
+            
+            console.log('Performing search for:', searchValue);
+            loadCampaignHistory(null);
+        }}
+        
+        function clearHistorySearch() {{
+            const searchEl = document.getElementById('historySearch');
+            if (searchEl) {{
+                searchEl.value = '';
+            }}
+            console.log('Search cleared, reloading all campaigns');
+            loadCampaignHistory(null);
+        }}
         
         // ============================================
         // LOADING SKELETON HELPER
