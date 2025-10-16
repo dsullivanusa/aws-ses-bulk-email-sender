@@ -478,7 +478,7 @@ def lambda_handler(event, context):
 
                 # Add CC list information
                 if cc_list:
-                    recipient_info += f"The following were cc'd on this email:\r\n {', '.join(cc_list)}\n\n"
+                    recipient_info += f"Emails CC'd: {', '.join(cc_list)}\n\n"
                 else:
                     recipient_info += "No one was cc'd on this email.\n\n"
 
