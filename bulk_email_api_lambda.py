@@ -13,6 +13,7 @@ from email import encoders
 import base64
 from datetime import datetime
 from decimal import Decimal
+import re
 
 # Initialize clients
 dynamodb = boto3.resource('dynamodb', region_name='us-gov-west-1')
@@ -7101,7 +7102,6 @@ def send_campaign(body, headers, event=None):
         print(f"🎨 FONT ANALYSIS: Analyzing email body for font usage...")
         
         # Extract font classes from the email HTML
-        import re
         font_classes = re.findall(r'class="[^"]*ql-font-([^"\s]+)', email_body)
         if font_classes:
             unique_fonts = list(set(font_classes))
@@ -7295,19 +7295,42 @@ def send_campaign(body, headers, event=None):
         queued_count = 0
         failed_to_queue = 0
         
-        # Queue contact email addresses to SQS (minimal payload)
-        print(f"Queuing {len(contacts)} contacts to SQS for campaign {campaign_id}")
-        
+        # Queue emails for all recipients (TO, CC, BCC) - unified approach
+        # Collect all unique recipients to avoid duplicates
+        all_recipients = set()
+
+        # Add database contacts
         for contact in contacts:
+            if contact.get('email'):
+                all_recipients.add(contact.get('email').lower().strip())
+
+        # Add CC recipients
+        for cc_email in cc_list:
+            if cc_email:
+                all_recipients.add(cc_email.lower().strip())
+
+        # Add BCC recipients
+        for bcc_email in bcc_list:
+            if bcc_email:
+                all_recipients.add(bcc_email.lower().strip())
+
+        # Add explicit TO recipients
+        for to_email in to_list:
+            if to_email:
+                all_recipients.add(to_email.lower().strip())
+
+        # Queue each unique recipient
+        for recipient_email in all_recipients:
+            if not recipient_email or '@' not in recipient_email:
+                print(f"Skipping invalid email: {recipient_email}")
+                continue
+
             try:
-                # Minimal message: only campaign_id and contact email
-                # Worker Lambda will retrieve campaign details from DynamoDB
                 message_body = {
                     'campaign_id': campaign_id,
-                    'contact_email': contact.get('email')
+                    'contact_email': recipient_email
                 }
-                
-                # Send message to SQS
+
                 sqs_client.send_message(
                     QueueUrl=queue_url,
                     MessageBody=json.dumps(message_body),
@@ -7317,74 +7340,16 @@ def send_campaign(body, headers, event=None):
                             'DataType': 'String'
                         },
                         'contact_email': {
-                            'StringValue': contact.get('email', 'unknown'),
-                            'DataType': 'String'
-                        }
-                    }
-                )
-                queued_count += 1
-                print(f"Queued email for {contact.get('email')}")
-                
-            except Exception as e:
-                print(f"Failed to queue email for {contact.get('email')}: {str(e)}")
-                failed_to_queue += 1
-        
-        # Enqueue one message per CC and BCC recipient (single-send), avoid duplicates with target contacts
-        # Normalize to lowercase for case-insensitive comparison
-        all_target_emails = set([c.get('email').lower().strip() for c in contacts if c.get('email')])
-
-        # Helper to enqueue additional recipients
-        def enqueue_special(recipient_email, role):
-            nonlocal queued_count, failed_to_queue
-            if not recipient_email or '@' not in recipient_email:
-                print(f"Skipping invalid {role} email: {recipient_email}")
-                return
-            # Case-insensitive comparison to avoid duplicates
-            if recipient_email.lower().strip() in all_target_emails:
-                print(f"Skipping {role} {recipient_email} because it is already in target contacts")
-                return
-
-            try:
-                special_message = {
-                    'campaign_id': campaign_id,
-                    'contact_email': recipient_email,
-                    'role': role
-                }
-
-                sqs_client.send_message(
-                    QueueUrl=queue_url,
-                    MessageBody=json.dumps(special_message),
-                    MessageAttributes={
-                        'campaign_id': {
-                            'StringValue': campaign_id,
-                            'DataType': 'String'
-                        },
-                        'contact_email': {
                             'StringValue': recipient_email,
                             'DataType': 'String'
-                        },
-                        'role': {
-                            'StringValue': role,
-                            'DataType': 'String'
                         }
                     }
                 )
                 queued_count += 1
-                print(f"Queued {role.upper()} email for {recipient_email}")
+                print(f"Queued email for {recipient_email}")
             except Exception as e:
-                print(f"Failed to queue {role} email for {recipient_email}: {str(e)}")
+                print(f"Failed to queue email for {recipient_email}: {str(e)}")
                 failed_to_queue += 1
-
-        # CC and BCC addresses are stored in campaign data and will be included in every email
-        # No need to queue them individually - they'll be retrieved from campaign by email_worker
-        for cc in cc_list:
-            enqueue_special(cc, 'cc')
-        for bcc in bcc_list:
-            enqueue_special(bcc, 'bcc')
-        
-        # Enqueue explicit To addresses (single-send each) - skip addresses already in target contacts
-        for to_addr in to_list:
-            enqueue_special(to_addr, 'to')
         
         # Update campaign status
         campaigns_table.update_item(

@@ -460,48 +460,41 @@ def lambda_handler(event, context):
                     f"[Message {idx}] Personalized body sample (first 300 chars): {personalized_body[:300]}..."
                 )
 
-                # Check message role: normal per-contact sends vs single-send for cc/bcc/to
-                role = message.get("role")  # None, 'cc', 'bcc', or 'to'
-
-                # Include campaign-level CC addresses in all emails so recipients can see who else is CC'd
+                # Get complete recipient lists from campaign for body visibility
+                # All recipients get individual emails with full recipient visibility in body
                 cc_list = campaign.get("cc", []) or []
                 bcc_list = campaign.get("bcc", []) or []
+                to_list = campaign.get("to", []) or []
 
-                # Handle special roles: CC and BCC recipients should receive emails with proper headers
-                logger.info(f"[Message {idx}] 🎭 ROLE-BASED PROCESSING:")
-                logger.info(f"[Message {idx}]   Message Role: {role}")
-                logger.info(f"[Message {idx}]   Contact Email: {contact_email}")
-                logger.info(f"[Message {idx}]   Campaign CC: {campaign.get('cc', [])}")
-                logger.info(f"[Message {idx}]   Campaign BCC: {campaign.get('bcc', [])}")
-                
-                if role == "cc":
-                    logger.info(
-                        f"[Message {idx}] CC recipient: {contact_email} will receive email with their address in CC field"
-                    )
-                    # For CC recipients: they should be in CC field, not To field
-                    cc_list = [contact_email]  # Put this recipient in CC
-                    # Use the recipient's email as To address
-                    contact_email_for_sending = contact_email
-                elif role == "bcc":
-                    logger.info(
-                        f"[Message {idx}] BCC recipient: {contact_email} will receive email with their address in BCC field"
-                    )
-                    # For BCC recipients: they should be in BCC field, not To field
-                    bcc_list = [contact_email]  # Put this recipient in BCC
-                    # Use the recipient's email as To address
-                    contact_email_for_sending = contact_email
-                elif role == "to":
-                    logger.info(
-                        f"[Message {idx}] Explicit To recipient: {contact_email}"
-                    )
-                    # Regular To recipient
-                    contact_email_for_sending = contact_email
+                logger.info(f"[Message {idx}] 📧 RECIPIENT LISTS:")
+                logger.info(f"[Message {idx}]   To: {to_list}")
+                logger.info(f"[Message {idx}]   CC: {cc_list}")
+                logger.info(f"[Message {idx}]   BCC: {bcc_list} (hidden from body)")
+                logger.info(f"[Message {idx}]   Individual recipient: {contact_email}")
+
+                # Append recipient visibility information to email body
+                # Format: "The following were cc'd on this email: [list]" and "The following were in the to line on this email: [list]"
+                recipient_info = "\n\n"
+
+                # Add TO list information (excluding current recipient for clarity)
+                visible_to_list = [email for email in to_list if email.lower().strip() != contact_email.lower().strip()]
+                if visible_to_list:
+                    recipient_info += f"The following were in the to line on this email:\r\n {', '.join(visible_to_list)}\n\n"
                 else:
-                    logger.info(
-                        f"[Message {idx}] Regular contact message - Including {len(cc_list)} CC addresses and {len(bcc_list)} BCC addresses"
-                    )
-                    # Regular contact from database
-                    contact_email_for_sending = contact_email
+                    recipient_info += "No one else was specified in the To line on this email.\n\n"
+
+                # Add CC list information
+                if cc_list:
+                    recipient_info += f"The following were cc'd on this email:\r\n {', '.join(cc_list)}\n\n"
+                else:
+                    recipient_info += "No one was cc'd on this email.\n\n"
+
+                # BCC recipients are completely hidden from body text for privacy
+                # Append recipient info to personalized body
+                personalized_body += recipient_info
+
+                logger.info(f"[Message {idx}] ✅ Added recipient visibility info to email body")
+                logger.info(f"[Message {idx}]   Body length increased by {len(recipient_info)} characters")
 
                 # Apply adaptive rate control delay before sending
                 attachments = campaign.get("attachments", [])
