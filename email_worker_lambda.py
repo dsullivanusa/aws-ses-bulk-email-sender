@@ -604,6 +604,7 @@ def lambda_handler(event, context):
                             idx,
                             cc_list=cc_list,
                             bcc_list=bcc_list,
+                            role=role,
                         )
                     else:
                         success = send_smtp_email(
@@ -615,6 +616,7 @@ def lambda_handler(event, context):
                             idx,
                             cc_list=cc_list,
                             bcc_list=bcc_list,
+                            role=role,
                         )
 
                     send_duration = (datetime.now() - send_start).total_seconds()
@@ -978,7 +980,7 @@ def get_aws_credentials_from_secrets_manager(secret_name, msg_idx=0):
 
 
 def send_ses_email(
-    campaign, contact, from_email, subject, body, msg_idx=0, cc_list=None, bcc_list=None
+    campaign, contact, from_email, subject, body, msg_idx=0, cc_list=None, bcc_list=None, role='to'
 ):
     """Send email via AWS SES using IAM role or Secrets Manager credentials with attachment support"""
     try:
@@ -1003,7 +1005,6 @@ def send_ses_email(
             bcc_list = campaign.get("bcc") or []
         
         # For BCC recipients, filter out other BCC addresses from headers (they shouldn't see other BCC recipients)
-        role = message.get('role', 'to')
         if role == 'bcc':
             # BCC recipients only see To and CC in headers, not other BCC recipients
             # But they are still in BCC for delivery
@@ -1906,7 +1907,7 @@ def send_ses_email(
 
 
 def send_smtp_email(
-    campaign, contact, from_email, subject, body, msg_idx=0, cc_list=None, bcc_list=None
+    campaign, contact, from_email, subject, body, msg_idx=0, cc_list=None, bcc_list=None, role='to'
 ):
     """Send email via SMTP"""
     try:
@@ -1962,7 +1963,6 @@ def send_smtp_email(
             bcc_list = campaign.get("bcc") or []
         
         # For BCC recipients, filter out other BCC addresses from headers
-        role = message.get('role', 'to')
         if role == 'bcc':
             display_cc_list = cc_list
             display_bcc_list = []
