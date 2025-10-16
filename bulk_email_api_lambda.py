@@ -13,7 +13,7 @@ from email import encoders
 import base64
 from datetime import datetime
 from decimal import Decimal
-import re
+
 
 # Initialize clients
 dynamodb = boto3.resource('dynamodb', region_name='us-gov-west-1')
@@ -7102,6 +7102,7 @@ def send_campaign(body, headers, event=None):
         print(f"🎨 FONT ANALYSIS: Analyzing email body for font usage...")
         
         # Extract font classes from the email HTML
+        import re
         font_classes = re.findall(r'class="[^"]*ql-font-([^"\s]+)', email_body)
         if font_classes:
             unique_fonts = list(set(font_classes))
