@@ -463,16 +463,51 @@ def lambda_handler(event, context):
                 # Check message role: normal per-contact sends vs single-send for cc/bcc/to
                 role = message.get("role")  # None, 'cc', 'bcc', or 'to'
 
-                # Include campaign-level CC addresses in all emails so recipients can see who else is CC'd
-                cc_list = campaign.get("cc", []) or []
-                bcc_list = campaign.get("bcc", []) or []
+                # ═══════════════════════════════════════════════════════════════════════════════
+                # CC/BCC VISIBILITY AND DUPLICATE PREVENTION LOGIC
+                # ═══════════════════════════════════════════════════════════════════════════════
+                # WHY THIS LOGIC EXISTS:
+                # We need to balance two requirements:
+                # 1. CC/BCC recipients should receive exactly ONE email (no duplicates)
+                # 2. Regular target contacts should SEE who was CC'd/BCC'd (transparency)
+                #
+                # HOW IT WORKS:
+                # - Messages have a 'role' field: None (regular target), 'cc', 'bcc', or 'to'
+                # - Regular target contacts (role=None): ADD campaign CC/BCC lists to headers
+                #   → They see: To: alice@example.com, CC: dave@example.com
+                # - CC/BCC recipients (role='cc'/'bcc'): DON'T add campaign lists
+                #   → They see: To: dave@example.com, CC: dave@example.com
+                #
+                # EXAMPLE WITH 3 TARGETS + 1 CC:
+                # Target contacts: Alice, Bob, Carol | CC: Dave
+                # - Alice receives: To: Alice, CC: Dave (sees Dave was copied)
+                # - Bob receives:   To: Bob, CC: Dave (sees Dave was copied)
+                # - Carol receives: To: Carol, CC: Dave (sees Dave was copied)
+                # - Dave receives:  To: Dave, CC: Dave (receives only 1 email, not 3!)
+                #
+                # WITHOUT THIS LOGIC (OLD BEHAVIOR):
+                # - Dave would receive 3 emails (CC'd on Alice's, Bob's, and Carol's emails)
+                # ═══════════════════════════════════════════════════════════════════════════════
+                
+                # For regular target contacts: Include campaign-level CC/BCC so they see who else is copied
+                # For CC/BCC role messages: Don't include campaign lists (prevent duplicates)
+                if role in ['cc', 'bcc', 'to']:
+                    # This message is FOR a CC/BCC/To recipient - don't add campaign CC/BCC
+                    # (They're already receiving their own dedicated email)
+                    cc_list = []
+                    bcc_list = []
+                else:
+                    # This is a regular target contact - ADD campaign CC/BCC so they can see them
+                    # (This allows transparency - they know who else is copied on the email)
+                    cc_list = campaign.get("cc", []) or []
+                    bcc_list = campaign.get("bcc", []) or []
 
                 # Handle special roles: CC and BCC recipients should receive emails with proper headers
                 logger.info(f"[Message {idx}] 🎭 ROLE-BASED PROCESSING:")
                 logger.info(f"[Message {idx}]   Message Role: {role}")
                 logger.info(f"[Message {idx}]   Contact Email: {contact_email}")
-                logger.info(f"[Message {idx}]   Campaign CC: {campaign.get('cc', [])}")
-                logger.info(f"[Message {idx}]   Campaign BCC: {campaign.get('bcc', [])}")
+                logger.info(f"[Message {idx}]   CC List for this email: {cc_list}")
+                logger.info(f"[Message {idx}]   BCC List for this email: {bcc_list}")
                 
                 if role == "cc":
                     logger.info(

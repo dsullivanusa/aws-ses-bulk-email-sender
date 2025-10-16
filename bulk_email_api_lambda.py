@@ -7375,12 +7375,35 @@ def send_campaign(body, headers, event=None):
                 print(f"Failed to queue {role} email for {recipient_email}: {str(e)}")
                 failed_to_queue += 1
 
-        # CC and BCC addresses are stored in campaign data and will be included in every email
-        # No need to queue them individually - they'll be retrieved from campaign by email_worker
-        # for cc in cc_list:
-        #     enqueue_special(cc, 'cc')
-        # for bcc in bcc_list:
-        #     enqueue_special(bcc, 'bcc')
+        # ═══════════════════════════════════════════════════════════════════════════════
+        # CC/BCC DUPLICATE PREVENTION FIX
+        # ═══════════════════════════════════════════════════════════════════════════════
+        # Queue CC and BCC recipients to receive ONE email each (not added to every email)
+        # 
+        # WHY THIS CHANGE WAS MADE:
+        # Previously, campaign-level CC/BCC lists were stored in the campaign object and 
+        # the email worker added them to EVERY email sent to target contacts.
+        # 
+        # PROBLEM:
+        # - If you had 50 target contacts and 2 CC recipients, those 2 CC people would 
+        #   receive 50 DUPLICATE emails (one for each target contact email sent)
+        # 
+        # SOLUTION:
+        # - Queue CC/BCC recipients as separate messages with role='cc' or role='bcc'
+        # - They receive ONE email with their address in the CC/BCC field
+        # - Email worker checks the message role and only adds campaign CC/BCC list to 
+        #   regular target contact emails (so they can see who was copied)
+        # - CC/BCC recipients themselves don't get the campaign CC/BCC list added again
+        # 
+        # RESULT:
+        # - Target contacts see CC/BCC recipients in email headers (transparency)
+        # - CC/BCC recipients receive exactly ONE email (no duplicates)
+        # ═══════════════════════════════════════════════════════════════════════════════
+        
+        for cc in cc_list:
+            enqueue_special(cc, 'cc')
+        for bcc in bcc_list:
+            enqueue_special(bcc, 'bcc')
         
         # Enqueue explicit To addresses (single-send each) - skip addresses already in target contacts
         for to_addr in to_list:
