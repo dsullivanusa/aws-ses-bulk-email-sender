@@ -554,14 +554,14 @@ def lambda_handler(event, context):
 
                 # Update contact email for sending based on role
                 contact_for_sending = contact.copy()
-                contact_for_sending["email"] = contact_email_for_sending
+                contact_for_sending["email"] = contact_email
 
                 # Send email via AWS SES or SMTP
                 logger.info(
                     f"[Message {idx}] Sending email via {email_service.upper()}"
                 )
                 logger.info(
-                    f"[Message {idx}] To: {contact_email_for_sending}, CC: {cc_list}, BCC: {bcc_list}"
+                    f"[Message {idx}] To: {contact_email}, CC: {cc_list}, BCC: {bcc_list}"
                 )
                 send_start = datetime.now()
 
@@ -1217,10 +1217,7 @@ def send_ses_email(
                 f"[Message {msg_idx}] Sending to: {contact['email']}, From: {from_email}"
             )
             destination = {"ToAddresses": [contact["email"]]}
-            if cc_list:
-                destination["CcAddresses"] = cc_list
-            if bcc_list:
-                destination["BccAddresses"] = bcc_list
+            # Individual emails: no CC/BCC headers - recipient info shown in body instead
             
             # DEBUG: Print To, CC, BCC for simple email
             logger.info(f"[Message {msg_idx}] 📧 EMAIL HEADERS (Simple Email):")
@@ -1315,9 +1312,7 @@ def send_ses_email(
             
             return False  # Don't send the email
 
-        # Add Cc header for recipients (BCC must not appear in headers)
-        if cc_list:
-            msg["Cc"] = ", ".join(cc_list)
+        # Individual emails: no CC/BCC headers - recipient info shown in body instead
         
         # DEBUG: Print To, CC, BCC for raw email (with attachments)
         logger.info(f"[Message {msg_idx}] 📧 EMAIL HEADERS (Raw Email with Attachments):")
