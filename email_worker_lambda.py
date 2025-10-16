@@ -472,7 +472,7 @@ def lambda_handler(event, context):
                 logger.info(f"[Message {idx}]   BCC: {bcc_list} (hidden from body)")
                 logger.info(f"[Message {idx}]   Individual recipient: {contact_email}")
 
-                # Append recipient visibility information to email body
+                # Append recipient visibility information to email body AFTER HTML cleaning
                 # Format: "The following were cc'd on this email: [list]" and "The following were in the to line on this email: [list]"
                 recipient_info = "\n\n"
 
@@ -480,7 +480,7 @@ def lambda_handler(event, context):
                 if cc_list:
                     recipient_info += f"Emails CC'd: {', '.join(cc_list)}\n\n"
                 else:
-                    recipient_info += "No one was cc'd on this email.\n\n"
+                    recipient_info += "Emails CC'd: NONE\n\n"
 
                 # BCC recipients are completely hidden from body text for privacy
                 # Append recipient info to personalized body
