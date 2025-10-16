@@ -7869,5 +7869,3 @@ def get_aws_credentials_from_secrets_manager(secret_name):
     except Exception as e:
         print(f"Error retrieving credentials from Secrets Manager: {str(e)}")
         raise
-
-
