@@ -7295,11 +7295,21 @@ def send_campaign(body, headers, event=None):
         queued_count = 0
         failed_to_queue = 0
         
+        # Track ALL emails that get queued to prevent any duplicates across all recipient types
+        queued_emails = set()
+        
         # Queue contact email addresses to SQS (minimal payload)
         print(f"Queuing {len(contacts)} contacts to SQS for campaign {campaign_id}")
         
         for contact in contacts:
             try:
+                normalized_email = contact.get('email').lower().strip()
+                
+                # Check if this email was already queued (shouldn't happen but safety check)
+                if normalized_email in queued_emails:
+                    print(f"Skipping regular contact {contact.get('email')} because it was already queued")
+                    continue
+                
                 # Minimal message: only campaign_id and contact email
                 # Worker Lambda will retrieve campaign details from DynamoDB
                 message_body = {
@@ -7323,6 +7333,7 @@ def send_campaign(body, headers, event=None):
                     }
                 )
                 queued_count += 1
+                queued_emails.add(normalized_email)  # Track that this email was queued
                 print(f"Queued email for {contact.get('email')}")
                 
             except Exception as e:
@@ -7331,7 +7342,9 @@ def send_campaign(body, headers, event=None):
         
         # Enqueue one message per CC and BCC recipient (single-send), avoid duplicates with target contacts
         # Normalize to lowercase for case-insensitive comparison
-        all_target_emails = set([c.get('email').lower().strip() for c in contacts if c.get('email')])
+        
+        # Track ALL emails that get queued to prevent any duplicates across all recipient types
+        queued_emails = set()
 
         # Helper to enqueue additional recipients
         def enqueue_special(recipient_email, role):
@@ -7339,9 +7352,12 @@ def send_campaign(body, headers, event=None):
             if not recipient_email or '@' not in recipient_email:
                 print(f"Skipping invalid {role} email: {recipient_email}")
                 return
-            # Case-insensitive comparison to avoid duplicates
-            if recipient_email.lower().strip() in all_target_emails:
-                print(f"Skipping {role} {recipient_email} because it is already in target contacts")
+            
+            normalized_email = recipient_email.lower().strip()
+            
+            # Check against ALL previously queued emails (not just target contacts)
+            if normalized_email in queued_emails:
+                print(f"Skipping {role} {recipient_email} because it was already queued in another role")
                 return
 
             try:
@@ -7370,6 +7386,7 @@ def send_campaign(body, headers, event=None):
                     }
                 )
                 queued_count += 1
+                queued_emails.add(normalized_email)  # Track that this email was queued
                 print(f"Queued {role.upper()} email for {recipient_email}")
             except Exception as e:
                 print(f"Failed to queue {role} email for {recipient_email}: {str(e)}")
