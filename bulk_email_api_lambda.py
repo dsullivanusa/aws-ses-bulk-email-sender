@@ -5875,21 +5875,33 @@ Click OK to proceed or Cancel to abort.
                         timeZone: browserTimezone  // Explicitly use browser's local timezone
                     }};
                     
+                    // Helper function to parse UTC timestamp and convert to local time
+                    function parseUTCTimestamp(timestamp) {{
+                        if (!timestamp) return null;
+                        // If timestamp doesn't have 'Z' suffix, it's UTC from Lambda - add 'Z' to force UTC parsing
+                        const utcTimestamp = timestamp.endsWith('Z') ? timestamp : timestamp + 'Z';
+                        return new Date(utcTimestamp);
+                    }}
+                    
                     // Use created_at, fallback to sent_at for display
                     const createdTimestamp = campaign.created_at || campaign.sent_at || '';
                     let formattedCreatedDate = '-';
                     if (createdTimestamp) {{
-                        // Parse ISO timestamp and convert to local time
-                        const createdDate = new Date(createdTimestamp);
-                        formattedCreatedDate = createdDate.toLocaleString('en-US', dateOptions);
+                        // Parse as UTC and convert to local time
+                        const createdDate = parseUTCTimestamp(createdTimestamp);
+                        if (createdDate) {{
+                            formattedCreatedDate = createdDate.toLocaleString('en-US', dateOptions);
+                        }}
                     }}
                     
                     // Format completed time
                     let formattedCompletedTime = '-';
                     if (campaign.completed_at) {{
-                        // Parse ISO timestamp and convert to local time
-                        const completedDate = new Date(campaign.completed_at);
-                        formattedCompletedTime = completedDate.toLocaleString('en-US', dateOptions);
+                        // Parse as UTC and convert to local time
+                        const completedDate = parseUTCTimestamp(campaign.completed_at);
+                        if (completedDate) {{
+                            formattedCompletedTime = completedDate.toLocaleString('en-US', dateOptions);
+                        }}
                     }}
                     
                     // Calculate total recipients (target_contacts + To + CC + BCC)
@@ -7283,21 +7295,11 @@ def send_campaign(body, headers, event=None):
         queued_count = 0
         failed_to_queue = 0
         
-        # Track ALL emails that get queued to prevent any duplicates across all recipient types
-        queued_emails = set()
-        
         # Queue contact email addresses to SQS (minimal payload)
         print(f"Queuing {len(contacts)} contacts to SQS for campaign {campaign_id}")
         
         for contact in contacts:
             try:
-                normalized_email = contact.get('email').lower().strip()
-                
-                # Check if this email was already queued (shouldn't happen but safety check)
-                if normalized_email in queued_emails:
-                    print(f"Skipping regular contact {contact.get('email')} because it was already queued")
-                    continue
-                
                 # Minimal message: only campaign_id and contact email
                 # Worker Lambda will retrieve campaign details from DynamoDB
                 message_body = {
@@ -7321,7 +7323,6 @@ def send_campaign(body, headers, event=None):
                     }
                 )
                 queued_count += 1
-                queued_emails.add(normalized_email)  # Track that this email was queued
                 print(f"Queued email for {contact.get('email')}")
                 
             except Exception as e:
@@ -7330,38 +7331,29 @@ def send_campaign(body, headers, event=None):
         
         # Enqueue one message per CC and BCC recipient (single-send), avoid duplicates with target contacts
         # Normalize to lowercase for case-insensitive comparison
-        
-        # Track ALL emails that get queued to prevent any duplicates across all recipient types
-        queued_emails = set()
+        all_target_emails = set([c.get('email').lower().strip() for c in contacts if c.get('email')])
 
-        # Helper to enqueue recipients with full recipient lists for proper header visibility
-        def enqueue_with_full_recipients(recipient_email, role):
+        # Helper to enqueue additional recipients
+        def enqueue_special(recipient_email, role):
             nonlocal queued_count, failed_to_queue
             if not recipient_email or '@' not in recipient_email:
                 print(f"Skipping invalid {role} email: {recipient_email}")
                 return
-            
-            normalized_email = recipient_email.lower().strip()
-            
-            # Check against ALL previously queued emails (not just target contacts)
-            if normalized_email in queued_emails:
-                print(f"Skipping {role} {recipient_email} because it was already queued in another role")
+            # Case-insensitive comparison to avoid duplicates
+            if recipient_email.lower().strip() in all_target_emails:
+                print(f"Skipping {role} {recipient_email} because it is already in target contacts")
                 return
 
             try:
-                # Include full recipient lists in the message so all recipients appear in headers
-                message_body = {
+                special_message = {
                     'campaign_id': campaign_id,
                     'contact_email': recipient_email,
-                    'role': role,
-                    'to_list': to_list,      # Full To list for header visibility
-                    'cc_list': cc_list,      # Full CC list for header visibility
-                    'bcc_list': bcc_list     # Full BCC list for header visibility
+                    'role': role
                 }
 
                 sqs_client.send_message(
                     QueueUrl=queue_url,
-                    MessageBody=json.dumps(message_body),
+                    MessageBody=json.dumps(special_message),
                     MessageAttributes={
                         'campaign_id': {
                             'StringValue': campaign_id,
@@ -7378,56 +7370,52 @@ def send_campaign(body, headers, event=None):
                     }
                 )
                 queued_count += 1
-                queued_emails.add(normalized_email)  # Track that this email was queued
-                print(f"Queued {role.upper()} email for {recipient_email} with full recipient lists")
+                print(f"Queued {role.upper()} email for {recipient_email}")
             except Exception as e:
                 print(f"Failed to queue {role} email for {recipient_email}: {str(e)}")
                 failed_to_queue += 1
 
-        # Queue CC recipients with full recipient lists for proper header visibility
-        for cc in cc_list:
-            enqueue_with_full_recipients(cc, 'cc')
-
-        # Queue BCC recipients with full recipient lists for proper header visibility
-        for bcc in bcc_list:
-            enqueue_with_full_recipients(bcc, 'bcc')
-
-        # Enqueue explicit To addresses with full recipient lists
-        for to_addr in to_list:
-            enqueue_with_full_recipients(to_addr, 'to')
+        # CC and BCC addresses are stored in campaign data and will be included in every email
+        # No need to queue them individually - they'll be retrieved from campaign by email_worker
+        # for cc in cc_list:
+        #     enqueue_special(cc, 'cc')
+        # for bcc in bcc_list:
+        #     enqueue_special(bcc, 'bcc')
         
-        # If no messages were queued at all, we need at least one message for the campaign to be processed
-        if queued_count == 0:
-            print(f"⚠️ No recipients queued - creating a placeholder message for campaign tracking")
+        # Enqueue explicit To addresses (single-send each) - skip addresses already in target contacts
+        for to_addr in to_list:
+            enqueue_special(to_addr, 'to')
+        
+        # If no messages were queued but we have CC/BCC recipients, queue one dummy message
+        # so the email worker will process the campaign and send to CC/BCC
+        if queued_count == 0 and (cc_list or bcc_list):
+            print(f"⚠️ CC/BCC-only campaign with no regular contacts - queuing one message for CC/BCC delivery")
             try:
-                # Queue a placeholder message that won't send an email but will allow campaign completion tracking
-                placeholder_message = {
+                # Queue a message with the first CC or BCC as the "To" recipient
+                # They'll receive the email as both To and CC/BCC
+                dummy_recipient = cc_list[0] if cc_list else bcc_list[0]
+                message_body = {
                     'campaign_id': campaign_id,
-                    'contact_email': 'placeholder@campaign.invalid',  # Invalid email so it won't send
-                    'role': 'placeholder'
+                    'contact_email': dummy_recipient
                 }
                 sqs_client.send_message(
                     QueueUrl=queue_url,
-                    MessageBody=json.dumps(placeholder_message),
+                    MessageBody=json.dumps(message_body),
                     MessageAttributes={
                         'campaign_id': {
                             'StringValue': campaign_id,
                             'DataType': 'String'
                         },
                         'contact_email': {
-                            'StringValue': 'placeholder@campaign.invalid',
-                            'DataType': 'String'
-                        },
-                        'role': {
-                            'StringValue': 'placeholder',
+                            'StringValue': dummy_recipient,
                             'DataType': 'String'
                         }
                     }
                 )
                 queued_count += 1
-                print(f"✅ Queued placeholder message for campaign tracking")
+                print(f"✅ Queued CC/BCC delivery message to {dummy_recipient}")
             except Exception as e:
-                print(f"❌ Failed to queue placeholder message: {str(e)}")
+                print(f"❌ Failed to queue CC/BCC delivery message: {str(e)}")
                 failed_to_queue += 1
         
         # Update campaign status
@@ -7858,5 +7846,3 @@ def get_aws_credentials_from_secrets_manager(secret_name):
     except Exception as e:
         print(f"Error retrieving credentials from Secrets Manager: {str(e)}")
         raise
-
-
