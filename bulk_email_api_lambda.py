@@ -5875,33 +5875,21 @@ Click OK to proceed or Cancel to abort.
                         timeZone: browserTimezone  // Explicitly use browser's local timezone
                     }};
                     
-                    // Helper function to parse UTC timestamp and convert to local time
-                    function parseUTCTimestamp(timestamp) {{
-                        if (!timestamp) return null;
-                        // If timestamp doesn't have 'Z' suffix, it's UTC from Lambda - add 'Z' to force UTC parsing
-                        const utcTimestamp = timestamp.endsWith('Z') ? timestamp : timestamp + 'Z';
-                        return new Date(utcTimestamp);
-                    }}
-                    
                     // Use created_at, fallback to sent_at for display
                     const createdTimestamp = campaign.created_at || campaign.sent_at || '';
                     let formattedCreatedDate = '-';
                     if (createdTimestamp) {{
-                        // Parse as UTC and convert to local time
-                        const createdDate = parseUTCTimestamp(createdTimestamp);
-                        if (createdDate) {{
-                            formattedCreatedDate = createdDate.toLocaleString('en-US', dateOptions);
-                        }}
+                        // Parse ISO timestamp and convert to local time
+                        const createdDate = new Date(createdTimestamp);
+                        formattedCreatedDate = createdDate.toLocaleString('en-US', dateOptions);
                     }}
                     
                     // Format completed time
                     let formattedCompletedTime = '-';
                     if (campaign.completed_at) {{
-                        // Parse as UTC and convert to local time
-                        const completedDate = parseUTCTimestamp(campaign.completed_at);
-                        if (completedDate) {{
-                            formattedCompletedTime = completedDate.toLocaleString('en-US', dateOptions);
-                        }}
+                        // Parse ISO timestamp and convert to local time
+                        const completedDate = new Date(campaign.completed_at);
+                        formattedCompletedTime = completedDate.toLocaleString('en-US', dateOptions);
                     }}
                     
                     // Calculate total recipients (target_contacts + To + CC + BCC)
