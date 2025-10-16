@@ -471,37 +471,58 @@ def lambda_handler(event, context):
                 logger.info(f"[Message {idx}] 🎭 ROLE-BASED PROCESSING:")
                 logger.info(f"[Message {idx}]   Message Role: {role}")
                 logger.info(f"[Message {idx}]   Contact Email: {contact_email}")
-                logger.info(f"[Message {idx}]   Campaign CC: {campaign.get('cc', [])}")
-                logger.info(f"[Message {idx}]   Campaign BCC: {campaign.get('bcc', [])}")
+                
+                # Get full recipient lists from the message (for proper header visibility)
+                full_to_list = message.get('to_list', [])
+                full_cc_list = message.get('cc_list', [])
+                full_bcc_list = message.get('bcc_list', [])
+                
+                logger.info(f"[Message {idx}]   Full To List: {full_to_list}")
+                logger.info(f"[Message {idx}]   Full CC List: {full_cc_list}")
+                logger.info(f"[Message {idx}]   Full BCC List: {full_bcc_list}")
                 
                 if role == "cc":
                     logger.info(
-                        f"[Message {idx}] CC recipient: {contact_email} will receive email with their address in CC field"
+                        f"[Message {idx}] CC recipient: {contact_email} will receive email with ALL recipients in headers"
                     )
-                    # For CC recipients: they should be in CC field, not To field
-                    cc_list = [contact_email]  # Put this recipient in CC
-                    # Use the recipient's email as To address
+                    # For CC recipients: they should be in CC field, but see all recipients in headers
+                    # Use the recipient's email as To address for delivery
                     contact_email_for_sending = contact_email
+                    # Keep full recipient lists for headers
+                    cc_list = full_cc_list
+                    bcc_list = full_bcc_list
+                    to_list = full_to_list
                 elif role == "bcc":
                     logger.info(
-                        f"[Message {idx}] BCC recipient: {contact_email} will receive email with their address in BCC field"
+                        f"[Message {idx}] BCC recipient: {contact_email} will receive email with To/CC recipients in headers (not other BCC)"
                     )
-                    # For BCC recipients: they should be in BCC field, not To field
-                    bcc_list = [contact_email]  # Put this recipient in BCC
-                    # Use the recipient's email as To address
+                    # For BCC recipients: they should be in BCC field, but see To/CC in headers (not other BCC)
+                    # Use the recipient's email as To address for delivery
                     contact_email_for_sending = contact_email
+                    # BCC recipients see To and CC in headers, but not other BCC recipients
+                    cc_list = full_cc_list
+                    bcc_list = [contact_email]  # Only themselves in BCC
+                    to_list = full_to_list
                 elif role == "to":
                     logger.info(
-                        f"[Message {idx}] Explicit To recipient: {contact_email}"
+                        f"[Message {idx}] Explicit To recipient: {contact_email} will receive email with ALL recipients in headers"
                     )
-                    # Regular To recipient
+                    # Regular To recipient - sees all recipients in headers
                     contact_email_for_sending = contact_email
+                    # Keep full recipient lists for headers
+                    cc_list = full_cc_list
+                    bcc_list = full_bcc_list
+                    to_list = full_to_list
                 else:
                     logger.info(
-                        f"[Message {idx}] Regular contact message - Including {len(cc_list)} CC addresses and {len(bcc_list)} BCC addresses"
+                        f"[Message {idx}] Regular contact message - Including full recipient lists in headers"
                     )
-                    # Regular contact from database
+                    # Regular contact from database - sees all recipients in headers
                     contact_email_for_sending = contact_email
+                    # Keep full recipient lists for headers
+                    cc_list = full_cc_list
+                    bcc_list = full_bcc_list
+                    to_list = full_to_list
 
                 # Apply adaptive rate control delay before sending
                 attachments = campaign.get("attachments", [])
@@ -980,6 +1001,18 @@ def send_ses_email(
             cc_list = campaign.get("cc") or []
         if bcc_list is None:
             bcc_list = campaign.get("bcc") or []
+        
+        # For BCC recipients, filter out other BCC addresses from headers (they shouldn't see other BCC recipients)
+        role = message.get('role', 'to')
+        if role == 'bcc':
+            # BCC recipients only see To and CC in headers, not other BCC recipients
+            # But they are still in BCC for delivery
+            display_cc_list = cc_list
+            display_bcc_list = []  # Don't show other BCC recipients
+        else:
+            # To and CC recipients see all recipients in headers
+            display_cc_list = cc_list
+            display_bcc_list = bcc_list
 
         # Check if we should use IAM role or explicit credentials
         if secret_name:
@@ -1224,10 +1257,10 @@ def send_ses_email(
                 f"[Message {msg_idx}] Sending to: {contact['email']}, From: {from_email}"
             )
             destination = {"ToAddresses": [contact["email"]]}
-            if cc_list:
-                destination["CcAddresses"] = cc_list
-            if bcc_list:
-                destination["BccAddresses"] = bcc_list
+            if display_cc_list:
+                destination["CcAddresses"] = display_cc_list
+            if display_bcc_list:
+                destination["BccAddresses"] = display_bcc_list
             
             # DEBUG: Print To, CC, BCC for simple email
             logger.info(f"[Message {msg_idx}] 📧 EMAIL HEADERS (Simple Email):")
@@ -1323,14 +1356,14 @@ def send_ses_email(
             return False  # Don't send the email
 
         # Add Cc header for recipients (BCC must not appear in headers)
-        if cc_list:
-            msg["Cc"] = ", ".join(cc_list)
+        if display_cc_list:
+            msg["Cc"] = ", ".join(display_cc_list)
         
         # DEBUG: Print To, CC, BCC for raw email (with attachments)
         logger.info(f"[Message {msg_idx}] 📧 EMAIL HEADERS (Raw Email with Attachments):")
         logger.info(f"[Message {msg_idx}]   To: {contact['email']}")
-        logger.info(f"[Message {msg_idx}]   CC: {cc_list}")
-        logger.info(f"[Message {msg_idx}]   BCC: {bcc_list}")
+        logger.info(f"[Message {msg_idx}]   CC: {display_cc_list}")
+        logger.info(f"[Message {msg_idx}]   BCC: {display_bcc_list}")
         logger.info(f"[Message {msg_idx}]   MIME CC Header: {msg.get('Cc', 'None')}")
 
         # multipart/related container for HTML body and inline images
@@ -1479,10 +1512,10 @@ def send_ses_email(
 
         # Build Destinations list for envelope recipients (To + Cc + Bcc)
         destinations = [contact["email"]]
-        if cc_list:
-            destinations.extend(cc_list)
-        if bcc_list:
-            destinations.extend(bcc_list)
+        if display_cc_list:
+            destinations.extend(display_cc_list)
+        if display_bcc_list:
+            destinations.extend(display_bcc_list)
         
         # DEBUG: Print SES envelope destinations
         logger.info(f"[Message {msg_idx}] 📬 SES ENVELOPE DESTINATIONS:")
@@ -1927,8 +1960,18 @@ def send_smtp_email(
             cc_list = campaign.get("cc") or []
         if bcc_list is None:
             bcc_list = campaign.get("bcc") or []
-        if cc_list:
-            msg["Cc"] = ", ".join(cc_list)
+        
+        # For BCC recipients, filter out other BCC addresses from headers
+        role = message.get('role', 'to')
+        if role == 'bcc':
+            display_cc_list = cc_list
+            display_bcc_list = []
+        else:
+            display_cc_list = cc_list
+            display_bcc_list = bcc_list
+        
+        if display_cc_list:
+            msg["Cc"] = ", ".join(display_cc_list)
 
         msg.attach(MIMEText(body, "html"))
 
@@ -1936,11 +1979,11 @@ def send_smtp_email(
 
         # Build envelope recipients (To + Cc + Bcc)
         envelope_recipients = [contact["email"]]
-        envelope_recipients.extend(cc_list)
-        envelope_recipients.extend(bcc_list)
+        envelope_recipients.extend(display_cc_list)
+        envelope_recipients.extend(display_bcc_list)
 
         # Print recipient addresses before calling SMTP
-        print(f"📧✉️ *** To: [{contact['email']}], CC: {cc_list if cc_list else []}, BCC: {bcc_list if bcc_list else []}")
+        print(f"📧✉️ *** To: [{contact['email']}], CC: {display_cc_list if display_cc_list else []}, BCC: {display_bcc_list if display_bcc_list else []}")
 
         with smtplib.SMTP(smtp_server, smtp_port) as server:
             logger.info(

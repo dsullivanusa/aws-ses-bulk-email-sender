@@ -7346,8 +7346,8 @@ def send_campaign(body, headers, event=None):
         # Track ALL emails that get queued to prevent any duplicates across all recipient types
         queued_emails = set()
 
-        # Helper to enqueue additional recipients
-        def enqueue_special(recipient_email, role):
+        # Helper to enqueue recipients with full recipient lists for proper header visibility
+        def enqueue_with_full_recipients(recipient_email, role):
             nonlocal queued_count, failed_to_queue
             if not recipient_email or '@' not in recipient_email:
                 print(f"Skipping invalid {role} email: {recipient_email}")
@@ -7361,15 +7361,19 @@ def send_campaign(body, headers, event=None):
                 return
 
             try:
-                special_message = {
+                # Include full recipient lists in the message so all recipients appear in headers
+                message_body = {
                     'campaign_id': campaign_id,
                     'contact_email': recipient_email,
-                    'role': role
+                    'role': role,
+                    'to_list': to_list,      # Full To list for header visibility
+                    'cc_list': cc_list,      # Full CC list for header visibility
+                    'bcc_list': bcc_list     # Full BCC list for header visibility
                 }
 
                 sqs_client.send_message(
                     QueueUrl=queue_url,
-                    MessageBody=json.dumps(special_message),
+                    MessageBody=json.dumps(message_body),
                     MessageAttributes={
                         'campaign_id': {
                             'StringValue': campaign_id,
@@ -7387,22 +7391,22 @@ def send_campaign(body, headers, event=None):
                 )
                 queued_count += 1
                 queued_emails.add(normalized_email)  # Track that this email was queued
-                print(f"Queued {role.upper()} email for {recipient_email}")
+                print(f"Queued {role.upper()} email for {recipient_email} with full recipient lists")
             except Exception as e:
                 print(f"Failed to queue {role} email for {recipient_email}: {str(e)}")
                 failed_to_queue += 1
 
-        # Queue CC recipients individually - each gets one email with their address in CC field
+        # Queue CC recipients with full recipient lists for proper header visibility
         for cc in cc_list:
-            enqueue_special(cc, 'cc')
+            enqueue_with_full_recipients(cc, 'cc')
 
-        # Queue BCC recipients individually - each gets one email with their address in BCC field
+        # Queue BCC recipients with full recipient lists for proper header visibility
         for bcc in bcc_list:
-            enqueue_special(bcc, 'bcc')
+            enqueue_with_full_recipients(bcc, 'bcc')
 
-        # Enqueue explicit To addresses (single-send each) - skip addresses already in target contacts
+        # Enqueue explicit To addresses with full recipient lists
         for to_addr in to_list:
-            enqueue_special(to_addr, 'to')
+            enqueue_with_full_recipients(to_addr, 'to')
         
         # If no messages were queued at all, we need at least one message for the campaign to be processed
         if queued_count == 0:
