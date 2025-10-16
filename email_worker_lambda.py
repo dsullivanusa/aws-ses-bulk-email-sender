@@ -476,13 +476,6 @@ def lambda_handler(event, context):
                 # Format: "The following were cc'd on this email: [list]" and "The following were in the to line on this email: [list]"
                 recipient_info = "\n\n"
 
-                # Add TO list information (excluding current recipient for clarity)
-                visible_to_list = [email for email in to_list if email.lower().strip() != contact_email.lower().strip()]
-                if visible_to_list:
-                    recipient_info += f"The following were in the to line on this email:\r\n {', '.join(visible_to_list)}\n\n"
-                else:
-                    recipient_info += "No one else was specified in the To line on this email.\n\n"
-
                 # Add CC list information
                 if cc_list:
                     recipient_info += f"The following were cc'd on this email:\r\n {', '.join(cc_list)}\n\n"
