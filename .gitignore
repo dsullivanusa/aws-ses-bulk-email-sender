@@ -2,19 +2,88 @@
 config.json
 lambda_config.json
 *.zip
+.aws/
+credentials
+credentials.json
 
 # Python
 __pycache__/
 *.pyc
 *.pyo
+*.pyd
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
 
-# IDE
+# Virtual Environments
+.venv/
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+.hypothesis/
+
+# IDE and Editor
 .vscode/
 .idea/
+*.swp
+*.swo
+*~
 
-# OS
+# OS Generated Files
 .DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
 Thumbs.db
+Desktop.ini
 
-# Logs
+# Logs and Temporary Files
 *.log
+*.tmp
+*.temp
+.tmp/
+temp/
+
+# Development Tools
+.trunk/
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# AWS Lambda
+lambda-deployments/
+serverless/
+
+# Local development
+sample_contacts.csv
+test_*.csv

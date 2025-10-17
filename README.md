@@ -12,6 +12,25 @@ A professional bulk email sending application with a GUI interface similar to Ma
 - **Rate Limiting**: Control sending speed to comply with SES limits
 - **Personalization**: Dynamic content with {{first_name}}, {{last_name}}, {{email}}, {{company}} placeholders
 
+## Project Structure
+
+```
+├── src/                    # Core application files
+│   ├── bulk_email_api_lambda.py    # Main Lambda (API + embedded web UI)
+│   ├── email_worker_lambda.py      # SQS worker Lambda
+│   ├── bulk_email_sender.py        # Desktop GUI application
+│   └── *.py                        # Other GUI and monitoring apps
+├── scripts/                # Infrastructure and deployment scripts
+├── deployment/             # Main deployment scripts
+├── docs/                   # Documentation
+├── tests/                  # Unit tests
+├── lib/                    # Shared libraries
+├── email_templates/        # Email templates
+├── configuration/          # Configuration files (JSON, requirements)
+├── front-end/              # Reserved for future UI split
+└── README.md, .gitignore   # Root documentation
+```
+
 ## Setup Instructions
 
 ### 1. Install Dependencies
@@ -27,7 +46,7 @@ pip install -r requirements.txt
 
 ### 3. Run the Application
 ```bash
-python bulk_email_sender.py
+python src/bulk_email_sender.py
 ```
 
 ## Serverless API Deployment
