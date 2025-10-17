@@ -474,13 +474,14 @@ def lambda_handler(event, context):
 
                 # Append recipient visibility information to email body AFTER HTML cleaning
                 # Format: "The following were cc'd on this email: [list]" and "The following were in the to line on this email: [list]"
-                recipient_info = "\n\n"
+                # Use HTML <br> tags for proper line breaks in email clients
+                recipient_info = "<br><br>"
 
                 # Add CC list information
                 if cc_list:
-                    recipient_info += f"Emails CC'd: {', '.join(cc_list)}\n\n"
+                    recipient_info += f"Emails CC'd: {', '.join(cc_list)}<br><br>"
                 else:
-                    recipient_info += "Emails CC'd: NONE\n\n"
+                    recipient_info += "Emails CC'd: NONE<br><br>"
 
                 # BCC recipients are completely hidden from body text for privacy
                 # Append recipient info to personalized body
