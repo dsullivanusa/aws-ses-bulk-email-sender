@@ -14,6 +14,7 @@ import base64
 from datetime import datetime
 from decimal import Decimal
 
+
 # Initialize clients
 dynamodb = boto3.resource('dynamodb', region_name='us-gov-west-1')
 contacts_table = dynamodb.Table('EmailContacts')
@@ -7295,65 +7296,45 @@ def send_campaign(body, headers, event=None):
         queued_count = 0
         failed_to_queue = 0
         
-        # Queue contact email addresses to SQS (minimal payload)
-        print(f"Queuing {len(contacts)} contacts to SQS for campaign {campaign_id}")
-        
+        # Queue emails for all recipients (TO, CC, BCC) - unified approach
+        # Collect all unique recipients to avoid duplicates
+        all_recipients = set()
+
+        # Add database contacts
         for contact in contacts:
+            if contact.get('email'):
+                all_recipients.add(contact.get('email').lower().strip())
+
+        # Add CC recipients
+        for cc_email in cc_list:
+            if cc_email:
+                all_recipients.add(cc_email.lower().strip())
+
+        # Add BCC recipients
+        for bcc_email in bcc_list:
+            if bcc_email:
+                all_recipients.add(bcc_email.lower().strip())
+
+        # Add explicit TO recipients
+        for to_email in to_list:
+            if to_email:
+                all_recipients.add(to_email.lower().strip())
+
+        # Queue each unique recipient
+        for recipient_email in all_recipients:
+            if not recipient_email or '@' not in recipient_email:
+                print(f"Skipping invalid email: {recipient_email}")
+                continue
+
             try:
-                # Minimal message: only campaign_id and contact email
-                # Worker Lambda will retrieve campaign details from DynamoDB
                 message_body = {
                     'campaign_id': campaign_id,
-                    'contact_email': contact.get('email')
+                    'contact_email': recipient_email
                 }
-                
-                # Send message to SQS
+
                 sqs_client.send_message(
                     QueueUrl=queue_url,
                     MessageBody=json.dumps(message_body),
-                    MessageAttributes={
-                        'campaign_id': {
-                            'StringValue': campaign_id,
-                            'DataType': 'String'
-                        },
-                        'contact_email': {
-                            'StringValue': contact.get('email', 'unknown'),
-                            'DataType': 'String'
-                        }
-                    }
-                )
-                queued_count += 1
-                print(f"Queued email for {contact.get('email')}")
-                
-            except Exception as e:
-                print(f"Failed to queue email for {contact.get('email')}: {str(e)}")
-                failed_to_queue += 1
-        
-        # Enqueue one message per CC and BCC recipient (single-send), avoid duplicates with target contacts
-        # Normalize to lowercase for case-insensitive comparison
-        all_target_emails = set([c.get('email').lower().strip() for c in contacts if c.get('email')])
-
-        # Helper to enqueue additional recipients
-        def enqueue_special(recipient_email, role):
-            nonlocal queued_count, failed_to_queue
-            if not recipient_email or '@' not in recipient_email:
-                print(f"Skipping invalid {role} email: {recipient_email}")
-                return
-            # Case-insensitive comparison to avoid duplicates
-            if recipient_email.lower().strip() in all_target_emails:
-                print(f"Skipping {role} {recipient_email} because it is already in target contacts")
-                return
-
-            try:
-                special_message = {
-                    'campaign_id': campaign_id,
-                    'contact_email': recipient_email,
-                    'role': role
-                }
-
-                sqs_client.send_message(
-                    QueueUrl=queue_url,
-                    MessageBody=json.dumps(special_message),
                     MessageAttributes={
                         'campaign_id': {
                             'StringValue': campaign_id,
@@ -7362,83 +7343,13 @@ def send_campaign(body, headers, event=None):
                         'contact_email': {
                             'StringValue': recipient_email,
                             'DataType': 'String'
-                        },
-                        'role': {
-                            'StringValue': role,
-                            'DataType': 'String'
                         }
                     }
                 )
                 queued_count += 1
-                print(f"Queued {role.upper()} email for {recipient_email}")
+                print(f"Queued email for {recipient_email}")
             except Exception as e:
-                print(f"Failed to queue {role} email for {recipient_email}: {str(e)}")
-                failed_to_queue += 1
-
-        # ═══════════════════════════════════════════════════════════════════════════════
-        # CC/BCC DUPLICATE PREVENTION FIX
-        # ═══════════════════════════════════════════════════════════════════════════════
-        # Queue CC and BCC recipients to receive ONE email each (not added to every email)
-        # 
-        # WHY THIS CHANGE WAS MADE:
-        # Previously, campaign-level CC/BCC lists were stored in the campaign object and 
-        # the email worker added them to EVERY email sent to target contacts.
-        # 
-        # PROBLEM:
-        # - If you had 50 target contacts and 2 CC recipients, those 2 CC people would 
-        #   receive 50 DUPLICATE emails (one for each target contact email sent)
-        # 
-        # SOLUTION:
-        # - Queue CC/BCC recipients as separate messages with role='cc' or role='bcc'
-        # - They receive ONE email with their address in the CC/BCC field
-        # - Email worker checks the message role and only adds campaign CC/BCC list to 
-        #   regular target contact emails (so they can see who was copied)
-        # - CC/BCC recipients themselves don't get the campaign CC/BCC list added again
-        # 
-        # RESULT:
-        # - Target contacts see CC/BCC recipients in email headers (transparency)
-        # - CC/BCC recipients receive exactly ONE email (no duplicates)
-        # ═══════════════════════════════════════════════════════════════════════════════
-        
-        for cc in cc_list:
-            enqueue_special(cc, 'cc')
-        for bcc in bcc_list:
-            enqueue_special(bcc, 'bcc')
-        
-        # Enqueue explicit To addresses (single-send each) - skip addresses already in target contacts
-        for to_addr in to_list:
-            enqueue_special(to_addr, 'to')
-        
-        # If no messages were queued but we have CC/BCC recipients, queue one dummy message
-        # so the email worker will process the campaign and send to CC/BCC
-        if queued_count == 0 and (cc_list or bcc_list):
-            print(f"⚠️ CC/BCC-only campaign with no regular contacts - queuing one message for CC/BCC delivery")
-            try:
-                # Queue a message with the first CC or BCC as the "To" recipient
-                # They'll receive the email as both To and CC/BCC
-                dummy_recipient = cc_list[0] if cc_list else bcc_list[0]
-                message_body = {
-                    'campaign_id': campaign_id,
-                    'contact_email': dummy_recipient
-                }
-                sqs_client.send_message(
-                    QueueUrl=queue_url,
-                    MessageBody=json.dumps(message_body),
-                    MessageAttributes={
-                        'campaign_id': {
-                            'StringValue': campaign_id,
-                            'DataType': 'String'
-                        },
-                        'contact_email': {
-                            'StringValue': dummy_recipient,
-                            'DataType': 'String'
-                        }
-                    }
-                )
-                queued_count += 1
-                print(f"✅ Queued CC/BCC delivery message to {dummy_recipient}")
-            except Exception as e:
-                print(f"❌ Failed to queue CC/BCC delivery message: {str(e)}")
+                print(f"Failed to queue email for {recipient_email}: {str(e)}")
                 failed_to_queue += 1
         
         # Update campaign status
