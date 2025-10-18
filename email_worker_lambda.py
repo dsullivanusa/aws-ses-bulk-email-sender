@@ -1465,16 +1465,15 @@ def send_ses_email(
         )
 
         # Build Destinations list for envelope recipients (To + Cc + Bcc)
+        # FIX: For attachment emails, only send to the specific recipient for this SQS message
+        # CC/BCC info is already shown in the email body, so no need to include in envelope
         destinations = [contact["email"]]
-        if cc_list:
-            destinations.extend(cc_list)
-        if bcc_list:
-            destinations.extend(bcc_list)
         
         # DEBUG: Print SES envelope destinations
         logger.info(f"[Message {msg_idx}] 📬 SES ENVELOPE DESTINATIONS:")
         logger.info(f"[Message {msg_idx}]   All Recipients: {destinations}")
         logger.info(f"[Message {msg_idx}]   Total Count: {len(destinations)}")
+        logger.info(f"[Message {msg_idx}]   Note: CC/BCC recipients shown in email body only")
 
         # Attempt to rewrite HTML body references to S3 keys or filenames to cid: references
         try:
