@@ -30,6 +30,12 @@ If the script can't automatically find the function name:
 python diagnose_emailworker_errors.py 24 email-worker-function
 ```
 
+### List All Lambda Functions (Helper)
+To see all your Lambda functions and find the right name:
+```bash
+python list_lambda_functions_simple.py
+```
+
 ## Requirements
 
 1. **Python 3.7+** installed
@@ -136,6 +142,29 @@ DETAILED ERROR SAMPLES (Most Recent)
 ```
 
 ## Common Issues and Solutions
+
+### 0. Could Not Find Lambda Function Name
+**Problem:** "Could not find Lambda function name in alarm dimensions"
+
+**Solution - The script now handles this automatically:**
+1. The script will list all your Lambda functions
+2. Find the one related to email/worker (usually contains "email", "worker", or "ses" in name)
+3. Re-run with the function name:
+   ```bash
+   python diagnose_emailworker_errors.py 24 your-function-name
+   ```
+
+**Alternative - Use the helper script:**
+```bash
+python list_lambda_functions_simple.py
+```
+This will show all functions and highlight email-related ones.
+
+**Why this happens:**
+- Alarm might be a composite alarm (no direct Lambda dimension)
+- Alarm dimension structure is different than expected
+- Alarm uses resource ARN instead of function name
+- Custom metric alarm not directly tied to Lambda
 
 ### 1. No Alarms Found
 **Problem:** Script says "No EmailWorker alarms found"

@@ -1,0 +1,76 @@
+===============================================================================
+QUICK START: Diagnose EmailWorker CloudWatch Errors
+===============================================================================
+
+STEP 1: Find Your Lambda Function Name
+---------------------------------------
+Run this first to see all your Lambda functions:
+
+    python list_lambda_functions_simple.py
+
+Look for functions with names like:
+  - email-worker
+  - EmailWorker
+  - email-worker-function
+  - BulkEmailWorker
+  - SESEmailWorker
+  - etc.
+
+Copy the exact function name you find.
+
+
+STEP 2: Run the Diagnostic Script
+----------------------------------
+Once you have the function name, run:
+
+    python diagnose_emailworker_errors.py 24 YOUR-FUNCTION-NAME
+
+Replace YOUR-FUNCTION-NAME with the actual name from Step 1.
+
+Examples:
+    python diagnose_emailworker_errors.py 24 email-worker-function
+    python diagnose_emailworker_errors.py 48 EmailWorkerLambda
+
+
+WHAT YOU'LL GET:
+----------------
+✓ Total error count
+✓ Error types (KeyError, TypeError, Timeouts, etc.)
+✓ Sample error messages with timestamps
+✓ Lambda function metrics
+✓ A detailed report file saved to disk
+
+
+DIFFERENT TIME RANGES:
+---------------------
+Last 1 hour:    python diagnose_emailworker_errors.py 1 your-function-name
+Last 24 hours:  python diagnose_emailworker_errors.py 24 your-function-name
+Last 48 hours:  python diagnose_emailworker_errors.py 48 your-function-name
+Last 7 days:    python diagnose_emailworker_errors.py 168 your-function-name
+
+
+REQUIREMENTS:
+-------------
+1. Python 3.7+ installed
+2. boto3 installed:  pip install boto3
+3. AWS credentials configured (aws configure)
+
+
+TROUBLESHOOTING:
+----------------
+If you get "No module named boto3":
+    pip install boto3
+
+If you get AWS authentication errors:
+    aws configure
+    (Enter your AWS Access Key ID and Secret Access Key)
+
+If you get "AccessDenied":
+    You need CloudWatch and Lambda read permissions
+
+If still stuck:
+    Read the full guide: EMAILWORKER_ERROR_DIAGNOSTICS.md
+
+
+===============================================================================
+

@@ -34,14 +34,21 @@ def find_emailworker_alarms():
     for alarm in alarms:
         state_icon = "ALARM" if alarm['StateValue'] == 'ALARM' else "OK"
         print(f"\n  [{state_icon}] {alarm['AlarmName']}")
+        print(f"      Namespace: {alarm.get('Namespace', 'N/A')}")
         print(f"      Metric: {alarm['MetricName']}")
         print(f"      State: {alarm['StateValue']}")
         print(f"      Reason: {alarm.get('StateReason', 'N/A')}")
         
-        # Extract function name from dimensions
-        for dim in alarm.get('Dimensions', []):
-            if dim['Name'] == 'FunctionName':
-                print(f"      Lambda Function: {dim['Value']}")
+        # Show ALL dimensions
+        dimensions = alarm.get('Dimensions', [])
+        if dimensions:
+            print(f"      Dimensions:")
+            for dim in dimensions:
+                print(f"        - {dim['Name']}: {dim['Value']}")
+                if dim['Name'] == 'FunctionName':
+                    print(f"      --> Lambda Function Found: {dim['Value']}")
+        else:
+            print(f"      Dimensions: None (This might be a composite alarm)")
     
     return alarms
 
@@ -271,15 +278,42 @@ def main():
             if function_name:
                 break
     
-    if not function_name:
-        print("\nERROR: Could not find Lambda function name in alarm dimensions")
-        print("Please specify the function name manually as the second argument:")
-        print("  python diagnose_emailworker_errors.py 24 <function-name>")
-        return
-    
+    # Allow manual function name override
     if len(sys.argv) > 2:
         function_name = sys.argv[2]
         print(f"\nUsing manually specified function name: {function_name}")
+    
+    if not function_name:
+        print("\nERROR: Could not find Lambda function name in alarm dimensions")
+        print("\nLet me list your Lambda functions to help you find the right one...")
+        
+        try:
+            lambda_client = boto3.client('lambda')
+            response = lambda_client.list_functions()
+            functions = response.get('Functions', [])
+            
+            if functions:
+                print("\nAvailable Lambda Functions:")
+                print("-" * 80)
+                for idx, func in enumerate(functions, 1):
+                    print(f"  {idx}. {func['FunctionName']}")
+                    print(f"     Runtime: {func['Runtime']} | Memory: {func['MemorySize']}MB")
+                    print(f"     Last Modified: {func['LastModified']}")
+                    print()
+                
+                print("\nPlease run the script again with the function name:")
+                print(f"  python diagnose_emailworker_errors.py {hours} <function-name>")
+                print("\nExample:")
+                print(f"  python diagnose_emailworker_errors.py {hours} {functions[0]['FunctionName']}")
+            else:
+                print("\nNo Lambda functions found in this account/region")
+                print("Please verify you're connected to the correct AWS account and region")
+        except Exception as e:
+            print(f"\nCouldn't list Lambda functions: {str(e)}")
+            print("\nPlease specify the function name manually:")
+            print(f"  python diagnose_emailworker_errors.py {hours} <function-name>")
+        
+        return
     
     # Step 3: Get Lambda error logs
     events = get_lambda_errors(function_name, hours)
