@@ -1,0 +1,119 @@
+╔══════════════════════════════════════════════════════════════════════════════╗
+║               FIND EmailWorker CloudWatch Error Sources                      ║
+║                          QUICK REFERENCE                                     ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+
+📍 WHERE ARE ERRORS SENT TO CLOUDWATCH?
+═══════════════════════════════════════════════════════════════════════════════
+
+1. LOGGER.ERROR() CALLS
+   → Creates log entries in CloudWatch Logs
+   → Can trigger log metric filters
+   → Found at: Lines 362, 601-604, 673-731, 811-814, 831-833, 883-885, 890-895
+
+2. CUSTOM METRICS
+   → Manually sent via send_cloudwatch_metric()
+   → Namespace: "EmailWorker/Custom"
+   → Function at: Lines 230-251
+   → Sent from: Lines 283, 606, 804-849
+
+3. UNHANDLED EXCEPTIONS
+   → Automatically counted by AWS Lambda as "Errors"
+   → Namespace: "AWS/Lambda", Metric: "Errors"
+   → Risk at: Line 310 (before try-catch!)
+
+4. LAMBDA TIMEOUTS/OOM
+   → Automatically counted by AWS Lambda
+   → Check Lambda configuration
+
+
+🔍 HOW TO FIND WHAT'S TRIGGERING YOUR ALARM
+═══════════════════════════════════════════════════════════════════════════════
+
+STEP 1: Run diagnostic script
+┌──────────────────────────────────────────────────────────────────────────┐
+│ python list_lambda_functions_simple.py                                   │
+│ python diagnose_emailworker_errors.py 24 YOUR-FUNCTION-NAME             │
+└──────────────────────────────────────────────────────────────────────────┘
+
+STEP 2: Check alarm configuration
+┌──────────────────────────────────────────────────────────────────────────┐
+│ aws cloudwatch describe-alarms --alarm-names EmailWorker-FunctionErrors │
+└──────────────────────────────────────────────────────────────────────────┘
+   Look for:
+   • Namespace (AWS/Lambda or EmailWorker/Custom?)
+   • MetricName (Errors, EmailsFailed, etc.?)
+   • Dimensions (which Lambda function?)
+
+STEP 3: Check for log metric filters
+┌──────────────────────────────────────────────────────────────────────────┐
+│ aws logs describe-metric-filters \                                      │
+│   --log-group-name /aws/lambda/YOUR-FUNCTION-NAME                       │
+└──────────────────────────────────────────────────────────────────────────┘
+
+
+📊 COMMON ERROR SOURCES IN YOUR CODE
+═══════════════════════════════════════════════════════════════════════════════
+
+Most Common:
+  ✗ Campaign not found in DynamoDB        → Line 362-366
+  ✗ Missing campaign_id or contact_email  → Line 347-348
+  ✗ SES throttling                        → Line 599-611
+  ✗ Invalid email addresses               → Lines 1243, 1299, 1724, 1745, 1776
+  ✗ AWS ClientError (SES/DynamoDB)        → Lines 673-731
+
+Less Common:
+  ✗ Malformed SQS event                   → Line 310 (UNHANDLED!)
+  ✗ Invalid JSON in SQS message body      → Line 338
+  ✗ Fatal unhandled exception             → Lines 887-898
+
+
+⚡ KEY INSIGHT
+═══════════════════════════════════════════════════════════════════════════════
+
+Your Lambda function catches ALL exceptions and returns success (200).
+This means AWS Lambda's built-in Errors metric should NOT trigger.
+
+Therefore, your alarm is MOST LIKELY using:
+  1. A LOG METRIC FILTER on "ERROR" or "Exception" patterns
+     OR
+  2. A CUSTOM METRIC like EmailsFailed or FailureRate
+
+
+📁 FILES TO READ
+═══════════════════════════════════════════════════════════════════════════════
+
+Full Details:
+  • CLOUDWATCH_ERROR_METRICS_EXPLAINED.md  - Complete explanation
+  • EMAILWORKER_ERROR_LOCATIONS.txt        - Specific line numbers
+
+Scripts:
+  • diagnose_emailworker_errors.py         - Main diagnostic tool
+  • list_lambda_functions_simple.py        - List all Lambda functions
+
+Documentation:
+  • EMAILWORKER_ERROR_DIAGNOSTICS.md       - Full guide
+  • QUICK_START_EMAILWORKER_ERRORS.txt     - Quick start guide
+
+
+🚀 GET STARTED NOW
+═══════════════════════════════════════════════════════════════════════════════
+
+On your other computer, run these commands:
+
+1. Find your Lambda function:
+   python list_lambda_functions_simple.py
+
+2. Get error details (replace YOUR-FUNCTION-NAME):
+   python diagnose_emailworker_errors.py 24 YOUR-FUNCTION-NAME
+
+3. This will show you:
+   ✓ Total error count
+   ✓ Error types (KeyError, ValueError, etc.)
+   ✓ When errors occurred
+   ✓ Sample error messages
+   ✓ What to fix
+
+═══════════════════════════════════════════════════════════════════════════════
+
+

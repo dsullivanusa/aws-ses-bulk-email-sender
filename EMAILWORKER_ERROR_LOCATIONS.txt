@@ -1,0 +1,199 @@
+================================================================================
+EMAIL WORKER LAMBDA - ERROR LOGGING LOCATIONS
+================================================================================
+
+Where errors are logged that could trigger CloudWatch alarms:
+
+LINE RANGE  | ERROR TYPE                    | CODE SNIPPET
+================================================================================
+
+Lines 887-898: FATAL ERROR HANDLER (Catches all unhandled exceptions)
+────────────────────────────────────────────────────────────────────────────
+    except Exception as fatal_error:
+        logger.error(f"❌ FATAL ERROR IN LAMBDA HANDLER")
+        logger.error(f"Exception Type: {type(fatal_error).__name__}")
+        logger.error(f"Exception Message: {str(fatal_error)}")
+        logger.exception(f"Full Stack Trace:")
+        
+    🔴 TRIGGERS: Any log metric filter looking for "ERROR" or "Exception"
+
+
+Line 310: EVENT PARSING (BEFORE try-catch!)
+────────────────────────────────────────────────────────────────────────────
+    logger.info(f"Processing {len(event['Records'])} messages from SQS queue")
+    
+    🔴 RISK: If event['Records'] doesn't exist → KeyError (UNHANDLED!)
+    ⚡ This would trigger AWS Lambda's built-in Errors metric
+
+
+Lines 347-348: MISSING REQUIRED FIELDS
+────────────────────────────────────────────────────────────────────────────
+    if not campaign_id or not contact_email:
+        raise ValueError("Missing campaign_id or contact_email in message")
+        
+    🔴 TRIGGERS: ValueError is caught, logged, counted as failure
+
+
+Lines 362-366: CAMPAIGN NOT FOUND
+────────────────────────────────────────────────────────────────────────────
+    if "Item" not in campaign_response:
+        logger.error(f"[Message {idx}] Campaign {campaign_id} not found in DynamoDB")
+        raise ValueError(f"Campaign {campaign_id} not found in DynamoDB")
+        
+    🔴 TRIGGERS: "ERROR" in logs, ValueError raised
+
+
+Lines 601-611: SES THROTTLE DETECTION
+────────────────────────────────────────────────────────────────────────────
+    logger.error(f"📊 ERROR METRIC → CloudWatch: ThrottleExceptions")
+    logger.error(f"📊 Sending ERROR metric to CloudWatch: ThrottleExceptions")
+    send_cloudwatch_metric(
+        "ThrottleExceptions",
+        1,
+        "Count",
+        dimensions=[{"Name": "CampaignId", "Value": campaign_id}],
+    )
+    
+    🔴 TRIGGERS: "ERROR" in logs + custom CloudWatch metric sent
+
+
+Lines 673-731: AWS CLIENT ERRORS (SES/DynamoDB failures)
+────────────────────────────────────────────────────────────────────────────
+    except ClientError as e:
+        error_code = e.response.get("Error", {}).get("Code", "Unknown")
+        error_msg = f"AWS error ({error_code}): {str(e)}"
+        logger.error(f"[Message {idx}] {error_msg}")
+        results["failed"] += 1
+        results["errors"].append(error_msg)
+        
+    🔴 TRIGGERS: "ERROR" in logs, failures counted
+
+
+Lines 811-816: EMAIL FAILURES METRIC
+────────────────────────────────────────────────────────────────────────────
+    if results["failed"] > 0:
+        logger.error(f"📊 ERROR METRIC → CloudWatch: EmailsFailed = {results['failed']}")
+        logger.error(f"📊 Sending ERROR metric to CloudWatch: EmailsFailed")
+        send_cloudwatch_metric("EmailsFailed", results["failed"], "Count")
+        
+    🔴 TRIGGERS: "ERROR" in logs + custom CloudWatch metric sent
+
+
+Lines 831-835: HIGH FAILURE RATE
+────────────────────────────────────────────────────────────────────────────
+    if failure_rate > 0:
+        print(f"📊 ERROR METRIC → CloudWatch: FailureRate = {failure_rate:.1f}%")
+        logger.error(f"📊 Sending ERROR metric to CloudWatch: FailureRate = {failure_rate:.1f}%")
+        send_cloudwatch_metric("FailureRate", failure_rate, "Percent")
+        
+    🔴 TRIGGERS: "ERROR" in logs + custom CloudWatch metric sent
+
+
+Lines 883-885: ERROR SUMMARY
+────────────────────────────────────────────────────────────────────────────
+    if results["errors"]:
+        logger.error(f"Errors encountered: {len(results['errors'])}")
+        for error in results["errors"]:
+            logger.error(f"  - {error}")
+            
+    🔴 TRIGGERS: "ERROR" in logs for each error
+
+
+Lines 1243, 1299, 1724, 1745, 1776, 1898: SES VALIDATION ERRORS
+────────────────────────────────────────────────────────────────────────────
+    send_cloudwatch_metric(
+        'SESValidationErrors',
+        1,
+        'Count',
+        dimensions=[{'Name': 'ErrorType', 'Value': 'InvalidToAddress'}]
+    )
+    
+    🔴 TRIGGERS: Custom CloudWatch metric sent (EmailWorker/Custom namespace)
+
+
+================================================================================
+CUSTOM CLOUDWATCH METRICS SENT
+================================================================================
+
+Function: send_cloudwatch_metric() - Lines 230-251
+Namespace: "EmailWorker/Custom"
+
+Metrics sent:
+  • IncompleteCampaigns       (Line 283)
+  • ThrottleExceptions        (Line 606)
+  • BatchProcessing           (Line 804)
+  • EmailsProcessed           (Line 805)
+  • EmailsSentSuccessfully    (Line 806)
+  • EmailsFailed              (Line 816) ⚠️ ERROR METRIC
+  • ProcessingDuration        (Line 818)
+  • EmailsPerSecond           (Line 821)
+  • EmailsPerMinute           (Line 824)
+  • SuccessRate               (Line 827)
+  • FailureRate               (Line 835) ⚠️ ERROR METRIC
+  • ThrottleExceptionsInBatch (Line 844) ⚠️ ERROR METRIC
+  • SESValidationErrors       (Multiple locations) ⚠️ ERROR METRIC
+
+
+================================================================================
+WHAT TRIGGERS "EmailWorker-FunctionErrors" ALARM?
+================================================================================
+
+Your alarm is MOST LIKELY triggered by ONE of these:
+
+1. LOG METRIC FILTER
+   - CloudWatch Logs filter pattern: [ERROR] or "Exception"
+   - Any of the logger.error() calls above trigger it
+   - Check with: aws logs describe-metric-filters --log-group-name /aws/lambda/FUNCTION-NAME
+
+2. CUSTOM METRIC
+   - Alarm monitors EmailWorker/Custom namespace
+   - Watches EmailsFailed, FailureRate, or ThrottleExceptions metrics
+   - Check with: aws cloudwatch describe-alarms --alarm-names EmailWorker-FunctionErrors
+
+3. UNHANDLED EXCEPTIONS
+   - Line 310: event['Records'] KeyError (before try-catch)
+   - Line 338: json.loads() JSONDecodeError
+   - Any exception outside lines 329-906
+
+4. LAMBDA TIMEOUT
+   - Function exceeds timeout limit
+   - Automatically counted as Lambda error
+
+5. OUT OF MEMORY
+   - Function exceeds memory limit
+   - Automatically counted as Lambda error
+
+
+================================================================================
+HOW TO FIND THE ROOT CAUSE
+================================================================================
+
+STEP 1: Check the alarm configuration
+────────────────────────────────────────────────────────────────────────────
+aws cloudwatch describe-alarms --alarm-names EmailWorker-FunctionErrors
+
+Look for:
+  • Namespace: AWS/Lambda or EmailWorker/Custom?
+  • MetricName: Errors, EmailsFailed, FailureRate, etc.?
+  • Dimensions: Which Lambda function?
+
+
+STEP 2: Check for log metric filters
+────────────────────────────────────────────────────────────────────────────
+aws logs describe-metric-filters --log-group-name /aws/lambda/YOUR-FUNCTION-NAME
+
+
+STEP 3: Run the diagnostic script
+────────────────────────────────────────────────────────────────────────────
+python list_lambda_functions_simple.py                    # Find function name
+python diagnose_emailworker_errors.py 24 FUNCTION-NAME    # Get error details
+
+
+STEP 4: Check recent logs directly
+────────────────────────────────────────────────────────────────────────────
+python tail_lambda_logs.py FUNCTION-NAME
+
+
+================================================================================
+
+

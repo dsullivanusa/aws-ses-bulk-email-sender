@@ -307,6 +307,16 @@ def lambda_handler(event, context):
 
     start_time = datetime.now()
     logger.info(f"Lambda invocation started at {start_time.isoformat()}")
+    
+    # Check if event has Records key to prevent KeyError
+    if 'Records' not in event:
+        logger.error("❌ FATAL ERROR: Event does not contain 'Records' key")
+        logger.error(f"Event structure: {list(event.keys())}")
+        return {
+            "statusCode": 400,
+            "body": json.dumps({"error": "Invalid event structure - missing Records key"})
+        }
+    
     logger.info(f"Processing {len(event['Records'])} messages from SQS queue")
     logger.info(f"Request ID: {context.aws_request_id}")
     logger.info(f"Function Name: {context.function_name}")
@@ -462,8 +472,8 @@ def lambda_handler(event, context):
 
                 # Get complete recipient lists from campaign for body visibility
                 # All recipients get individual emails with full recipient visibility in body
-                    cc_list = campaign.get("cc", []) or []
-                    bcc_list = campaign.get("bcc", []) or []
+                cc_list = campaign.get("cc", []) or []
+                bcc_list = campaign.get("bcc", []) or []
                 to_list = campaign.get("to", []) or []
 
                 logger.info(f"[Message {idx}] 📧 RECIPIENT LISTS:")
@@ -1232,12 +1242,11 @@ def send_ses_email(
                 print(f"🚨 SES VALIDATION ERROR - Campaign {campaign_id}: {error_msg}")
                 print(f"   Message {msg_idx}: Destination={destination}")
                 print(f"   Message {msg_idx}: Contact={contact}")
-                print(f"   Message {msg_idx}: Role={message.get('role', 'None')}")
+                print(f"   Message {msg_idx}: Contact={contact}")
                 
                 logger.error(f"[Message {msg_idx}] ❌ SES VALIDATION ERROR - Campaign {campaign_id}: {error_msg}")
                 logger.error(f"[Message {msg_idx}]   Destination: {destination}")
                 logger.error(f"[Message {msg_idx}]   Contact: {contact}")
-                logger.error(f"[Message {msg_idx}]   Role: {message.get('role', 'None')}")
                 
                 # Send CloudWatch metric for validation errors
                 send_cloudwatch_metric(
@@ -1718,7 +1727,7 @@ def send_ses_email(
             logger.error(f"[Message {msg_idx}]   Contact: {contact}")
             logger.error(f"[Message {msg_idx}]   CC List: {cc_list}")
             logger.error(f"[Message {msg_idx}]   BCC List: {bcc_list}")
-            logger.error(f"[Message {msg_idx}]   Role: {message.get('role', 'None')}")
+            logger.error(f"[Message {msg_idx}]   Contact: {contact}")
             
             # Send CloudWatch metric for validation errors
             send_cloudwatch_metric(
