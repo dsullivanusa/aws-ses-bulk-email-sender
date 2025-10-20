@@ -4916,11 +4916,11 @@ def serve_web_ui(event):
             // IMPORTANT: Preserve blank lines by converting <p><br></p> to <p>&nbsp;</p>
             const bodyBeforeRegexCleanup = emailBody;
             emailBody = emailBody
-                .replace(/<p>\\\\s*<br\\\\s*\\\\/?\\\\s*>\\\\s*<\\\\/p>/g, '<p>&nbsp;</p>')  // Preserve blank lines as &nbsp;
-                .replace(/<p>\\\\s*<\\\\/p>/g, '')  // Remove truly empty paragraphs (no content, no br)
-                .replace(/<br>\\\\s*<br>/g, '<br>')  // Remove double line breaks (reduce to single)
+                .replace(/<p>\\s*<br\\s*\\/?\\s*>\\s*<\\/p>/g, '<p>&nbsp;</p>')  // Preserve blank lines as &nbsp;
+                .replace(/<p>\\s*<\\/p>/g, '')  // Remove truly empty paragraphs (no content, no br)
+                .replace(/<br>\\s*<br>/g, '<br>')  // Remove double line breaks (reduce to single)
                 // PRESERVE class attributes (user custom classes and Quill classes)
-                .replace(/\\\\s+data-[^=]*="[^"]*"/g, '')  // Remove all data-* attributes (S3 keys already in src)
+                .replace(/\\s+data-[^=]*="[^"]*"/g, '')  // Remove all data-* attributes (S3 keys already in src)
                 .trim();
             
             console.log('✅ Applied HTML cleanup and preserved blank lines as <p>&nbsp;</p>');
@@ -5123,11 +5123,11 @@ Click OK to proceed or Cancel to abort.
             
             // Log font usage before sending campaign
             console.log('🎨 CAMPAIGN FONT ANALYSIS: Analyzing fonts used in email...');
-            const fontMatches = emailBody.match(/class="[^"]*ql-font-([^"\\\\s]+)/g) || [];
+            const fontMatches = emailBody.match(/class="[^"]*ql-font-([^"\\s]+)/g) || [];
             const fontUsage = {{}};
             
             fontMatches.forEach(match => {{
-                const fontMatch = match.match(/ql-font-([^"\\\\s]+)/);
+                const fontMatch = match.match(/ql-font-([^"\\s]+)/);
                 if (fontMatch) {{
                     const font = fontMatch[1];
                     fontUsage[font] = (fontUsage[font] || 0) + 1;
@@ -5204,8 +5204,8 @@ Click OK to proceed or Cancel to abort.
                 console.log(`   Replaced ${{replacementCount}} data URI(s) with S3 keys`);
                 
                 // Now remove data-s3-key and data-inline attributes from campaign.body
-                campaign.body = campaign.body.replace(/\\\\s+data-s3-key="[^"]*"/g, '');
-                campaign.body = campaign.body.replace(/\\\\s+data-inline="[^"]*"/g, '');
+                campaign.body = campaign.body.replace(/\\s+data-s3-key="[^"]*"/g, '');
+                campaign.body = campaign.body.replace(/\\s+data-inline="[^"]*"/g, '');
                 console.log(`   ✅ Removed data-s3-key attributes from campaign.body`);
                 
                 // Verify no data URIs remain in campaign.body
@@ -5735,11 +5735,11 @@ Click OK to proceed or Cancel to abort.
             if (!quillEditor) return;
             
             const content = quillEditor.root.innerHTML;
-            const fontClasses = content.match(/class="[^"]*ql-font-([^"\\\\s]+)/g) || [];
+            const fontClasses = content.match(/class="[^"]*ql-font-([^"\\s]+)/g) || [];
             const fontCounts = {{}};
             
             fontClasses.forEach(match => {{
-                const font = match.match(/ql-font-([^"\\\\s]+)/)[1];
+                const font = match.match(/ql-font-([^"\\s]+)/)[1];
                 fontCounts[font] = (fontCounts[font] || 0) + 1;
             }});
             
