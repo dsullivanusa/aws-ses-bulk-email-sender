@@ -1,0 +1,4 @@
+email,first_name,last_name,title,entity_type,state,agency_name,sector,subsection,phone,ms_isac_member,soc_call,fusion_center,k12,water_wastewater,weekly_rollup,alternate_email,region,group
+john.doe@example.com,John,Doe,IT Director,State Government,CA,California State Agency,Government,IT Services,555-0100,Yes,Yes,No,No,No,Yes,john.alt@example.com,West,Group A
+jane.smith@example.com,Jane,Smith,Cybersecurity Manager,Local Government,NY,New York City,Government,Cybersecurity,555-0101,No,No,Yes,Yes,No,No,jane.alt@example.com,East,Group B
+bob.wilson@example.com,Bob,Wilson,Network Administrator,Federal Government,DC,Federal Agency,Federal,IT Infrastructure,555-0102,Yes,Yes,No,No,Yes,Yes,bob.alt@example.com,Central,Group C

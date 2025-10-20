@@ -3551,6 +3551,7 @@ def serve_web_ui(event):
                 
                 const headers = parseCSVLine(lines[0]).map(h => h.trim().toLowerCase());
                 console.log('CSV Headers:', headers);
+                console.log('CSV Headers (original):', parseCSVLine(lines[0]));
                 
                 // Parse all contacts first
                 const allContacts = [];
@@ -3568,57 +3569,99 @@ def serve_web_ui(event):
                     const fieldMap = {{
                         'email': 'email',
                         'email_address': 'email',
-                            'email address': 'email',
+                        'email address': 'email',
+                        'e-mail': 'email',
+                        'e_mail': 'email',
                         'first_name': 'first_name',
                         'firstname': 'first_name',
+                        'first name': 'first_name',
                         'first': 'first_name',
+                        'fname': 'first_name',
                         'last_name': 'last_name',
                         'lastname': 'last_name',
+                        'last name': 'last_name',
                         'last': 'last_name',
+                        'lname': 'last_name',
                         'title': 'title',
+                        'job_title': 'title',
+                        'job title': 'title',
+                        'position': 'title',
                         'entity_type': 'entity_type',
                         'entitytype': 'entity_type',
+                        'entity type': 'entity_type',
+                        'entity': 'entity_type',
                         'state': 'state',
+                        'state_name': 'state',
+                        'state name': 'state',
                         'agency_name': 'agency_name',
                         'agencyname': 'agency_name',
+                        'agency name': 'agency_name',
                         'agency': 'agency_name',
+                        'organization': 'agency_name',
+                        'org': 'agency_name',
                         'sector': 'sector',
+                        'industry': 'sector',
                         'subsection': 'subsection',
+                        'sub_section': 'subsection',
+                        'sub section': 'subsection',
                         'phone': 'phone',
                         'phone_number': 'phone',
+                        'phone number': 'phone',
+                        'telephone': 'phone',
+                        'tel': 'phone',
                         'ms_isac_member': 'ms_isac_member',
                         'ms-isac': 'ms_isac_member',
                         'msisac': 'ms_isac_member',
+                        'ms isac': 'ms_isac_member',
                         'soc_call': 'soc_call',
                         'soc': 'soc_call',
+                        'soc call': 'soc_call',
                         'fusion_center': 'fusion_center',
                         'fusion': 'fusion_center',
+                        'fusion center': 'fusion_center',
                         'k12': 'k12',
                         'k-12': 'k12',
+                        'k 12': 'k12',
                         'water_wastewater': 'water_wastewater',
                         'water/wastewater': 'water_wastewater',
                         'water': 'water_wastewater',
+                        'water wastewater': 'water_wastewater',
                         'weekly_rollup': 'weekly_rollup',
                         'weekly': 'weekly_rollup',
                         'rollup': 'weekly_rollup',
+                        'weekly rollup': 'weekly_rollup',
                         'alternate_email': 'alternate_email',
                         'alt_email': 'alternate_email',
+                        'alt email': 'alternate_email',
+                        'alt_email_address': 'alternate_email',
+                        'alt email address': 'alternate_email',
                         'region': 'region',
-                        'group': 'group'
+                        'geographic_region': 'region',
+                        'geographic region': 'region',
+                        'group': 'group',
+                        'group_name': 'group',
+                        'group name': 'group'
                     }};
                     
                     const fieldName = fieldMap[header];
                     if (fieldName) {{
                         contact[fieldName] = values[index];
+                        console.log(`Mapped: ${{header}} -> ${{fieldName}} = "${{values[index]}}"`);
+                    }} else {{
+                        console.log(`Unmapped header: "${{header}}" (value: "${{values[index]}}")`);
                     }}
                 }});
                 
                 if (contact.email) {{
                         allContacts.push(contact);
+                        console.log(`Contact ${{i}}:`, contact);
                     }}
                 }}
                 
                 console.log(`Parsed ${{allContacts.length}} valid contacts from CSV`);
+                if (allContacts.length > 0) {{
+                    console.log('Sample contact:', allContacts[0]);
+                }}
                 
                 if (allContacts.length === 0) {{
                     alert('No valid contacts found in CSV file');
@@ -6956,6 +6999,8 @@ def add_contact(body, headers):
 def batch_add_contacts(body, headers):
     """Batch add contacts - up to 25 at a time (DynamoDB limit)"""
     try:
+        import uuid
+        
         contacts = body.get('contacts', [])
         
         if not contacts:
@@ -6968,35 +7013,41 @@ def batch_add_contacts(body, headers):
         dynamodb_client = boto3.client('dynamodb', region_name='us-gov-west-1')
         
         request_items = []
-        for contact in contacts:
+        for i, contact in enumerate(contacts):
             if not contact.get('email'):
+                print(f"⚠️ Skipping contact {i+1}: No email address")
                 continue
                 
             # Generate unique contact_id for each contact
-            import uuid
             contact_id = str(uuid.uuid4())
+            
+            # Validate email format
+            email = contact['email'].strip()
+            if '@' not in email:
+                print(f"⚠️ Skipping contact {i+1}: Invalid email format: {email}")
+                continue
                 
             item = {
                 'contact_id': {'S': contact_id},  # Add contact_id field
-                'email': {'S': contact['email']},
-                'first_name': {'S': contact.get('first_name', '')},
-                'last_name': {'S': contact.get('last_name', '')},
-                'title': {'S': contact.get('title', '')},
-                'entity_type': {'S': contact.get('entity_type', '')},
-                'state': {'S': contact.get('state', '')},
-                'agency_name': {'S': contact.get('agency_name', '')},
-                'sector': {'S': contact.get('sector', '')},
-                'subsection': {'S': contact.get('subsection', '')},
-                'phone': {'S': contact.get('phone', '')},
-                'ms_isac_member': {'S': contact.get('ms_isac_member', '')},
-                'soc_call': {'S': contact.get('soc_call', '')},
-                'fusion_center': {'S': contact.get('fusion_center', '')},
-                'k12': {'S': contact.get('k12', '')},
-                'water_wastewater': {'S': contact.get('water_wastewater', '')},
-                'weekly_rollup': {'S': contact.get('weekly_rollup', '')},
-                'alternate_email': {'S': contact.get('alternate_email', '')},
-                'region': {'S': contact.get('region', '')},
-                'group': {'S': contact.get('group', '')},
+                'email': {'S': email},
+                'first_name': {'S': str(contact.get('first_name', '')).strip()},
+                'last_name': {'S': str(contact.get('last_name', '')).strip()},
+                'title': {'S': str(contact.get('title', '')).strip()},
+                'entity_type': {'S': str(contact.get('entity_type', '')).strip()},
+                'state': {'S': str(contact.get('state', '')).strip()},
+                'agency_name': {'S': str(contact.get('agency_name', '')).strip()},
+                'sector': {'S': str(contact.get('sector', '')).strip()},
+                'subsection': {'S': str(contact.get('subsection', '')).strip()},
+                'phone': {'S': str(contact.get('phone', '')).strip()},
+                'ms_isac_member': {'S': str(contact.get('ms_isac_member', '')).strip()},
+                'soc_call': {'S': str(contact.get('soc_call', '')).strip()},
+                'fusion_center': {'S': str(contact.get('fusion_center', '')).strip()},
+                'k12': {'S': str(contact.get('k12', '')).strip()},
+                'water_wastewater': {'S': str(contact.get('water_wastewater', '')).strip()},
+                'weekly_rollup': {'S': str(contact.get('weekly_rollup', '')).strip()},
+                'alternate_email': {'S': str(contact.get('alternate_email', '')).strip()},
+                'region': {'S': str(contact.get('region', '')).strip()},
+                'group': {'S': str(contact.get('group', '')).strip()},
                 'created_at': {'S': datetime.now().isoformat()}
             }
             
@@ -7006,6 +7057,7 @@ def batch_add_contacts(body, headers):
             return {'statusCode': 400, 'headers': headers, 'body': json.dumps({'error': 'No valid contacts with email addresses'})}
         
         # Execute batch write
+        print(f"📝 Batch write: {len(request_items)} items to EmailContacts table")
         response = dynamodb_client.batch_write_item(
             RequestItems={
                 'EmailContacts': request_items
@@ -7015,6 +7067,8 @@ def batch_add_contacts(body, headers):
         # Check for unprocessed items
         unprocessed = response.get('UnprocessedItems', {})
         unprocessed_count = len(unprocessed.get('EmailContacts', []))
+        
+        print(f"✅ Batch write complete: {len(request_items) - unprocessed_count} imported, {unprocessed_count} unprocessed")
         
         return {
             'statusCode': 200, 
@@ -7026,7 +7080,9 @@ def batch_add_contacts(body, headers):
             })
         }
     except Exception as e:
-        print(f"Batch import error: {str(e)}")
+        print(f"❌ Batch import error: {str(e)}")
+        import traceback
+        traceback.print_exc()
         return {'statusCode': 500, 'headers': headers, 'body': json.dumps({'error': str(e)})}
 
 def update_contact(body, headers):
