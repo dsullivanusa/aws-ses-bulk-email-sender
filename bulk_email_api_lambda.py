@@ -3565,20 +3565,20 @@ def serve_web_ui(event):
                 const allContacts = [];
                 const invalidRows = [];  // Track rows with parsing errors
                 
-                for (let i = 1; i < lines.length; i++) {
-                    try {
+                for (let i = 1; i < lines.length; i++) {{
+                    try {{
                         const values = parseCSVLine(lines[i]);
                         
-                        if (values.length !== headers.length) {
-                            console.warn(`Row ${i + 1}: Column count mismatch. Got ${values.length}, expected ${headers.length}`);
-                            invalidRows.push({ row: i + 1, error: `Column count mismatch (got ${values.length}, expected ${headers.length})`, rawLine: lines[i] });
+                        if (values.length !== headers.length) {{
+                            console.warn(`Row ${{i + 1}}: Column count mismatch. Got ${{values.length}}, expected ${{headers.length}}`);
+                            invalidRows.push({{ row: i + 1, error: `Column count mismatch (got ${{values.length}}, expected ${{headers.length}})`, rawLine: lines[i] }});
                             continue;
-                        }
+                        }}
                         
-                        const contact = {};
-                        headers.forEach((header, index) => {
+                        const contact = {{}};
+                        headers.forEach((header, index) => {{
                             // Map CSV headers to contact fields
-                            const fieldMap = {
+                            const fieldMap = {{
                                 'email': 'email',
                                 'email_address': 'email',
                                 'email address': 'email',
@@ -3653,80 +3653,80 @@ def serve_web_ui(event):
                                 'group': 'group',
                                 'group_name': 'group',
                                 'group name': 'group'
-                            };
+                            }};
                             
                             const fieldName = fieldMap[header];
-                            if (fieldName) {
+                            if (fieldName) {{
                                 contact[fieldName] = values[index];
-                                console.log(`Mapped: ${header} -> ${fieldName} = "${values[index]}"`);
-                            } else {
-                                console.log(`Unmapped header: "${header}" (value: "${values[index]}")`);
-                            }
-                        });
+                                console.log(`Mapped: ${{header}} -> ${{fieldName}} = "${{values[index]}}"`);
+                            }} else {{
+                                console.log(`Unmapped header: "${{header}}" (value: "${{values[index]}}")`);
+                            }}
+                        }});
                         
-                        if (contact.email) {
+                        if (contact.email) {{
                             allContacts.push(contact);
-                            console.log(`Contact row ${i + 1}:`, contact);
-                        } else {
-                            console.warn(`Row ${i + 1}: No valid email found, skipping`);
-                            invalidRows.push({ row: i + 1, error: 'No valid email', rawLine: lines[i] });
-                        }
-                    } catch (parseError) {
-                        console.error(`CSV Parse Error on row ${i + 1}:`, parseError);
+                            console.log(`Contact row ${{i + 1}}:`, contact);
+                        }} else {{
+                            console.warn(`Row ${{i + 1}}: No valid email found, skipping`);
+                            invalidRows.push({{ row: i + 1, error: 'No valid email', rawLine: lines[i] }});
+                        }}
+                    }} catch (parseError) {{
+                        console.error(`CSV Parse Error on row ${{i + 1}}:`, parseError);
                         console.error(`Raw line:`, lines[i].substring(0, 200));
-                        invalidRows.push({ 
+                        invalidRows.push({{ 
                             row: i + 1, 
                             error: parseError.message, 
                             rawLine: lines[i] 
-                        });
+                        }});
                         
                         // Log to CloudWatch via API endpoint (non-blocking)
-                        const errorData = {
+                        const errorData = {{
                             row: i + 1,
                             error: parseError.message,
                             rawLine: lines[i],
                             timestamp: new Date().toISOString(),
                             userAgent: navigator.userAgent
-                        };
+                        }};
                         
-                        fetch(`${API_URL}/log-csv-error`, {
+                        fetch(`${{API_URL}}/log-csv-error`, {{
                             method: 'POST',
-                            headers: {'Content-Type': 'application/json'},
+                            headers: {{'Content-Type': 'application/json'}},
                             body: JSON.stringify(errorData)
-                        })
+                        }})
                         .then(response => response.json())
-                        .then(data => {
-                            if (data.success) {
-                                console.log(`✅ Row ${i + 1} error logged to CloudWatch: ${data.message}`);
-                            } else {
-                                console.warn(`⚠️ Failed to log row ${i + 1} error: ${data.error}`);
-                            }
-                        })
-                        .catch(logError => {
-                            console.warn(`Failed to send row ${i + 1} error to server:`, logError);
-                        });
+                        .then(data => {{
+                            if (data.success) {{
+                                console.log(`✅ Row ${{i + 1}} error logged to CloudWatch: ${{data.message}}`);
+                            }} else {{
+                                console.warn(`⚠️ Failed to log row ${{i + 1}} error: ${{data.error}}`);
+                            }}
+                        }})
+                        .catch(logError => {{
+                            console.warn(`Failed to send row ${{i + 1}} error to server:`, logError);
+                        }});
                         
                         // Continue to next row
-                    }
-                }
+                    }}
+                }}
                 
-                console.log(`Parsed ${allContacts.length} valid contacts from CSV`);
-                if (allContacts.length > 0) {
+                console.log(`Parsed ${{allContacts.length}} valid contacts from CSV`);
+                if (allContacts.length > 0) {{
                     console.log('Sample contact:', allContacts[0]);
-                }
+                }}
                 
-                if (invalidRows.length > 0) {
-                    console.log(`⚠️ Found ${invalidRows.length} invalid rows:`);
-                    invalidRows.forEach(row => {
-                        console.log(`  Row ${row.row}: ${row.error} - Raw: ${row.rawLine.substring(0, 100)}...`);
-                    });
-                }
+                if (invalidRows.length > 0) {{
+                    console.log(`⚠️ Found ${{invalidRows.length}} invalid rows:`);
+                    invalidRows.forEach(row => {{
+                        console.log(`  Row ${{row.row}}: ${{row.error}} - Raw: ${{row.rawLine.substring(0, 100)}}...`);
+                    }});
+                }}
                 
-                if (allContacts.length === 0) {
+                if (allContacts.length === 0) {{
                     alert('No valid contacts found in CSV file. Check invalid rows in console.');
                     hideCSVProgress();
                     return;
-                }
+                }}
                 updateCSVProgress(0, allContacts.length, 'Starting import...');
                 
                 for (let batchNum = 0; batchNum < totalBatches; batchNum++) {{
@@ -7568,6 +7568,57 @@ def mark_campaign_viewed(body, headers):
             'statusCode': 500,
             'headers': headers,
             'body': json.dumps({'error': 'Failed to log campaign view'})
+        }
+
+def log_csv_error(body, headers):
+    """Log CSV parsing errors to CloudWatch with prominent markers"""
+    try:
+        row_num = body.get('row', 'Unknown')
+        error_msg = body.get('error', 'No error provided')
+        raw_line = body.get('rawLine', 'No raw line provided')
+        
+        # Log with prominent markers for easy searching in CloudWatch
+        print("=" * 80)
+        print(f"🚨🚨🚨🚨 ****CSV**** PARSE ERROR DETECTED ****CSV**** 🚨🚨🚨🚨")
+        print("=" * 80)
+        print(f"📍 CSV ROW NUMBER: {row_num}")
+        print(f"❌ ERROR MESSAGE: {error_msg}")
+        print(f"")
+        print(f"📄 ACTUAL CSV ROW CONTENT:")
+        print(f"   {raw_line}")
+        print(f"")
+        if len(raw_line) > 1000:
+            print(f"⚠️  Note: Row length is {len(raw_line)} characters")
+        
+        # Additional context if available
+        if 'timestamp' in body:
+            print(f"🕐 Timestamp: {body['timestamp']}")
+        if 'userAgent' in body:
+            print(f"🌐 User Agent: {body['userAgent']}")
+        
+        print("=" * 80)
+        print(f"🚨🚨🚨🚨 ****CSV**** END ERROR LOG ****CSV**** 🚨🚨🚨🚨")
+        print("=" * 80)
+        
+        return {
+            'statusCode': 200,
+            'headers': headers,
+            'body': json.dumps({
+                'success': True,
+                'message': f'CSV error for row {row_num} logged to CloudWatch'
+            })
+        }
+    except Exception as e:
+        print(f"❌ Error logging CSV parse error: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return {
+            'statusCode': 500,
+            'headers': headers,
+            'body': json.dumps({
+                'error': f'Failed to log error: {str(e)}',
+                'success': False
+            })
         }
 
 

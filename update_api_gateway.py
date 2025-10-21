@@ -170,24 +170,71 @@ def get_lambda_function_arn():
     
     # Try to find the Lambda function
     try:
-        response = lambda_client.list_functions()
+        response = lambda_client.list_functions(MaxItems=100)
+        
+        if not response['Functions']:
+            print("\n❌ No Lambda functions found in us-gov-west-1 region")
+            print("   Make sure your Lambda function is deployed and you have access")
+            return None, None, None
         
         print("\n📋 Available Lambda functions:")
+        
+        # First, try to find email/api related functions
         functions = []
+        recommended_idx = None
+        
         for idx, func in enumerate(response['Functions'], 1):
-            if 'email' in func['FunctionName'].lower() or 'api' in func['FunctionName'].lower():
-                print(f"   {idx}. {func['FunctionName']}")
+            is_match = False
+            is_recommended = False
+            
+            # Check function name
+            func_name_lower = func['FunctionName'].lower()
+            if any(keyword in func_name_lower for keyword in ['bulk', 'email', 'api', 'ses', 'contact', 'campaign']):
+                is_match = True
+            
+            # Check handler
+            handler = func.get('Handler', '')
+            if 'bulk_email_api_lambda' in handler or 'api_gateway_lambda' in handler:
+                is_match = True
+                is_recommended = True
+            
+            # Check environment variables
+            if 'Environment' in func and 'Variables' in func['Environment']:
+                env_vars = func['Environment']['Variables']
+                if any(key in env_vars for key in ['CONTACTS_TABLE', 'CAMPAIGNS_TABLE', 'ATTACHMENTS_BUCKET', 'QUEUE_URL']):
+                    is_match = True
+                    is_recommended = True
+            
+            if is_match:
                 functions.append(func)
+                marker = "⭐ RECOMMENDED" if is_recommended else ""
+                print(f"   {len(functions)}. {func['FunctionName']} {marker}")
+                print(f"      Handler: {handler}")
+                if is_recommended and recommended_idx is None:
+                    recommended_idx = len(functions)
         
         if not functions:
-            print("No Lambda functions found with 'email' or 'api' in name.")
-            print("\nAll functions:")
+            print("\n   No email/API functions found. Showing ALL functions:")
             for idx, func in enumerate(response['Functions'], 1):
                 print(f"   {idx}. {func['FunctionName']}")
+                print(f"      Handler: {func.get('Handler', 'N/A')}")
             functions = response['Functions']
         
+        if not functions:
+            print("\n❌ No Lambda functions available")
+            return None, None, None
+        
         # Ask user to select
-        selection = input(f"\nSelect Lambda function (1-{len(functions)}): ").strip()
+        print(f"\n💡 Which Lambda function handles your bulk email API?")
+        print(f"   (The one that serves the web UI with CSV upload)")
+        if recommended_idx:
+            print(f"   Recommendation: #{recommended_idx} (marked with ⭐)")
+        
+        selection = input(f"\nSelect Lambda function (1-{len(functions)}) or press Enter for #{recommended_idx or 1}: ").strip()
+        
+        if not selection:
+            selection = str(recommended_idx or 1)
+        
         selected_func = functions[int(selection) - 1]
         
         # Construct the integration URI

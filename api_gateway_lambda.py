@@ -212,20 +212,28 @@ def log_csv_error(body, headers):
         error_msg = body.get('error', 'No error provided')
         raw_line = body.get('rawLine', 'No raw line provided')
         
-        print(f"🚨 CSV Parse Error Logged")
-        print(f"   Row Number: {row_num}")
-        print(f"   Error: {error_msg}")
-        print(f"   Raw Line (first 500 chars): {raw_line[:500]}")
-        if len(raw_line) > 500:
-            print(f"   (Line truncated - full length: {len(raw_line)} chars)")
+        # Log with prominent markers for easy searching in CloudWatch
+        print("=" * 80)
+        print(f"🚨🚨🚨🚨 ****CSV**** PARSE ERROR DETECTED ****CSV**** 🚨🚨🚨🚨")
+        print("=" * 80)
+        print(f"📍 CSV ROW NUMBER: {row_num}")
+        print(f"❌ ERROR MESSAGE: {error_msg}")
+        print(f"")
+        print(f"📄 ACTUAL CSV ROW CONTENT:")
+        print(f"   {raw_line}")
+        print(f"")
+        if len(raw_line) > 1000:
+            print(f"⚠️  Note: Row length is {len(raw_line)} characters")
         
         # Additional context if available
-        if 'userAgent' in body:
-            print(f"   User Agent: {body['userAgent']}")
         if 'timestamp' in body:
-            print(f"   Timestamp: {body['timestamp']}")
+            print(f"🕐 Timestamp: {body['timestamp']}")
+        if 'userAgent' in body:
+            print(f"🌐 User Agent: {body['userAgent']}")
         
-        print(f"🔍 End CSV Error Log")
+        print("=" * 80)
+        print(f"🚨🚨🚨🚨 ****CSV**** END ERROR LOG ****CSV**** 🚨🚨🚨🚨")
+        print("=" * 80)
         
         return {
             'statusCode': 200,
