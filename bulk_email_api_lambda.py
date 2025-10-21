@@ -3571,7 +3571,8 @@ def serve_web_ui(event):
                         
                         if (values.length !== headers.length) {{
                             console.warn(`Row ${{i + 1}}: Column count mismatch. Got ${{values.length}}, expected ${{headers.length}}`);
-                            invalidRows.push({{ row: i + 1, error: 'Column count mismatch (got ' + values.length + ', expected ' + headers.length + ')', rawLine: lines[i] }});
+                            const errorMsg = 'Column count mismatch: ' + values.length + ' columns found, ' + headers.length + ' expected';
+                            invalidRows.push({{ row: i + 1, error: errorMsg, rawLine: lines[i] }});
                             continue;
                         }}
                         
@@ -3674,9 +3675,10 @@ def serve_web_ui(event):
                     }} catch (parseError) {{
                         console.error(`CSV Parse Error on row ${{i + 1}}:`, parseError);
                         console.error(`Raw line:`, lines[i].substring(0, 200));
+                        const parseErrorMsg = parseError.message || 'Unknown parse error';
                         invalidRows.push({{ 
                             row: i + 1, 
-                            error: parseError.message, 
+                            error: parseErrorMsg, 
                             rawLine: lines[i] 
                         }});
                         
