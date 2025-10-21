@@ -17,7 +17,7 @@ def lambda_handler(event, context):
     headers = {
         'Access-Control-Allow-Origin': '*',
         'Access-Control-Allow-Headers': 'Content-Type',
-        'Access-Control-Allow-Methods': 'GET,POST,OPTIONS'
+        'Access-Control-Allow-Methods': 'GET,POST,PUT,DELETE,OPTIONS'
     }
     
     try:
@@ -30,9 +30,28 @@ def lambda_handler(event, context):
             }
         
         # Parse request
-        path = event['resource']
+        path = event.get('resource', event.get('path', '/'))
         method = event['httpMethod']
-        body = json.loads(event['body']) if event.get('body') else {}
+        
+        # Parse request body with error handling
+        try:
+            if event.get('body'):
+                body_str = event.get('body', '{}')
+                print(f"📨 Request: {method} {path} (body length: {len(body_str)} chars)")
+                body = json.loads(body_str)
+            else:
+                body = {}
+        except json.JSONDecodeError as je:
+            print(f"❌ JSON decode error: {str(je)}")
+            print(f"   Body preview: {event.get('body', '')[:500]}")
+            return {
+                'statusCode': 400, 
+                'headers': headers, 
+                'body': json.dumps({
+                    'error': f'Invalid JSON in request body: {str(je)}',
+                    'success': False
+                })
+            }
         
         # Route requests
         if path == '/contacts' and method == 'GET':
@@ -41,11 +60,14 @@ def lambda_handler(event, context):
             return add_contact(body, headers)
         elif path == '/campaign' and method == 'POST':
             return send_campaign(body, headers)
+        elif path == '/log-csv-error' and method == 'POST':
+            print("   → Calling log_csv_error()")
+            return log_csv_error(body, headers)
         else:
             return {
                 'statusCode': 404,
                 'headers': headers,
-                'body': json.dumps({'error': 'Not found'})
+                'body': json.dumps({'error': f'Not found: {method} {path}'})
             }
             
     except Exception as e:
@@ -182,3 +204,44 @@ def personalize_content(content, contact):
     content = content.replace('{{email}}', contact.get('email', ''))
     content = content.replace('{{company}}', contact.get('company', ''))
     return content
+
+def log_csv_error(body, headers):
+    """Log CSV parsing errors to CloudWatch"""
+    try:
+        row_num = body.get('row', 'Unknown')
+        error_msg = body.get('error', 'No error provided')
+        raw_line = body.get('rawLine', 'No raw line provided')
+        
+        print(f"🚨 CSV Parse Error Logged")
+        print(f"   Row Number: {row_num}")
+        print(f"   Error: {error_msg}")
+        print(f"   Raw Line (first 500 chars): {raw_line[:500]}")
+        if len(raw_line) > 500:
+            print(f"   (Line truncated - full length: {len(raw_line)} chars)")
+        
+        # Additional context if available
+        if 'userAgent' in body:
+            print(f"   User Agent: {body['userAgent']}")
+        if 'timestamp' in body:
+            print(f"   Timestamp: {body['timestamp']}")
+        
+        print(f"🔍 End CSV Error Log")
+        
+        return {
+            'statusCode': 200,
+            'headers': headers,
+            'body': json.dumps({
+                'success': True,
+                'message': f'CSV error for row {row_num} logged to CloudWatch'
+            })
+        }
+    except Exception as e:
+        print(f"❌ Error logging CSV parse error: {str(e)}")
+        return {
+            'statusCode': 500,
+            'headers': headers,
+            'body': json.dumps({
+                'error': f'Failed to log error: {str(e)}',
+                'success': False
+            })
+        }

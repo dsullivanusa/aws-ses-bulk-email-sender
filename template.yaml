@@ -1,0 +1,438 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: Bulk Email API with CSV Error Logging and SES Integration
+
+Globals:
+  Function:
+    Runtime: python3.11
+    Timeout: 900  # 15 minutes for large CSV uploads
+    MemorySize: 1024
+    Environment:
+      Variables:
+        CONTACTS_TABLE: EmailContacts
+        CAMPAIGNS_TABLE: EmailCampaigns
+        ATTACHMENTS_BUCKET: !Ref AttachmentsBucket
+        REGION: !Ref AWS::Region
+  Api:
+    Cors:
+      AllowMethods: "'GET,POST,PUT,DELETE,OPTIONS'"
+      AllowHeaders: "'Content-Type,Authorization,X-Amz-Date,X-Api-Key,X-Amz-Security-Token'"
+      AllowOrigin: "'*'"
+      AllowCredentials: false
+
+Resources:
+  # ========================================
+  # DynamoDB Tables
+  # ========================================
+  
+  EmailContactsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: EmailContacts
+      BillingMode: PAY_PER_REQUEST  # On-demand pricing for variable workloads
+      AttributeDefinitions:
+        - AttributeName: contact_id
+          AttributeType: S
+        - AttributeName: email
+          AttributeType: S
+      KeySchema:
+        - AttributeName: contact_id
+          KeyType: HASH
+      GlobalSecondaryIndexes:
+        - IndexName: EmailIndex
+          KeySchema:
+            - AttributeName: email
+              KeyType: HASH
+          Projection:
+            ProjectionType: ALL
+      StreamSpecification:
+        StreamViewType: NEW_AND_OLD_IMAGES
+      Tags:
+        - Key: Application
+          Value: BulkEmailAPI
+
+  EmailCampaignsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: EmailCampaigns
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: campaign_id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: campaign_id
+          KeyType: HASH
+      StreamSpecification:
+        StreamViewType: NEW_AND_OLD_IMAGES
+      Tags:
+        - Key: Application
+          Value: BulkEmailAPI
+
+  # ========================================
+  # S3 Bucket for Attachments
+  # ========================================
+  
+  AttachmentsBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub '${AWS::StackName}-attachments-${AWS::AccountId}'
+      CorsConfiguration:
+        CorsRules:
+          - AllowedOrigins:
+              - '*'
+            AllowedMethods:
+              - GET
+              - PUT
+              - POST
+            AllowedHeaders:
+              - '*'
+            MaxAge: 3600
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      VersioningConfiguration:
+        Status: Enabled
+      LifecycleConfiguration:
+        Rules:
+          - Id: DeleteOldAttachments
+            Status: Enabled
+            ExpirationInDays: 90
+      Tags:
+        - Key: Application
+          Value: BulkEmailAPI
+
+  # ========================================
+  # SQS Queue for Email Processing
+  # ========================================
+  
+  EmailQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Sub '${AWS::StackName}-email-queue'
+      VisibilityTimeout: 300  # 5 minutes
+      MessageRetentionPeriod: 1209600  # 14 days
+      ReceiveMessageWaitTimeSeconds: 20  # Long polling
+      RedrivePolicy:
+        deadLetterTargetArn: !GetAtt EmailDeadLetterQueue.Arn
+        maxReceiveCount: 3
+      Tags:
+        - Key: Application
+          Value: BulkEmailAPI
+
+  EmailDeadLetterQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Sub '${AWS::StackName}-email-dlq'
+      MessageRetentionPeriod: 1209600  # 14 days
+      Tags:
+        - Key: Application
+          Value: BulkEmailAPI
+
+  # ========================================
+  # Lambda Function - Main API Handler
+  # ========================================
+  
+  BulkEmailApiFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: .
+      Handler: bulk_email_api_lambda.lambda_handler
+      Description: Main API handler for bulk email system with CSV error logging
+      Environment:
+        Variables:
+          QUEUE_URL: !Ref EmailQueue
+          CONTACTS_TABLE: !Ref EmailContactsTable
+          CAMPAIGNS_TABLE: !Ref EmailCampaignsTable
+          ATTACHMENTS_BUCKET: !Ref AttachmentsBucket
+          CUSTOM_API_URL: !Sub 'https://${BulkEmailApi}.execute-api.${AWS::Region}.amazonaws.com/Prod'
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref EmailContactsTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref EmailCampaignsTable
+        - S3CrudPolicy:
+            BucketName: !Ref AttachmentsBucket
+        - SQSSendMessagePolicy:
+            QueueName: !GetAtt EmailQueue.QueueName
+        - Statement:
+            - Effect: Allow
+              Action:
+                - ses:SendEmail
+                - ses:SendRawEmail
+              Resource: '*'
+            - Effect: Allow
+              Action:
+                - logs:CreateLogGroup
+                - logs:CreateLogStream
+                - logs:PutLogEvents
+              Resource: '*'
+      Events:
+        # Root path - serves Web UI
+        RootPath:
+          Type: Api
+          Properties:
+            Path: /
+            Method: GET
+            RestApiId: !Ref BulkEmailApi
+        
+        # Config endpoints
+        GetConfig:
+          Type: Api
+          Properties:
+            Path: /config
+            Method: GET
+            RestApiId: !Ref BulkEmailApi
+        
+        SaveConfig:
+          Type: Api
+          Properties:
+            Path: /config
+            Method: POST
+            RestApiId: !Ref BulkEmailApi
+        
+        # Contact management endpoints
+        GetContacts:
+          Type: Api
+          Properties:
+            Path: /contacts
+            Method: GET
+            RestApiId: !Ref BulkEmailApi
+        
+        AddContact:
+          Type: Api
+          Properties:
+            Path: /contacts
+            Method: POST
+            RestApiId: !Ref BulkEmailApi
+        
+        UpdateContact:
+          Type: Api
+          Properties:
+            Path: /contacts
+            Method: PUT
+            RestApiId: !Ref BulkEmailApi
+        
+        DeleteContact:
+          Type: Api
+          Properties:
+            Path: /contacts
+            Method: DELETE
+            RestApiId: !Ref BulkEmailApi
+        
+        # Batch contact operations
+        BatchAddContacts:
+          Type: Api
+          Properties:
+            Path: /contacts/batch
+            Method: POST
+            RestApiId: !Ref BulkEmailApi
+        
+        # Contact search and filter
+        SearchContacts:
+          Type: Api
+          Properties:
+            Path: /contacts/search
+            Method: POST
+            RestApiId: !Ref BulkEmailApi
+        
+        FilterContacts:
+          Type: Api
+          Properties:
+            Path: /contacts/filter
+            Method: POST
+            RestApiId: !Ref BulkEmailApi
+        
+        GetDistinctValues:
+          Type: Api
+          Properties:
+            Path: /contacts/distinct
+            Method: GET
+            RestApiId: !Ref BulkEmailApi
+        
+        # Groups
+        GetGroups:
+          Type: Api
+          Properties:
+            Path: /groups
+            Method: GET
+            RestApiId: !Ref BulkEmailApi
+        
+        # Campaign endpoints
+        SendCampaign:
+          Type: Api
+          Properties:
+            Path: /campaign
+            Method: POST
+            RestApiId: !Ref BulkEmailApi
+        
+        GetCampaignStatus:
+          Type: Api
+          Properties:
+            Path: /campaign/{campaign_id}
+            Method: GET
+            RestApiId: !Ref BulkEmailApi
+        
+        GetCampaigns:
+          Type: Api
+          Properties:
+            Path: /campaigns
+            Method: GET
+            RestApiId: !Ref BulkEmailApi
+        
+        MarkCampaignViewed:
+          Type: Api
+          Properties:
+            Path: /campaign-viewed
+            Method: POST
+            RestApiId: !Ref BulkEmailApi
+        
+        # Attachment endpoints
+        UploadAttachment:
+          Type: Api
+          Properties:
+            Path: /upload-attachment
+            Method: POST
+            RestApiId: !Ref BulkEmailApi
+        
+        GetAttachmentUrl:
+          Type: Api
+          Properties:
+            Path: /attachment-url
+            Method: GET
+            RestApiId: !Ref BulkEmailApi
+        
+        # NEW: CSV Error Logging endpoint
+        LogCsvError:
+          Type: Api
+          Properties:
+            Path: /log-csv-error
+            Method: POST
+            RestApiId: !Ref BulkEmailApi
+        
+        # OPTIONS for CORS preflight
+        OptionsProxy:
+          Type: Api
+          Properties:
+            Path: /{proxy+}
+            Method: OPTIONS
+            RestApiId: !Ref BulkEmailApi
+
+  # ========================================
+  # API Gateway
+  # ========================================
+  
+  BulkEmailApi:
+    Type: AWS::Serverless::Api
+    Properties:
+      StageName: Prod
+      Description: Bulk Email API with CSV error logging
+      TracingEnabled: true
+      MethodSettings:
+        - ResourcePath: '/*'
+          HttpMethod: '*'
+          LoggingLevel: INFO
+          DataTraceEnabled: true
+          MetricsEnabled: true
+      AccessLogSetting:
+        DestinationArn: !GetAtt ApiAccessLogGroup.Arn
+        Format: '$context.requestId $context.extendedRequestId $context.identity.sourceIp $context.requestTime $context.httpMethod $context.routeKey $context.status $context.error.message'
+      Tags:
+        Application: BulkEmailAPI
+
+  # CloudWatch Log Group for API Gateway Access Logs
+  ApiAccessLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/apigateway/${AWS::StackName}-api'
+      RetentionInDays: 30
+
+  # ========================================
+  # Lambda Function - Email Worker (SQS Consumer)
+  # ========================================
+  
+  EmailWorkerFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: .
+      Handler: email_worker_lambda.lambda_handler
+      Description: Processes SQS messages and sends emails via SES
+      Timeout: 300
+      MemorySize: 512
+      ReservedConcurrentExecutions: 10  # Limit concurrency to avoid SES throttling
+      Environment:
+        Variables:
+          CAMPAIGNS_TABLE: !Ref EmailCampaignsTable
+          CONTACTS_TABLE: !Ref EmailContactsTable
+          ATTACHMENTS_BUCKET: !Ref AttachmentsBucket
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref EmailCampaignsTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref EmailContactsTable
+        - S3ReadPolicy:
+            BucketName: !Ref AttachmentsBucket
+        - SQSPollerPolicy:
+            QueueName: !GetAtt EmailQueue.QueueName
+        - Statement:
+            - Effect: Allow
+              Action:
+                - ses:SendEmail
+                - ses:SendRawEmail
+              Resource: '*'
+      Events:
+        EmailQueueEvent:
+          Type: SQS
+          Properties:
+            Queue: !GetAtt EmailQueue.Arn
+            BatchSize: 10
+            MaximumBatchingWindowInSeconds: 5
+
+# ========================================
+# Outputs
+# ========================================
+
+Outputs:
+  ApiUrl:
+    Description: API Gateway endpoint URL for Prod stage
+    Value: !Sub 'https://${BulkEmailApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/'
+    Export:
+      Name: !Sub '${AWS::StackName}-ApiUrl'
+
+  BulkEmailApiFunctionArn:
+    Description: Bulk Email API Lambda Function ARN
+    Value: !GetAtt BulkEmailApiFunction.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-FunctionArn'
+
+  EmailQueueUrl:
+    Description: SQS Queue URL for email processing
+    Value: !Ref EmailQueue
+    Export:
+      Name: !Sub '${AWS::StackName}-QueueUrl'
+
+  AttachmentsBucketName:
+    Description: S3 Bucket for email attachments
+    Value: !Ref AttachmentsBucket
+    Export:
+      Name: !Sub '${AWS::StackName}-BucketName'
+
+  ContactsTableName:
+    Description: DynamoDB table for contacts
+    Value: !Ref EmailContactsTable
+    Export:
+      Name: !Sub '${AWS::StackName}-ContactsTable'
+
+  CampaignsTableName:
+    Description: DynamoDB table for campaigns
+    Value: !Ref EmailCampaignsTable
+    Export:
+      Name: !Sub '${AWS::StackName}-CampaignsTable'
+
+  LogCsvErrorEndpoint:
+    Description: NEW - Endpoint for logging CSV parse errors to CloudWatch
+    Value: !Sub 'https://${BulkEmailApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/log-csv-error'
+    Export:
+      Name: !Sub '${AWS::StackName}-LogCsvErrorEndpoint'
+

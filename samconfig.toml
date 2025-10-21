@@ -1,0 +1,27 @@
+# SAM CLI configuration file for deployment
+
+version = 0.1
+
+[default]
+[default.global.parameters]
+stack_name = "bulk-email-api"
+
+[default.deploy.parameters]
+capabilities = "CAPABILITY_IAM"
+confirm_changeset = true
+resolve_s3 = true
+region = "us-gov-west-1"
+parameter_overrides = []
+
+[default.package.parameters]
+resolve_s3 = true
+
+[default.sync.parameters]
+watch = true
+
+[default.local_start_api.parameters]
+warm_containers = "EAGER"
+
+[default.local_start_lambda.parameters]
+warm_containers = "EAGER"
+

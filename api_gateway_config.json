@@ -154,6 +154,83 @@
           "uri": "arn:aws-us-gov:apigateway:us-gov-west-1:lambda:path/2015-03-31/functions/arn:aws-us-gov:lambda:us-gov-west-1:ACCOUNT_ID:function:email-api-function/invocations"
         }
       }
+    },
+    "/log-csv-error": {
+      "post": {
+        "summary": "Log CSV parsing errors to CloudWatch",
+        "consumes": ["application/json"],
+        "produces": ["application/json"],
+        "parameters": [
+          {
+            "in": "body",
+            "name": "error",
+            "required": true,
+            "schema": {
+              "type": "object",
+              "properties": {
+                "row": {"type": "integer", "description": "Row number with error"},
+                "error": {"type": "string", "description": "Error message"},
+                "rawLine": {"type": "string", "description": "Raw CSV line content"},
+                "timestamp": {"type": "string", "description": "ISO timestamp"},
+                "userAgent": {"type": "string", "description": "Browser user agent"}
+              },
+              "required": ["row", "error", "rawLine"]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Error logged successfully",
+            "headers": {
+              "Access-Control-Allow-Origin": {
+                "type": "string"
+              }
+            },
+            "schema": {
+              "type": "object",
+              "properties": {
+                "success": {"type": "boolean"},
+                "message": {"type": "string"}
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request"
+          },
+          "500": {
+            "description": "Server error"
+          }
+        },
+        "x-amazon-apigateway-integration": {
+          "type": "aws_proxy",
+          "httpMethod": "POST",
+          "uri": "arn:aws-us-gov:apigateway:us-gov-west-1:lambda:path/2015-03-31/functions/arn:aws-us-gov:lambda:us-gov-west-1:ACCOUNT_ID:function:email-api-function/invocations"
+        }
+      },
+      "options": {
+        "summary": "CORS preflight for log-csv-error",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "headers": {
+              "Access-Control-Allow-Origin": {
+                "type": "string"
+              },
+              "Access-Control-Allow-Methods": {
+                "type": "string"
+              },
+              "Access-Control-Allow-Headers": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "x-amazon-apigateway-integration": {
+          "type": "aws_proxy",
+          "httpMethod": "POST",
+          "uri": "arn:aws-us-gov:apigateway:us-gov-west-1:lambda:path/2015-03-31/functions/arn:aws-us-gov:lambda:us-gov-west-1:ACCOUNT_ID:function:email-api-function/invocations"
+        }
+      }
     }
   }
 }
