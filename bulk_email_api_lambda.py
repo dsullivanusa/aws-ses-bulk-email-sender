@@ -118,7 +118,24 @@ def lambda_handler(event, context):
             return serve_web_ui(event)
         
         # Parse request body
-        body = json.loads(event.get('body', '{}')) if event.get('body') else {}
+        try:
+            if event.get('body'):
+                body_str = event.get('body', '{}')
+                print(f"   Body length: {len(body_str)} characters")
+                body = json.loads(body_str)
+            else:
+                body = {}
+        except json.JSONDecodeError as je:
+            print(f"❌ JSON decode error: {str(je)}")
+            print(f"   Body preview: {event.get('body', '')[:500]}")
+            return {
+                'statusCode': 400, 
+                'headers': headers, 
+                'body': json.dumps({
+                    'error': f'Invalid JSON in request body: {str(je)}',
+                    'success': False
+                })
+            }
         
         # API endpoints
         if path == '/config' and method == 'POST':
@@ -6979,7 +6996,7 @@ def add_contact(body, headers):
                 'agency_name': body.get('agency_name', ''),
                 'sector': body.get('sector', ''),
                 'subsection': body.get('subsection', ''),
-                'phone': body.get('phone', ''),
+                'phone': normalize_phone_number(body.get('phone', '')),
                 'ms_isac_member': body.get('ms_isac_member', ''),
                 'soc_call': body.get('soc_call', ''),
                 'fusion_center': body.get('fusion_center', ''),
@@ -6994,14 +7011,74 @@ def add_contact(body, headers):
         )
         return {'statusCode': 200, 'headers': headers, 'body': json.dumps({'success': True})}
     except Exception as e:
-        return {'statusCode': 500, 'headers': headers, 'body': json.dumps({'error': str(e)})}
+        error_msg = f"Error adding contact: {str(e)}"
+        print(f"❌ {error_msg}")
+        return {
+            'statusCode': 500,
+            'headers': headers,
+            'body': json.dumps({'error': error_msg, 'success': False})
+        }
+
+def normalize_phone_number(phone_str):
+    """Normalize phone number to a standard format (digits only)"""
+    if not phone_str:
+        return ''
+    
+    import re
+    
+    # Convert to string and strip whitespace
+    phone_str = str(phone_str).strip()
+    
+    # Remove all non-digit characters except 'x' or 'ext' for extensions
+    # First, check if there's an extension
+    extension = ''
+    
+    # Look for extensions (x, ext, ext., extension)
+    ext_patterns = [
+        r'\s*(?:x|ext\.?|extension)\s*(\d+)$',  # matches x123, ext123, ext.123, extension123
+    ]
+    
+    for pattern in ext_patterns:
+        match = re.search(pattern, phone_str, re.IGNORECASE)
+        if match:
+            extension = match.group(1)
+            # Remove the extension part from the phone string
+            phone_str = phone_str[:match.start()]
+            break
+    
+    # Remove all non-digit characters from the main phone number
+    digits = re.sub(r'\D', '', phone_str)
+    
+    # Format based on number of digits
+    if len(digits) == 10:
+        # Format as (XXX) XXX-XXXX
+        formatted = f"({digits[0:3]}) {digits[3:6]}-{digits[6:10]}"
+    elif len(digits) == 11 and digits[0] == '1':
+        # US number with country code, format as 1 (XXX) XXX-XXXX
+        formatted = f"1 ({digits[1:4]}) {digits[4:7]}-{digits[7:11]}"
+    elif len(digits) == 7:
+        # Local number, format as XXX-XXXX
+        formatted = f"{digits[0:3]}-{digits[3:7]}"
+    else:
+        # Keep as-is if it doesn't match expected patterns
+        formatted = digits
+    
+    # Add extension if present
+    if extension:
+        formatted += f" x{extension}"
+    
+    return formatted
 
 def batch_add_contacts(body, headers):
     """Batch add contacts - up to 25 at a time (DynamoDB limit)"""
     try:
         import uuid
         
+        print(f"📝 batch_add_contacts called")
+        print(f"   Body keys: {list(body.keys()) if body else 'No body'}")
+        
         contacts = body.get('contacts', [])
+        print(f"   Number of contacts received: {len(contacts)}")
         
         if not contacts:
             return {'statusCode': 400, 'headers': headers, 'body': json.dumps({'error': 'No contacts provided'})}
@@ -7038,7 +7115,7 @@ def batch_add_contacts(body, headers):
                 'agency_name': {'S': str(contact.get('agency_name', '')).strip()},
                 'sector': {'S': str(contact.get('sector', '')).strip()},
                 'subsection': {'S': str(contact.get('subsection', '')).strip()},
-                'phone': {'S': str(contact.get('phone', '')).strip()},
+                'phone': {'S': normalize_phone_number(contact.get('phone', ''))}, 
                 'ms_isac_member': {'S': str(contact.get('ms_isac_member', '')).strip()},
                 'soc_call': {'S': str(contact.get('soc_call', '')).strip()},
                 'fusion_center': {'S': str(contact.get('fusion_center', '')).strip()},
@@ -7080,10 +7157,22 @@ def batch_add_contacts(body, headers):
             })
         }
     except Exception as e:
-        print(f"❌ Batch import error: {str(e)}")
+        error_msg = f"Batch import error: {str(e)}"
+        print(f"❌ {error_msg}")
         import traceback
         traceback.print_exc()
-        return {'statusCode': 500, 'headers': headers, 'body': json.dumps({'error': str(e)})}
+        
+        # Always return valid JSON, never HTML
+        return {
+            'statusCode': 500,
+            'headers': headers,
+            'body': json.dumps({
+                'error': error_msg,
+                'success': False,
+                'imported': 0,
+                'unprocessed': len(contacts) if 'contacts' in locals() else 0
+            })
+        }
 
 def update_contact(body, headers):
     """Update contact with all CISA fields"""
@@ -7114,7 +7203,11 @@ def update_contact(body, headers):
                 value_placeholder = f":{field}"
                 update_parts.append(f"{field_placeholder} = {value_placeholder}")
                 expr_names[field_placeholder] = field
-                expr_values[value_placeholder] = body[field]
+                # Normalize phone numbers before saving
+                if field == 'phone':
+                    expr_values[value_placeholder] = normalize_phone_number(body[field])
+                else:
+                    expr_values[value_placeholder] = body[field]
         
         if not update_parts:
             return {'statusCode': 400, 'headers': headers, 'body': json.dumps({'error': 'No fields to update'})}
