@@ -259,19 +259,35 @@ def add_lambda_permission(api_id, lambda_arn, function_name):
     
     print(f"\n🔐 Adding permission for API Gateway to invoke Lambda...")
     
+    # Extract account ID from Lambda ARN
+    # ARN format: arn:aws-us-gov:lambda:us-gov-west-1:123456789012:function:function-name
+    account_id = lambda_arn.split(':')[4]
+    print(f"   Account ID: {account_id}")
+    
+    # Sanitize api_id for StatementId (only alphanumeric, hyphens, underscores)
+    import re
+    safe_api_id = re.sub(r'[^a-zA-Z0-9_-]', '', api_id)
+    statement_id = f'apigateway-csv-error-{safe_api_id}'
+    
+    # Construct SourceArn with actual account ID
+    source_arn = f'arn:aws-us-gov:execute-api:us-gov-west-1:{account_id}:{api_id}/*/*/log-csv-error'
+    print(f"   SourceArn: {source_arn}")
+    
     try:
         lambda_client.add_permission(
             FunctionName=function_name,
-            StatementId=f'apigateway-log-csv-error-{api_id}',
+            StatementId=statement_id,
             Action='lambda:InvokeFunction',
             Principal='apigateway.amazonaws.com',
-            SourceArn=f'arn:aws-us-gov:execute-api:us-gov-west-1:*:{api_id}/*/*/log-csv-error'
+            SourceArn=source_arn
         )
-        print("✅ Lambda permission added")
+        print(f"✅ Lambda permission added (StatementId: {statement_id})")
     except lambda_client.exceptions.ResourceConflictException:
-        print("ℹ️  Permission already exists, skipping")
+        print(f"ℹ️  Permission already exists (StatementId: {statement_id}) - OK")
     except Exception as e:
         print(f"⚠️  Error adding permission: {str(e)}")
+        print(f"   StatementId attempted: {statement_id}")
+        print(f"   SourceArn attempted: {source_arn}")
         print("   You may need to add this manually in the Lambda console")
 
 def main():
