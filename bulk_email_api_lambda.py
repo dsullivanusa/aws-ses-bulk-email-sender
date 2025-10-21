@@ -3571,7 +3571,7 @@ def serve_web_ui(event):
                         
                         if (values.length !== headers.length) {{
                             console.warn(`Row ${{i + 1}}: Column count mismatch. Got ${{values.length}}, expected ${{headers.length}}`);
-                            invalidRows.push({{ row: i + 1, error: `Column count mismatch (got ${{values.length}}, expected ${{headers.length}})`, rawLine: lines[i] }});
+                            invalidRows.push({{ row: i + 1, error: 'Column count mismatch (got ' + values.length + ', expected ' + headers.length + ')', rawLine: lines[i] }});
                             continue;
                         }}
                         
