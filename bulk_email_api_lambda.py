@@ -3727,6 +3727,14 @@ def serve_web_ui(event):
                     hideCSVProgress();
                     return;
                 }}
+                
+                // Process in batches of 25 (DynamoDB batch limit)
+                const BATCH_SIZE = 25;
+                let imported = 0;
+                let errors = 0;
+                const totalBatches = Math.ceil(allContacts.length / BATCH_SIZE);
+                const failedBatches = [];  // Track failed batches
+                
                 updateCSVProgress(0, allContacts.length, 'Starting import...');
                 
                 for (let batchNum = 0; batchNum < totalBatches; batchNum++) {{
