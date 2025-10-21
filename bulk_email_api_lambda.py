@@ -6889,6 +6889,376 @@ def search_contacts(body, headers):
             'headers': headers,
             'body': json.dumps({'error': str(e)}, default=_json_default)
         }
+def add_contact(body, headers):
+    """Add a new contact to DynamoDB"""
+    try:
+        # Validate required fields
+        email = body.get('email', '').strip()
+        if not email:
+            return {
+                'statusCode': 400,
+                'headers': headers,
+                'body': json.dumps({'error': 'Email is required'})
+            }
+        
+        # Check if contact already exists
+        existing = contacts_table.get_item(Key={'email': email})
+        if 'Item' in existing:
+            return {
+                'statusCode': 409,
+                'headers': headers,
+                'body': json.dumps({'error': 'Contact with this email already exists'})
+            }
+        
+        # Build contact item with all fields
+        contact_item = {
+            'email': email,
+            'first_name': body.get('first_name', '').strip(),
+            'last_name': body.get('last_name', '').strip(),
+            'title': body.get('title', '').strip(),
+            'entity_type': body.get('entity_type', '').strip(),
+            'state': body.get('state', '').strip(),
+            'agency_name': body.get('agency_name', '').strip(),
+            'sector': body.get('sector', '').strip(),
+            'subsection': body.get('subsection', '').strip(),
+            'phone': body.get('phone', '').strip(),
+            'ms_isac_member': body.get('ms_isac_member', '').strip(),
+            'soc_call': body.get('soc_call', '').strip(),
+            'fusion_center': body.get('fusion_center', '').strip(),
+            'k12': body.get('k12', '').strip(),
+            'water_wastewater': body.get('water_wastewater', '').strip(),
+            'weekly_rollup': body.get('weekly_rollup', '').strip(),
+            'alternate_email': body.get('alternate_email', '').strip(),
+            'region': body.get('region', '').strip(),
+            'group': body.get('group', '').strip(),
+            'created_at': datetime.now().isoformat()
+        }
+        
+        # Remove empty values to save space
+        contact_item = {k: v for k, v in contact_item.items() if v}
+        
+        # Save to DynamoDB
+        contacts_table.put_item(Item=contact_item)
+        
+        print(f"✅ Contact added: {email}")
+        return {
+            'statusCode': 201,
+            'headers': headers,
+            'body': json.dumps({
+                'success': True,
+                'message': 'Contact added successfully',
+                'contact': convert_decimals(contact_item)
+            })
+        }
+    except Exception as e:
+        print(f"Error adding contact: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return {
+            'statusCode': 500,
+            'headers': headers,
+            'body': json.dumps({'error': str(e)})
+        }
+
+def update_contact(body, headers):
+    """Update an existing contact in DynamoDB"""
+    try:
+        # Get email (primary key)
+        email = body.get('email', '').strip()
+        if not email:
+            return {
+                'statusCode': 400,
+                'headers': headers,
+                'body': json.dumps({'error': 'Email is required to update contact'})
+            }
+        
+        # Check if contact exists
+        existing = contacts_table.get_item(Key={'email': email})
+        if 'Item' not in existing:
+            return {
+                'statusCode': 404,
+                'headers': headers,
+                'body': json.dumps({'error': 'Contact not found'})
+            }
+        
+        # Build update expression dynamically
+        update_parts = []
+        expression_attribute_names = {}
+        expression_attribute_values = {}
+        
+        # List of updateable fields
+        updateable_fields = [
+            'first_name', 'last_name', 'title', 'entity_type', 'state',
+            'agency_name', 'sector', 'subsection', 'phone', 'ms_isac_member',
+            'soc_call', 'fusion_center', 'k12', 'water_wastewater',
+            'weekly_rollup', 'alternate_email', 'region', 'group'
+        ]
+        
+        for field in updateable_fields:
+            if field in body:
+                value = body[field].strip() if isinstance(body[field], str) else body[field]
+                if value:  # Only update non-empty values
+                    update_parts.append(f'#{field} = :{field}')
+                    expression_attribute_names[f'#{field}'] = field
+                    expression_attribute_values[f':{field}'] = value
+        
+        # Add update timestamp
+        update_parts.append('#updated_at = :updated_at')
+        expression_attribute_names['#updated_at'] = 'updated_at'
+        expression_attribute_values[':updated_at'] = datetime.now().isoformat()
+        
+        if not update_parts:
+            return {
+                'statusCode': 400,
+                'headers': headers,
+                'body': json.dumps({'error': 'No fields to update'})
+            }
+        
+        # Update the contact
+        update_expression = 'SET ' + ', '.join(update_parts)
+        
+        response = contacts_table.update_item(
+            Key={'email': email},
+            UpdateExpression=update_expression,
+            ExpressionAttributeNames=expression_attribute_names,
+            ExpressionAttributeValues=expression_attribute_values,
+            ReturnValues='ALL_NEW'
+        )
+        
+        print(f"✅ Contact updated: {email}")
+        return {
+            'statusCode': 200,
+            'headers': headers,
+            'body': json.dumps({
+                'success': True,
+                'message': 'Contact updated successfully',
+                'contact': convert_decimals(response['Attributes'])
+            })
+        }
+    except Exception as e:
+        print(f"Error updating contact: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return {
+            'statusCode': 500,
+            'headers': headers,
+            'body': json.dumps({'error': str(e)})
+        }
+
+def delete_contact(event, headers):
+    """Delete a contact from DynamoDB"""
+    try:
+        # Get email from query parameters
+        query_params = event.get('queryStringParameters') or {}
+        email = query_params.get('email', '').strip()
+        
+        # Also check for contact_id (alias for email)
+        if not email:
+            email = query_params.get('contact_id', '').strip()
+        
+        if not email:
+            return {
+                'statusCode': 400,
+                'headers': headers,
+                'body': json.dumps({'error': 'Email or contact_id parameter is required'})
+            }
+        
+        # Check if contact exists
+        existing = contacts_table.get_item(Key={'email': email})
+        if 'Item' not in existing:
+            return {
+                'statusCode': 404,
+                'headers': headers,
+                'body': json.dumps({'error': 'Contact not found'})
+            }
+        
+        # Delete the contact
+        contacts_table.delete_item(Key={'email': email})
+        
+        print(f"✅ Contact deleted: {email}")
+        return {
+            'statusCode': 200,
+            'headers': headers,
+            'body': json.dumps({
+                'success': True,
+                'message': 'Contact deleted successfully'
+            })
+        }
+    except Exception as e:
+        print(f"Error deleting contact: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return {
+            'statusCode': 500,
+            'headers': headers,
+            'body': json.dumps({'error': str(e)})
+        }
+
+def batch_add_contacts(body, headers):
+    """Add multiple contacts in batch to DynamoDB"""
+    try:
+        contacts = body.get('contacts', [])
+        
+        if not contacts:
+            return {
+                'statusCode': 400,
+                'headers': headers,
+                'body': json.dumps({'error': 'No contacts provided'})
+            }
+        
+        # Validate and process contacts
+        success_count = 0
+        failed_contacts = []
+        added_contacts = []
+        
+        with contacts_table.batch_writer() as batch:
+            for contact_data in contacts:
+                email = contact_data.get('email', '').strip()
+                
+                if not email:
+                    failed_contacts.append({
+                        'contact': contact_data,
+                        'error': 'Email is required'
+                    })
+                    continue
+                
+                # Check if contact exists (batch check would be more efficient for large sets)
+                existing = contacts_table.get_item(Key={'email': email})
+                if 'Item' in existing:
+                    failed_contacts.append({
+                        'email': email,
+                        'error': 'Contact already exists'
+                    })
+                    continue
+                
+                # Build contact item
+                contact_item = {
+                    'email': email,
+                    'first_name': contact_data.get('first_name', '').strip(),
+                    'last_name': contact_data.get('last_name', '').strip(),
+                    'title': contact_data.get('title', '').strip(),
+                    'entity_type': contact_data.get('entity_type', '').strip(),
+                    'state': contact_data.get('state', '').strip(),
+                    'agency_name': contact_data.get('agency_name', '').strip(),
+                    'sector': contact_data.get('sector', '').strip(),
+                    'subsection': contact_data.get('subsection', '').strip(),
+                    'phone': contact_data.get('phone', '').strip(),
+                    'ms_isac_member': contact_data.get('ms_isac_member', '').strip(),
+                    'soc_call': contact_data.get('soc_call', '').strip(),
+                    'fusion_center': contact_data.get('fusion_center', '').strip(),
+                    'k12': contact_data.get('k12', '').strip(),
+                    'water_wastewater': contact_data.get('water_wastewater', '').strip(),
+                    'weekly_rollup': contact_data.get('weekly_rollup', '').strip(),
+                    'alternate_email': contact_data.get('alternate_email', '').strip(),
+                    'region': contact_data.get('region', '').strip(),
+                    'group': contact_data.get('group', '').strip(),
+                    'created_at': datetime.now().isoformat()
+                }
+                
+                # Remove empty values
+                contact_item = {k: v for k, v in contact_item.items() if v}
+                
+                try:
+                    batch.put_item(Item=contact_item)
+                    success_count += 1
+                    added_contacts.append(email)
+                except Exception as e:
+                    failed_contacts.append({
+                        'email': email,
+                        'error': str(e)
+                    })
+        
+        print(f"✅ Batch add completed: {success_count} succeeded, {len(failed_contacts)} failed")
+        
+        return {
+            'statusCode': 200 if success_count > 0 else 400,
+            'headers': headers,
+            'body': json.dumps({
+                'success': success_count > 0,
+                'added_count': success_count,
+                'added_contacts': added_contacts,
+                'failed_count': len(failed_contacts),
+                'failed_contacts': failed_contacts
+            })
+        }
+    except Exception as e:
+        print(f"Error in batch add contacts: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return {
+            'statusCode': 500,
+            'headers': headers,
+            'body': json.dumps({'error': str(e)})
+        }
+
+def upload_attachment(body, headers):
+    """Upload attachment to S3 and return the S3 key"""
+    try:
+        print("📎 Processing attachment upload")
+        
+        # Get file data
+        file_name = body.get('fileName', 'attachment')
+        file_content = body.get('fileContent', '')
+        
+        if not file_content:
+            return {
+                'statusCode': 400,
+                'headers': headers,
+                'body': json.dumps({'error': 'No file content provided'})
+            }
+        
+        # Decode base64 content
+        try:
+            file_data = base64.b64decode(file_content)
+            print(f"   → Decoded file size: {len(file_data)} bytes")
+        except Exception as e:
+            print(f"   ❌ Base64 decode error: {str(e)}")
+            return {
+                'statusCode': 400,
+                'headers': headers,
+                'body': json.dumps({'error': 'Invalid base64 file content'})
+            }
+        
+        # Generate unique S3 key
+        timestamp = int(datetime.now().timestamp())
+        s3_key = f"attachments/{timestamp}_{file_name}"
+        
+        # Upload to S3
+        try:
+            s3_client.put_object(
+                Bucket=ATTACHMENTS_BUCKET,
+                Key=s3_key,
+                Body=file_data,
+                ContentType=body.get('contentType', 'application/octet-stream')
+            )
+            print(f"   ✅ File uploaded to S3: {s3_key}")
+        except Exception as e:
+            print(f"   ❌ S3 upload error: {str(e)}")
+            return {
+                'statusCode': 500,
+                'headers': headers,
+                'body': json.dumps({'error': f'Failed to upload file to S3: {str(e)}'})
+            }
+        
+        return {
+            'statusCode': 200,
+            'headers': headers,
+            'body': json.dumps({
+                'success': True,
+                's3_key': s3_key,
+                'file_name': file_name
+            })
+        }
+    except Exception as e:
+        print(f"❌ Attachment upload error: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return {
+            'statusCode': 500,
+            'headers': headers,
+            'body': json.dumps({'error': str(e)})
+        }
+
 def get_groups(headers):
     """Get distinct groups from contacts - optimized for large datasets"""
     try:
