@@ -178,9 +178,6 @@ def lambda_handler(event, context):
         elif path == '/campaign-viewed' and method == 'POST':
             print("   → Calling mark_campaign_viewed()")
             return mark_campaign_viewed(body, headers)
-        elif path == '/log-csv-error' and method == 'POST':
-            print("   → Calling log_csv_error()")
-            return log_csv_error(body, headers)
         else:
             print(f"   → Route not found: {method} {path}")
             print("   Available routes: /config, /contacts, /campaign, /upload-attachment, /campaigns, etc.")
@@ -2024,6 +2021,65 @@ def serve_web_ui(event):
         }};
         
         // ============================================
+        // PHONE NUMBER NORMALIZATION UTILITY
+        // ============================================
+        // Accepts: (111) 111-1111, 111-111-1111, 1112223333, 111-222-3333 ext. 4
+        function normalizePhoneNumber(phone) {{
+            if (!phone || phone.trim() === '') {{
+                return '';
+            }}
+            
+            const original = phone;
+            
+            // Remove leading/trailing whitespace
+            phone = phone.trim();
+            
+            // Check for extension (ext, ext., x, extension)
+            let extension = '';
+            const extMatch = phone.match(/\\s+(ext\\.?|extension|x)\\s*(\\d+)$/i);
+            if (extMatch) {{
+                extension = ' ext. ' + extMatch[2];
+                phone = phone.substring(0, extMatch.index).trim();
+            }}
+            
+            // Extract only digits from the main phone number
+            const digits = phone.replace(/\\D/g, '');
+            
+            // Validate phone number has enough digits (7-10 digits for US numbers)
+            if (digits.length < 7) {{
+                console.warn(`Phone number "${{original}}" has too few digits (${{digits.length}}), keeping as-is`);
+                return original;
+            }}
+            
+            if (digits.length > 11) {{
+                console.warn(`Phone number "${{original}}" has too many digits (${{digits.length}}), keeping as-is`);
+                return original;
+            }}
+            
+            // Format based on digit count
+            let formatted;
+            
+            if (digits.length === 7) {{
+                // Format: 111-1111
+                formatted = `${{digits.slice(0, 3)}}-${{digits.slice(3)}}`;
+            }} else if (digits.length === 10) {{
+                // Format: (111) 111-1111
+                formatted = `(${{digits.slice(0, 3)}}) ${{digits.slice(3, 6)}}-${{digits.slice(6)}}`;
+            }} else if (digits.length === 11 && digits[0] === '1') {{
+                // Format: 1 (111) 111-1111 (with country code)
+                formatted = `1 (${{digits.slice(1, 4)}}) ${{digits.slice(4, 7)}}-${{digits.slice(7)}}`;
+            }} else {{
+                // Unrecognized format, keep digits with dashes
+                console.warn(`Phone number "${{original}}" has unusual digit count (${{digits.length}}), formatting with dashes`);
+                formatted = digits;
+            }}
+            
+            const result = formatted + extension;
+            console.log(`📞 Phone normalized: "${{original}}" → "${{result}}"`);
+            return result;
+        }}
+        
+        // ============================================
         // CAMPAIGN HISTORY SEARCH FUNCTIONS
         // ============================================
         function performHistorySearch() {{
@@ -3042,6 +3098,11 @@ def serve_web_ui(event):
                     return;
                 }}
                 
+                // Normalize phone number if present
+                if (contactData.phone) {{
+                    contactData.phone = normalizePhoneNumber(contactData.phone);
+                }}
+                
                 console.log('Creating new contact:', contactData);
                 
                 // Show saving state
@@ -3273,6 +3334,11 @@ def serve_web_ui(event):
                     contactData[field] = value;
                 }});
                 
+                // Normalize phone number if present
+                if (contactData.phone) {{
+                    contactData.phone = normalizePhoneNumber(contactData.phone);
+                }}
+                
                 console.log('Saving contact:', contactData);
                 
                 // Show saving state
@@ -3396,6 +3462,11 @@ def serve_web_ui(event):
                 region: document.getElementById('editRegion').value
             }};
             
+            // Normalize phone number if present
+            if (contactData.phone) {{
+                contactData.phone = normalizePhoneNumber(contactData.phone);
+            }}
+            
             try {{
                 const response = await fetch(`${{API_URL}}/contacts`, {{
                     method: 'PUT',
@@ -3439,6 +3510,11 @@ def serve_web_ui(event):
                 alternate_email: document.getElementById('newAlternateEmail').value,
                 region: document.getElementById('newRegion').value
             }};
+            
+            // Normalize phone number if present
+            if (contact.phone) {{
+                contact.phone = normalizePhoneNumber(contact.phone);
+            }}
             
             const response = await fetch(`${{API_URL}}/contacts`, {{
                 method: 'POST',
@@ -3527,7 +3603,7 @@ def serve_web_ui(event):
                 const text = await file.text();
                 const lines = text.split('\\n').filter(line => line.trim());
                 
-                console.log('Total lines in CSV:', lines.length);
+                console.log('Line 3530Total lines in CSV:', lines.length);
             
             if (lines.length < 2) {{
                 alert('CSV file must have at least a header row and one data row');
@@ -3557,6 +3633,63 @@ def serve_web_ui(event):
                     return result;
                 }}
                 
+                // Phone number normalization function
+                // Accepts: (111) 111-1111, 111-111-1111, 1112223333, 111-222-3333 ext. 4
+                function normalizePhoneNumber(phone) {{
+                    if (!phone || phone.trim() === '') {{
+                        return '';
+                    }}
+                    
+                    const original = phone;
+                    
+                    // Remove leading/trailing whitespace
+                    phone = phone.trim();
+                    
+                    // Check for extension (ext, ext., x, extension)
+                    let extension = '';
+                    const extMatch = phone.match(/\\s+(ext\\.?|extension|x)\\s*(\\d+)$/i);
+                    if (extMatch) {{
+                        extension = ' ext. ' + extMatch[2];
+                        phone = phone.substring(0, extMatch.index).trim();
+                    }}
+                    
+                    // Extract only digits from the main phone number
+                    const digits = phone.replace(/\\D/g, '');
+                    
+                    // Validate phone number has enough digits (7-10 digits for US numbers)
+                    if (digits.length < 7) {{
+                        console.warn(`Phone number "${{original}}" has too few digits (${{digits.length}}), keeping as-is`);
+                        return original;
+                    }}
+                    
+                    if (digits.length > 11) {{
+                        console.warn(`Phone number "${{original}}" has too many digits (${{digits.length}}), keeping as-is`);
+                        return original;
+                    }}
+                    
+                    // Format based on digit count
+                    let formatted;
+                    
+                    if (digits.length === 7) {{
+                        // Format: 111-1111
+                        formatted = `${{digits.slice(0, 3)}}-${{digits.slice(3)}}`;
+                    }} else if (digits.length === 10) {{
+                        // Format: (111) 111-1111
+                        formatted = `(${{digits.slice(0, 3)}}) ${{digits.slice(3, 6)}}-${{digits.slice(6)}}`;
+                    }} else if (digits.length === 11 && digits[0] === '1') {{
+                        // Format: 1 (111) 111-1111 (with country code)
+                        formatted = `1 (${{digits.slice(1, 4)}}) ${{digits.slice(4, 7)}}-${{digits.slice(7)}}`;
+                    }} else {{
+                        // Unrecognized format, keep digits with dashes
+                        console.warn(`Phone number "${{original}}" has unusual digit count (${{digits.length}}), formatting with dashes`);
+                        formatted = digits;
+                    }}
+                    
+                    const result = formatted + extension;
+                    console.log(`📞 Phone normalized: "${{original}}" → "${{result}}"`);
+                    return result;
+                }}
+                
                 const headers = parseCSVLine(lines[0]).map(h => h.trim().toLowerCase());
                 console.log('CSV Headers:', headers);
                 console.log('CSV Headers (original):', parseCSVLine(lines[0]));
@@ -3568,6 +3701,14 @@ def serve_web_ui(event):
                 for (let i = 1; i < lines.length; i++) {{
                     try {{
                         const values = parseCSVLine(lines[i]);
+                        
+                        // Log raw CSV row data
+                        console.log(`\n📋 CSV Row ${{i + 1}} - Raw Values:`);
+                        console.log(`   Raw line: ${{lines[i]}}`);
+                        console.log(`   Parsed values (${{values.length}}):`, values);
+                        values.forEach((val, idx) => {{
+                            console.log(`   [${{idx}}] ${{headers[idx] || '(no header)'}}: "${{val}}"`);
+                        }});
                         
                         if (values.length !== headers.length) {{
                             console.warn(`Row ${{i + 1}}: Column count mismatch. Got ${{values.length}}, expected ${{headers.length}}`);
@@ -3665,6 +3806,11 @@ def serve_web_ui(event):
                             }}
                         }});
                         
+                        // Normalize phone number if present
+                        if (contact.phone) {{
+                            contact.phone = normalizePhoneNumber(contact.phone);
+                        }}
+                        
                         if (contact.email) {{
                             allContacts.push(contact);
                             console.log(`Contact row ${{i + 1}}:`, contact);
@@ -3680,32 +3826,6 @@ def serve_web_ui(event):
                             row: i + 1, 
                             error: parseErrorMsg, 
                             rawLine: lines[i] 
-                        }});
-                        
-                        // Log to CloudWatch via API endpoint (non-blocking)
-                        const errorData = {{
-                            row: i + 1,
-                            error: parseError.message,
-                            rawLine: lines[i],
-                            timestamp: new Date().toISOString(),
-                            userAgent: navigator.userAgent
-                        }};
-                        
-                        fetch(`${{API_URL}}/log-csv-error`, {{
-                            method: 'POST',
-                            headers: {{'Content-Type': 'application/json'}},
-                            body: JSON.stringify(errorData)
-                        }})
-                        .then(response => response.json())
-                        .then(data => {{
-                            if (data.success) {{
-                                console.log(`✅ Row ${{i + 1}} error logged to CloudWatch: ${{data.message}}`);
-                            }} else {{
-                                console.warn(`⚠️ Failed to log row ${{i + 1}} error: ${{data.error}}`);
-                            }}
-                        }})
-                        .catch(logError => {{
-                            console.warn(`Failed to send row ${{i + 1}} error to server:`, logError);
                         }});
                         
                         // Continue to next row
@@ -7949,58 +8069,6 @@ def mark_campaign_viewed(body, headers):
             'headers': headers,
             'body': json.dumps({'error': 'Failed to log campaign view'})
         }
-
-def log_csv_error(body, headers):
-    """Log CSV parsing errors to CloudWatch with prominent markers"""
-    try:
-        row_num = body.get('row', 'Unknown')
-        error_msg = body.get('error', 'No error provided')
-        raw_line = body.get('rawLine', 'No raw line provided')
-        
-        # Log with prominent markers for easy searching in CloudWatch
-        print("=" * 80)
-        print(f"🚨🚨🚨🚨 ****CSV**** PARSE ERROR DETECTED ****CSV**** 🚨🚨🚨🚨")
-        print("=" * 80)
-        print(f"📍 CSV ROW NUMBER: {row_num}")
-        print(f"❌ ERROR MESSAGE: {error_msg}")
-        print(f"")
-        print(f"📄 ACTUAL CSV ROW CONTENT:")
-        print(f"   {raw_line}")
-        print(f"")
-        if len(raw_line) > 1000:
-            print(f"⚠️  Note: Row length is {len(raw_line)} characters")
-        
-        # Additional context if available
-        if 'timestamp' in body:
-            print(f"🕐 Timestamp: {body['timestamp']}")
-        if 'userAgent' in body:
-            print(f"🌐 User Agent: {body['userAgent']}")
-        
-        print("=" * 80)
-        print(f"🚨🚨🚨🚨 ****CSV**** END ERROR LOG ****CSV**** 🚨🚨🚨🚨")
-        print("=" * 80)
-        
-        return {
-            'statusCode': 200,
-            'headers': headers,
-            'body': json.dumps({
-                'success': True,
-                'message': f'CSV error for row {row_num} logged to CloudWatch'
-            })
-        }
-    except Exception as e:
-        print(f"❌ Error logging CSV parse error: {str(e)}")
-        import traceback
-        traceback.print_exc()
-        return {
-            'statusCode': 500,
-            'headers': headers,
-            'body': json.dumps({
-                'error': f'Failed to log error: {str(e)}',
-                'success': False
-            })
-        }
-
 
 def get_aws_credentials_from_secrets_manager(secret_name):
     """Retrieve AWS credentials from Secrets Manager"""
