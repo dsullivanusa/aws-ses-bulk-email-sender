@@ -3509,16 +3509,12 @@ def serve_web_ui(event):
             
             csvUploadCancelled = false;
             
-            console.log('Starting batch CSV upload...', file.name);
-            
             // Show progress bar
             document.getElementById('csvUploadProgress').classList.remove('hidden');
             
             try {{
                 const text = await file.text();
                 const lines = text.split('\\n').filter(line => line.trim());
-                
-                console.log('Total lines in CSV:', lines.length);
             
             if (lines.length < 2) {{
                 alert('CSV file must have at least a header row and one data row');
@@ -3549,8 +3545,6 @@ def serve_web_ui(event):
                 }}
                 
                 const headers = parseCSVLine(lines[0]).map(h => h.trim().toLowerCase());
-                console.log('CSV Headers:', headers);
-                console.log('CSV Headers (original):', parseCSVLine(lines[0]));
                 
                 // Phone number normalization function
                 function normalizePhoneNumber(phone) {{
@@ -3584,7 +3578,6 @@ def serve_web_ui(event):
                     const values = parseCSVLine(lines[i]);
                 
                     if (values.length !== headers.length) {{
-                        console.warn(`Row ${{i}}: Column count mismatch. Got ${{values.length}}, expected ${{headers.length}}`);
                         continue;
                     }}
                 
@@ -3699,32 +3692,12 @@ def serve_web_ui(event):
                         }}
                         
                         contact[fieldName] = finalValue;
-                        console.log(`  ✓ ${{header}} → ${{fieldName}}: "${{originalValue}}"${{transformation}}`);
-                    }} else {{
-                        console.log(`Unmapped header: "${{header}}" (value: "${{values[index]}}")`);
                     }}
                 }});
                 
                 if (contact.email) {{
                         allContacts.push(contact);
-                        console.log(`\n📋 Contact #${{i}} parsed successfully:`);
-                        console.log(`   Email: ${{contact.email}}`);
-                        console.log(`   Name: ${{contact.first_name || '(empty)'}} ${{contact.last_name || '(empty)'}}`);
-                        if (contact.phone) console.log(`   Phone: ${{contact.phone}}`);
-                        if (contact.ms_isac_member) console.log(`   MS-ISAC Member: ${{contact.ms_isac_member}}`);
-                        if (contact.soc_call) console.log(`   SOC Call: ${{contact.soc_call}}`);
-                        if (contact.fusion_center) console.log(`   Fusion Center: ${{contact.fusion_center}}`);
-                        if (contact.k12) console.log(`   K-12: ${{contact.k12}}`);
-                        if (contact.water_wastewater) console.log(`   Water/Wastewater: ${{contact.water_wastewater}}`);
-                        if (contact.weekly_rollup) console.log(`   Weekly Rollup: ${{contact.weekly_rollup}}`);
-                        console.log(`   ➜ Ready for DynamoDB storage`);
-                    }}
                 }}
-                
-                console.log(`\n✅ CSV Parsing Complete: ${{allContacts.length}} valid contacts ready for import`);
-                console.log(`\n📊 Sample Contact (First Entry) - Final Values to Store in DynamoDB:`);
-                if (allContacts.length > 0) {{
-                    console.log(JSON.stringify(allContacts[0], null, 2));
                 }}
                 
                 if (allContacts.length === 0) {{
@@ -3746,7 +3719,6 @@ def serve_web_ui(event):
                 for (let batchNum = 0; batchNum < totalBatches; batchNum++) {{
                     // Check if cancelled
                     if (csvUploadCancelled) {{
-                        console.log('CSV upload cancelled by user');
                         alert(`Import cancelled.\\nImported: ${{imported}} contacts\\nRemaining: ${{allContacts.length - imported}}`);
                         hideCSVProgress();
                         return;
@@ -3755,18 +3727,6 @@ def serve_web_ui(event):
                     const start = batchNum * BATCH_SIZE;
                     const end = Math.min(start + BATCH_SIZE, allContacts.length);
                     const batch = allContacts.slice(start, end);
-                    
-                    console.log(`\n📦 Processing batch ${{batchNum + 1}}/${{totalBatches}}: contacts ${{start + 1}}-${{end}}`);
-                    console.log(`   Batch size: ${{batch.length}} contacts`);
-                    console.log(`   💾 Sending to DynamoDB EmailContacts table...`);
-                    
-                    // Log first contact in batch for verification
-                    if (batch.length > 0) {{
-                        console.log(`   Sample from this batch:`);
-                        console.log(`      Email: ${{batch[0].email}}`);
-                        console.log(`      First Name: ${{batch[0].first_name || 'N/A'}}`);
-                        console.log(`      Last Name: ${{batch[0].last_name || 'N/A'}}`);
-                    }}
                     
                     try {{
                         // Send batch to backend API
@@ -3777,8 +3737,6 @@ def serve_web_ui(event):
                                 contacts: batch
                             }})
                         }});
-                        
-                        console.log(`   📡 Response status: ${{response.status}} ${{response.statusText}}`);
                         
                         if (response.ok) {{
                             // Validate Content-Type
@@ -3814,17 +3772,10 @@ def serve_web_ui(event):
                             
                             imported += result.imported || 0;
                             errors += result.unprocessed || 0;
-                            console.log(`   ✅ Batch ${{batchNum + 1}} stored successfully in DynamoDB`);
-                            if (result.retries && result.retries > 0) {{
-                                console.log(`   ⏳ DynamoDB throttling: Batch required ${{result.retries}} retries`);
-                            }}
-                            console.log(`   Total imported so far: ${{imported}}/${{allContacts.length}}`);
                             
                             const percentage = Math.round((imported / allContacts.length) * 100);
                             updateCSVProgress(imported, allContacts.length, 
                                 `Batch ${{batchNum + 1}}/${{totalBatches}} - Imported: ${{imported}}, Errors: ${{errors}}`);
-                            
-                            console.log(`✓ Batch ${{batchNum + 1}} complete: +${{result.imported}} imported, ${{result.unprocessed}} failed`);
                         }} else {{
                             const errorText = await response.text();
                             console.error(`Batch ${{batchNum + 1}} failed:`, response.status, errorText);
@@ -3860,31 +3811,19 @@ def serve_web_ui(event):
                     }}
                     
                     // Delay between batches to prevent DynamoDB throttling and API Gateway timeouts (3 seconds)
-                    // Increased further to reduce throttling on large imports
                     await new Promise(resolve => setTimeout(resolve, 3000));
                 }}
                 
-                console.log(`\n${{'='.repeat(70)}}`);  
-                console.log(`🎉 CSV IMPORT COMPLETE - FINAL SUMMARY`);
-                console.log(`${{'='.repeat(70)}}`);
-                console.log(`✅ Successfully stored in DynamoDB: ${{imported}} contacts`);
-                console.log(`❌ Failed/Errors: ${{errors}} contacts`);
-                console.log(`📊 Total processed: ${{allContacts.length}} contacts in ${{totalBatches}} batches`);
-                console.log(`${{'='.repeat(70)}}\n`);
-                
-                // Log failed batches details
+                // Log only HTML/API errors for failed batches
                 if (failedBatches.length > 0) {{
-                    console.log('\\n=== FAILED BATCHES DETAILS ===');
+                    console.error('=== CSV IMPORT ERRORS ===');
                     failedBatches.forEach(fb => {{
-                        console.log(`\\nBatch ${{fb.batchNum}} (Rows ${{fb.rowStart}}-${{fb.rowEnd}}):`);
-                        console.log(`  Error: ${{fb.error}}`);
-                        console.log(`  Failed contacts:`, fb.contacts);
+                        console.error(`Batch ${{fb.batchNum}} (Rows ${{fb.rowStart}}-${{fb.rowEnd}}): ${{fb.error}}`);
                     }});
-                    console.log('\\n=== END FAILED BATCHES ===\\n');
+                    console.error('=== END ERRORS ===');
                     
                     // Create downloadable CSV of failed rows
                     window.failedContacts = failedBatches.flatMap(fb => fb.contacts);
-                    console.log('To download failed contacts, run: downloadFailedContacts()');
                 }}
                 
                 hideCSVProgress();
