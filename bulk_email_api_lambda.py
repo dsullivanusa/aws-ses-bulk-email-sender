@@ -3553,6 +3553,32 @@ def serve_web_ui(event):
                 console.log('CSV Headers:', headers);
                 console.log('CSV Headers (original):', parseCSVLine(lines[0]));
                 
+                // Phone number normalization function
+                function normalizePhoneNumber(phone) {{
+                    if (!phone) return phone;
+                    // Keep the original value as-is to preserve all phone formats including:
+                    // - (111) 222-3333
+                    // - 111-222-3333
+                    // - (111) 222-3333 ext.5
+                    // - 111-222-3333 ext 444
+                    // - 111-222-3333 X444
+                    // - Any other format with extensions, spaces, or special characters
+                    return phone.trim();
+                }}
+                
+                // Boolean field normalization function
+                function normalizeBooleanField(value) {{
+                    if (!value || value.trim() === '') return 'FALSE';
+                    const normalized = value.trim().toUpperCase();
+                    // Accept various true values: true, yes, y, 1, x
+                    if (normalized === 'TRUE' || normalized === 'YES' || normalized === 'Y' || 
+                        normalized === '1' || normalized === 'X') {{
+                        return 'TRUE';
+                    }}
+                    // Everything else is FALSE
+                    return 'FALSE';
+                }}
+                
                 // Parse all contacts first
                 const allContacts = [];
             for (let i = 1; i < lines.length; i++) {{
@@ -3645,8 +3671,29 @@ def serve_web_ui(event):
                     
                     const fieldName = fieldMap[header];
                     if (fieldName) {{
-                        contact[fieldName] = values[index];
-                        console.log(`Mapped: ${{header}} -> ${{fieldName}} = "${{values[index]}}"`);
+                        let originalValue = values[index];
+                        let finalValue;
+                        let transformation = '';
+                        
+                        // Apply phone number normalization for phone fields
+                        if (fieldName === 'phone') {{
+                            finalValue = normalizePhoneNumber(values[index]);
+                            transformation = ' [phone format preserved]';
+                        }} 
+                        // Apply boolean normalization for yes/no fields
+                        else if (fieldName === 'ms_isac_member' || fieldName === 'soc_call' || 
+                                 fieldName === 'k12' || fieldName === 'water_wastewater' || 
+                                 fieldName === 'weekly_rollup') {{
+                            finalValue = normalizeBooleanField(values[index]);
+                            transformation = ` [normalized: "${{originalValue}}" → ${{finalValue}}]`;
+                        }} 
+                        else {{
+                            finalValue = values[index];
+                            transformation = '';
+                        }}
+                        
+                        contact[fieldName] = finalValue;
+                        console.log(`  ✓ ${{header}} → ${{fieldName}}: "${{originalValue}}"${{transformation}}`);
                     }} else {{
                         console.log(`Unmapped header: "${{header}}" (value: "${{values[index]}}")`);
                     }}
@@ -3654,13 +3701,23 @@ def serve_web_ui(event):
                 
                 if (contact.email) {{
                         allContacts.push(contact);
-                        console.log(`Contact ${{i}}:`, contact);
+                        console.log(`\n📋 Contact #${{i}} parsed successfully:`);
+                        console.log(`   Email: ${{contact.email}}`);
+                        console.log(`   Name: ${{contact.first_name || '(empty)'}} ${{contact.last_name || '(empty)'}}`);
+                        if (contact.phone) console.log(`   Phone: ${{contact.phone}}`);
+                        if (contact.ms_isac_member) console.log(`   MS-ISAC Member: ${{contact.ms_isac_member}}`);
+                        if (contact.soc_call) console.log(`   SOC Call: ${{contact.soc_call}}`);
+                        if (contact.k12) console.log(`   K-12: ${{contact.k12}}`);
+                        if (contact.water_wastewater) console.log(`   Water/Wastewater: ${{contact.water_wastewater}}`);
+                        if (contact.weekly_rollup) console.log(`   Weekly Rollup: ${{contact.weekly_rollup}}`);
+                        console.log(`   ➜ Ready for DynamoDB storage`);
                     }}
                 }}
                 
-                console.log(`Parsed ${{allContacts.length}} valid contacts from CSV`);
+                console.log(`\n✅ CSV Parsing Complete: ${{allContacts.length}} valid contacts ready for import`);
+                console.log(`\n📊 Sample Contact (First Entry) - Final Values to Store in DynamoDB:`);
                 if (allContacts.length > 0) {{
-                    console.log('Sample contact:', allContacts[0]);
+                    console.log(JSON.stringify(allContacts[0], null, 2));
                 }}
                 
                 if (allContacts.length === 0) {{
@@ -3691,7 +3748,21 @@ def serve_web_ui(event):
                     const end = Math.min(start + BATCH_SIZE, allContacts.length);
                     const batch = allContacts.slice(start, end);
                     
-                    console.log(`Processing batch ${{batchNum + 1}}/${{totalBatches}}: contacts ${{start + 1}}-${{end}}`);
+                    console.log(`\n📦 Processing batch ${{batchNum + 1}}/${{totalBatches}}: contacts ${{start + 1}}-${{end}}`);
+                    console.log(`   Batch size: ${{batch.length}} contacts`);
+                    console.log(`   💾 Sending to DynamoDB EmailContacts table...`);
+                    
+                    // Log first contact in batch for verification
+                    if (batch.length > 0) {{
+                        console.log(`   Sample from this batch:`);
+                        console.log(`     - Email: ${{batch[0].email}}`);
+                        console.log(`     - Phone: ${{batch[0].phone || '(none)'}}`);
+                        console.log(`     - MS-ISAC: ${{batch[0].ms_isac_member || 'FALSE'}}`);
+                        console.log(`     - SOC Call: ${{batch[0].soc_call || 'FALSE'}}`);
+                        console.log(`     - K-12: ${{batch[0].k12 || 'FALSE'}}`);
+                        console.log(`     - Water/Wastewater: ${{batch[0].water_wastewater || 'FALSE'}}`);
+                        console.log(`     - Weekly Rollup: ${{batch[0].weekly_rollup || 'FALSE'}}`);
+                    }}
                     
                     try {{
                         const response = await fetch(`${{API_URL}}/contacts/batch`, {{
@@ -3704,6 +3775,8 @@ def serve_web_ui(event):
                             const result = await response.json();
                             imported += result.imported || 0;
                             errors += result.unprocessed || 0;
+                            console.log(`   ✅ Batch ${{batchNum + 1}} stored successfully in DynamoDB`);
+                            console.log(`   Total imported so far: ${{imported}}/${{allContacts.length}}`);
                             
                             const percentage = Math.round((imported / allContacts.length) * 100);
                             updateCSVProgress(imported, allContacts.length, 
@@ -3748,7 +3821,13 @@ def serve_web_ui(event):
                     await new Promise(resolve => setTimeout(resolve, 100));
                 }}
                 
-                console.log('Batch CSV Upload Complete. Imported:', imported, 'Errors:', errors);
+                console.log(`\n${'='.repeat(70)}`);  
+                console.log(`🎉 CSV IMPORT COMPLETE - FINAL SUMMARY`);
+                console.log(`${'='.repeat(70)}`);
+                console.log(`✅ Successfully stored in DynamoDB: ${{imported}} contacts`);
+                console.log(`❌ Failed/Errors: ${{errors}} contacts`);
+                console.log(`📊 Total processed: ${{allContacts.length}} contacts in ${{totalBatches}} batches`);
+                console.log(`${'='.repeat(70)}\n`);
                 
                 // Log failed batches details
                 if (failedBatches.length > 0) {{
