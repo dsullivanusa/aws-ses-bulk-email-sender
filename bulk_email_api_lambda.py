@@ -3692,8 +3692,8 @@ def serve_web_ui(event):
                         }} 
                         // Apply boolean normalization for yes/no fields
                         else if (fieldName === 'ms_isac_member' || fieldName === 'soc_call' || 
-                                 fieldName === 'k12' || fieldName === 'water_wastewater' || 
-                                 fieldName === 'weekly_rollup') {{
+                                 fieldName === 'fusion_center' || fieldName === 'k12' || 
+                                 fieldName === 'water_wastewater' || fieldName === 'weekly_rollup') {{
                             finalValue = normalizeBooleanField(values[index]);
                             transformation = ` [normalized: "${{originalValue}}" → ${{finalValue}}]`;
                         }} 
@@ -3717,6 +3717,7 @@ def serve_web_ui(event):
                         if (contact.phone) console.log(`   Phone: ${{contact.phone}}`);
                         if (contact.ms_isac_member) console.log(`   MS-ISAC Member: ${{contact.ms_isac_member}}`);
                         if (contact.soc_call) console.log(`   SOC Call: ${{contact.soc_call}}`);
+                        if (contact.fusion_center) console.log(`   Fusion Center: ${{contact.fusion_center}}`);
                         if (contact.k12) console.log(`   K-12: ${{contact.k12}}`);
                         if (contact.water_wastewater) console.log(`   Water/Wastewater: ${{contact.water_wastewater}}`);
                         if (contact.weekly_rollup) console.log(`   Weekly Rollup: ${{contact.weekly_rollup}}`);
