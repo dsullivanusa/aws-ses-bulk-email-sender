@@ -3736,8 +3736,9 @@ def serve_web_ui(event):
                     return;
                 }}
                 
-                // Process in batches of 25 (DynamoDB batch limit)
-                const BATCH_SIZE = 25;
+                // Process in smaller batches to avoid API Gateway 29s timeout
+                // Reduced from 25 to 15 for faster processing per batch
+                const BATCH_SIZE = 15;
                 let imported = 0;
                 let errors = 0;
                 const totalBatches = Math.ceil(allContacts.length / BATCH_SIZE);
@@ -3765,27 +3766,6 @@ def serve_web_ui(event):
                     // Log first contact in batch for verification
                     if (batch.length > 0) {{
                         console.log(`   Sample from this batch:`);
-                        console.log(`     - Email: ${{batch[0].email}}`);
-                        console.log(`     - Phone: ${{batch[0].phone || '(none)'}}`);
-                        console.log(`     - MS-ISAC: ${{batch[0].ms_isac_member || 'FALSE'}}`);
-                        console.log(`     - SOC Call: ${{batch[0].soc_call || 'FALSE'}}`);
-                        console.log(`     - K-12: ${{batch[0].k12 || 'FALSE'}}`);
-                        console.log(`     - Water/Wastewater: ${{batch[0].water_wastewater || 'FALSE'}}`);
-                        console.log(`     - Weekly Rollup: ${{batch[0].weekly_rollup || 'FALSE'}}`);
-                    }}
-                    
-                    try {{
-                        const response = await fetch(`${{API_URL}}/contacts/batch`, {{
-                            method: 'POST',
-                            headers: {{'Content-Type': 'application/json'}},
-                            body: JSON.stringify({{ contacts: batch }})
-                        }});
-                        
-                        if (response.ok) {{
-                            // Check Content-Type before parsing
-                            const contentType = response.headers.get('content-type');
-                            console.log(`   📝 Response Content-Type: ${{contentType}}`);
-                            
                             if (!contentType || !contentType.includes('application/json')) {{
                                 const responseText = await response.text();
                                 console.error(`❌ Expected JSON but got Content-Type: ${{contentType}}`);
@@ -3798,11 +3778,20 @@ def serve_web_ui(event):
                             try {{
                                 result = await response.json();
                             }} catch (jsonError) {{
-                                const responseText = await response.text();
                                 console.error(`❌ JSON Parse Error:`);
-                                console.error(`   Error: ${{jsonError.message}}`);
-                                console.error(`   Response body (first 1000 chars):`);
-                                console.error(responseText.substring(0, 1000));
+                                console.error(`   Error type: ${{jsonError.constructor.name}}`);
+                                console.error(`   Error message: ${{jsonError.message}}`);
+                                console.error(`   Error stack:`, jsonError.stack);
+                                
+                                // Try to read response as text
+                                try {{
+                                    const responseText = await response.clone().text();
+                                    console.error(`   Response body (first 1000 chars):`);
+                                    console.error(responseText.substring(0, 1000));
+                                }} catch (textError) {{
+                                    console.error(`   Could not read response as text:`, textError.message);
+                                }}
+                                
                                 throw new Error(`Failed to parse JSON: ${{jsonError.message}}`);
                             }}
                             
@@ -3853,8 +3842,9 @@ def serve_web_ui(event):
                             `Batch ${{batchNum + 1}}/${{totalBatches}} ERROR - Imported: ${{imported}}, Errors: ${{errors}}`);
                     }}
                     
-                    // Delay between batches to prevent DynamoDB throttling (500ms)
-                    await new Promise(resolve => setTimeout(resolve, 500));
+                    // Delay between batches to prevent DynamoDB throttling and API Gateway timeouts (2 seconds)
+                    // Increased to give DynamoDB more breathing room
+                    await new Promise(resolve => setTimeout(resolve, 2000));
                 }}
                 
                 console.log(`\n${{'='.repeat(70)}}`);  
@@ -7183,12 +7173,12 @@ def batch_add_contacts(body, headers):
         
         unprocessed_items = request_items
         retry_count = 0
-        max_retries = 5
+        max_retries = 3  # Reduced from 5 to stay under API Gateway 29s timeout
         
         while unprocessed_items and retry_count < max_retries:
             if retry_count > 0:
-                # Exponential backoff: 1s, 2s, 4s, 8s, 16s
-                wait_time = 2 ** (retry_count - 1)
+                # Shorter exponential backoff: 0.5s, 1s, 2s (total max ~3.5s)
+                wait_time = 0.5 * (2 ** (retry_count - 1))
                 print(f"⏳ Retry {retry_count}/{max_retries}: Waiting {wait_time}s before retrying {len(unprocessed_items)} items...")
                 time.sleep(wait_time)
             
