@@ -3862,9 +3862,9 @@ def serve_web_ui(event):
                             `Batch ${{batchNum + 1}}/${{totalBatches}} ERROR - Imported: ${{imported}}, Errors: ${{errors}}`);
                     }}
                     
-                    // Delay between batches to prevent DynamoDB throttling and API Gateway timeouts (2 seconds)
-                    // Increased to give DynamoDB more breathing room
-                    await new Promise(resolve => setTimeout(resolve, 2000));
+                    // Delay between batches to prevent DynamoDB throttling and API Gateway timeouts (3 seconds)
+                    // Increased further to reduce throttling on large imports
+                    await new Promise(resolve => setTimeout(resolve, 3000));
                 }}
                 
                 console.log(`\n${{'='.repeat(70)}}`);  
