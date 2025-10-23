@@ -3782,7 +3782,30 @@ def serve_web_ui(event):
                         }});
                         
                         if (response.ok) {{
-                            const result = await response.json();
+                            // Check Content-Type before parsing
+                            const contentType = response.headers.get('content-type');
+                            console.log(`   📝 Response Content-Type: ${{contentType}}`);
+                            
+                            if (!contentType || !contentType.includes('application/json')) {{
+                                const responseText = await response.text();
+                                console.error(`❌ Expected JSON but got Content-Type: ${{contentType}}`);
+                                console.error(`   Response body (first 1000 chars):`);
+                                console.error(responseText.substring(0, 1000));
+                                throw new Error(`Server returned non-JSON response (Content-Type: ${{contentType}})`);
+                            }}
+                            
+                            let result;
+                            try {{
+                                result = await response.json();
+                            }} catch (jsonError) {{
+                                const responseText = await response.text();
+                                console.error(`❌ JSON Parse Error:`);
+                                console.error(`   Error: ${{jsonError.message}}`);
+                                console.error(`   Response body (first 1000 chars):`);
+                                console.error(responseText.substring(0, 1000));
+                                throw new Error(`Failed to parse JSON: ${{jsonError.message}}`);
+                            }}
+                            
                             imported += result.imported || 0;
                             errors += result.unprocessed || 0;
                             console.log(`   ✅ Batch ${{batchNum + 1}} stored successfully in DynamoDB`);
