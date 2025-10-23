@@ -3766,6 +3766,26 @@ def serve_web_ui(event):
                     // Log first contact in batch for verification
                     if (batch.length > 0) {{
                         console.log(`   Sample from this batch:`);
+                        console.log(`      Email: ${{batch[0].email}}`);
+                        console.log(`      First Name: ${{batch[0].first_name || 'N/A'}}`);
+                        console.log(`      Last Name: ${{batch[0].last_name || 'N/A'}}`);
+                    }}
+                    
+                    try {{
+                        // Send batch to backend API
+                        const response = await fetch(`${{API_URL}}/contacts/batch`, {{
+                            method: 'POST',
+                            headers: {{'Content-Type': 'application/json'}},
+                            body: JSON.stringify({{
+                                contacts: batch
+                            }})
+                        }});
+                        
+                        console.log(`   📡 Response status: ${{response.status}} ${{response.statusText}}`);
+                        
+                        if (response.ok) {{
+                            // Validate Content-Type
+                            const contentType = response.headers.get('content-type');
                             if (!contentType || !contentType.includes('application/json')) {{
                                 const responseText = await response.text();
                                 console.error(`❌ Expected JSON but got Content-Type: ${{contentType}}`);
@@ -3872,11 +3892,11 @@ def serve_web_ui(event):
                 
                 hideCSVProgress();
                 
-                let message = `CSV Import Complete!\\n\\nImported: ${{imported}} contacts\\nErrors: ${{errors}}\\n\\nProcessed ${{totalBatches}} batches of up to 25 contacts each.`;
+                let message = `CSV Import Complete!\n\nImported: ${{imported}} contacts\nErrors: ${{errors}}\n\nProcessed ${{totalBatches}} batches of up to 15 contacts each.`;
                 
                 if (failedBatches.length > 0) {{
-                    message += `\\n\\n⚠️ ${{failedBatches.length}} batches failed (${{errors}} contacts).`;
-                    message += `\\n\\nTo see failed rows:\\n1. Open Console (F12)\\n2. Look for "FAILED BATCHES DETAILS"\\n3. Run: downloadFailedContacts()`;
+                    message += `\n\n⚠️ ${{failedBatches.length}} batches failed (${{errors}} contacts).`;
+                    message += `\n\nTo see failed rows:\n1. Open Console (F12)\n2. Look for "FAILED BATCHES DETAILS"\n3. Run: downloadFailedContacts()`;
                 }}
                 
                 alert(message);
