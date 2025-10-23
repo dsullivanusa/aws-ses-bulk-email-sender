@@ -3821,13 +3821,13 @@ def serve_web_ui(event):
                     await new Promise(resolve => setTimeout(resolve, 100));
                 }}
                 
-                console.log(`\n${'='.repeat(70)}`);  
+                console.log(`\n${{'='.repeat(70)}}`);  
                 console.log(`🎉 CSV IMPORT COMPLETE - FINAL SUMMARY`);
-                console.log(`${'='.repeat(70)}`);
+                console.log(`${{'='.repeat(70)}}`);
                 console.log(`✅ Successfully stored in DynamoDB: ${{imported}} contacts`);
                 console.log(`❌ Failed/Errors: ${{errors}} contacts`);
                 console.log(`📊 Total processed: ${{allContacts.length}} contacts in ${{totalBatches}} batches`);
-                console.log(`${'='.repeat(70)}\n`);
+                console.log(`${{'='.repeat(70)}}\n`);
                 
                 // Log failed batches details
                 if (failedBatches.length > 0) {{
