@@ -118,7 +118,24 @@ def lambda_handler(event, context):
             return serve_web_ui(event)
         
         # Parse request body
-        body = json.loads(event.get('body', '{}')) if event.get('body') else {}
+        try:
+            if event.get('body'):
+                body_str = event.get('body', '{}')
+                print(f"   Body length: {len(body_str)} characters")
+                body = json.loads(body_str)
+            else:
+                body = {}
+        except json.JSONDecodeError as je:
+            print(f"❌ JSON decode error: {str(je)}")
+            print(f"   Body preview: {event.get('body', '')[:500]}")
+            return {
+                'statusCode': 400, 
+                'headers': headers, 
+                'body': json.dumps({
+                    'error': f'Invalid JSON in request body: {str(je)}',
+                    'success': False
+                })
+            }
         
         # API endpoints
         if path == '/config' and method == 'POST':
@@ -165,7 +182,7 @@ def lambda_handler(event, context):
             print(f"   → Route not found: {method} {path}")
             print("   Available routes: /config, /contacts, /campaign, /upload-attachment, /campaigns, etc.")
             return {'statusCode': 404, 'headers': headers, 'body': json.dumps({'error': f'Route not found: {method} {path}'})}
-            
+        
     except Exception as e:
         print(f"❌ Lambda handler exception: {str(e)}")
         import traceback
@@ -979,7 +996,6 @@ def serve_web_ui(event):
         .toast.removing {{
             animation: toastSlideOut 0.3s ease forwards;
         }}
-        
         @keyframes toastSlideOut {{
             to {{
                 transform: translateX(400px);
@@ -1022,7 +1038,6 @@ def serve_web_ui(event):
             margin-bottom: 4px;
             border-radius: 6px;
         }}
-        
         /* ============================================
            ENHANCED BUTTON ANIMATIONS
            ============================================ */
@@ -1678,7 +1693,6 @@ def serve_web_ui(event):
                         </button>
                     </div>
                 </div>
-                
                 <!-- Available Values Area (shown when a filter type is selected) -->
                 <div id="campaignAvailableValuesArea" style="display: none; margin-bottom: 15px;">
                     <label style="display: block; margin-bottom: 8px; font-size: 13px; font-weight: 600; color: #374151;">Available Values (click to add):</label>
@@ -2007,6 +2021,65 @@ def serve_web_ui(event):
         }};
         
         // ============================================
+        // PHONE NUMBER NORMALIZATION UTILITY
+        // ============================================
+        // Accepts: (111) 111-1111, 111-111-1111, 1112223333, 111-222-3333 ext. 4
+        function normalizePhoneNumber(phone) {{
+            if (!phone || phone.trim() === '') {{
+                return '';
+            }}
+            
+            const original = phone;
+            
+            // Remove leading/trailing whitespace
+            phone = phone.trim();
+            
+            // Check for extension (ext, ext., x, extension)
+            let extension = '';
+            const extMatch = phone.match(/\\s+(ext\\.?|extension|x)\\s*(\\d+)$/i);
+            if (extMatch) {{
+                extension = ' ext. ' + extMatch[2];
+                phone = phone.substring(0, extMatch.index).trim();
+            }}
+            
+            // Extract only digits from the main phone number
+            const digits = phone.replace(/\\D/g, '');
+            
+            // Validate phone number has enough digits (7-10 digits for US numbers)
+            if (digits.length < 7) {{
+                console.warn(`Phone number "${{original}}" has too few digits (${{digits.length}}), keeping as-is`);
+                return original;
+            }}
+            
+            if (digits.length > 11) {{
+                console.warn(`Phone number "${{original}}" has too many digits (${{digits.length}}), keeping as-is`);
+                return original;
+            }}
+            
+            // Format based on digit count
+            let formatted;
+            
+            if (digits.length === 7) {{
+                // Format: 111-1111
+                formatted = `${{digits.slice(0, 3)}}-${{digits.slice(3)}}`;
+            }} else if (digits.length === 10) {{
+                // Format: (111) 111-1111
+                formatted = `(${{digits.slice(0, 3)}}) ${{digits.slice(3, 6)}}-${{digits.slice(6)}}`;
+            }} else if (digits.length === 11 && digits[0] === '1') {{
+                // Format: 1 (111) 111-1111 (with country code)
+                formatted = `1 (${{digits.slice(1, 4)}}) ${{digits.slice(4, 7)}}-${{digits.slice(7)}}`;
+            }} else {{
+                // Unrecognized format, keep digits with dashes
+                console.warn(`Phone number "${{original}}" has unusual digit count (${{digits.length}}), formatting with dashes`);
+                formatted = digits;
+            }}
+            
+            const result = formatted + extension;
+            console.log(`📞 Phone normalized: "${{original}}" → "${{result}}"`);
+            return result;
+        }}
+        
+        // ============================================
         // CAMPAIGN HISTORY SEARCH FUNCTIONS
         // ============================================
         function performHistorySearch() {{
@@ -2030,7 +2103,6 @@ def serve_web_ui(event):
             console.log('Search cleared, reloading all campaigns');
             loadCampaignHistory(null);
         }}
-        
         // ============================================
         // LOADING SKELETON HELPER
         // ============================================
@@ -2263,7 +2335,6 @@ def serve_web_ui(event):
                 }}
             }}, 100);  // Small delay to ensure toolbar is rendered
         }});
-        
         // Initialize the application
         
         function showTab(tabName, clickedElement) {{
@@ -2368,8 +2439,6 @@ def serve_web_ui(event):
             hasNextPage: false,
             displayedContacts: []
         }};
-        
-        
         function showFormStatus(message, type = 'warning') {{
             const statusDiv = document.getElementById('formStatus');
             if (statusDiv) {{
@@ -2677,7 +2746,6 @@ def serve_web_ui(event):
             // Show loading message
             const tbody = document.querySelector('#contactsTable tbody');
             tbody.innerHTML = '<tr><td colspan="20" style="text-align: center; padding: 40px; color: #6b7280; font-size: 14px;">⏳ Querying DynamoDB with filters...</td></tr>';
-            
             // Check if any filters are selected
             const hasFilters = Object.keys(selectedFilterValues).length > 0;
             
@@ -2746,8 +2814,6 @@ def serve_web_ui(event):
                 paginationState.lastKeys = [null];
             }}
         }}
-        
-        
         // Debounce search to avoid too many API calls while typing
         let searchTimeout;
         function debouncedSearch() {{
@@ -2995,7 +3061,6 @@ def serve_web_ui(event):
                 console.log('❌ New contact cancelled');
             }}
         }}
-        
         async function saveNewContact() {{
             try {{
                 const row = document.querySelector('tr.new-contact-row');
@@ -3031,6 +3096,11 @@ def serve_web_ui(event):
                 if (!emailFound || !contactData.email) {{
                     alert('Email is required!');
                     return;
+                }}
+                
+                // Normalize phone number if present
+                if (contactData.phone) {{
+                    contactData.phone = normalizePhoneNumber(contactData.phone);
                 }}
                 
                 console.log('Creating new contact:', contactData);
@@ -3264,6 +3334,11 @@ def serve_web_ui(event):
                     contactData[field] = value;
                 }});
                 
+                // Normalize phone number if present
+                if (contactData.phone) {{
+                    contactData.phone = normalizePhoneNumber(contactData.phone);
+                }}
+                
                 console.log('Saving contact:', contactData);
                 
                 // Show saving state
@@ -3329,7 +3404,6 @@ def serve_web_ui(event):
         function hideAddContact() {{
             document.getElementById('addContactForm').classList.add('hidden');
         }}
-        
         function editContact(email) {{
             const contact = allContacts.find(c => c.email === email);
             if (!contact) {{
@@ -3388,6 +3462,11 @@ def serve_web_ui(event):
                 region: document.getElementById('editRegion').value
             }};
             
+            // Normalize phone number if present
+            if (contactData.phone) {{
+                contactData.phone = normalizePhoneNumber(contactData.phone);
+            }}
+            
             try {{
                 const response = await fetch(`${{API_URL}}/contacts`, {{
                     method: 'PUT',
@@ -3431,6 +3510,11 @@ def serve_web_ui(event):
                 alternate_email: document.getElementById('newAlternateEmail').value,
                 region: document.getElementById('newRegion').value
             }};
+            
+            // Normalize phone number if present
+            if (contact.phone) {{
+                contact.phone = normalizePhoneNumber(contact.phone);
+            }}
             
             const response = await fetch(`${{API_URL}}/contacts`, {{
                 method: 'POST',
@@ -3519,7 +3603,7 @@ def serve_web_ui(event):
                 const text = await file.text();
                 const lines = text.split('\\n').filter(line => line.trim());
                 
-                console.log('Total lines in CSV:', lines.length);
+                console.log('Line 3530Total lines in CSV:', lines.length);
             
             if (lines.length < 2) {{
                 alert('CSV file must have at least a header row and one data row');
@@ -3549,112 +3633,202 @@ def serve_web_ui(event):
                     return result;
                 }}
                 
+                // Phone number normalization function
+                // Accepts: (111) 111-1111, 111-111-1111, 1112223333, 111-222-3333 ext. 4
+                function normalizePhoneNumber(phone) {{
+                    if (!phone || phone.trim() === '') {{
+                        return '';
+                    }}
+                    
+                    const original = phone;
+                    
+                    // Remove leading/trailing whitespace
+                    phone = phone.trim();
+                    
+                    // Check for extension (ext, ext., x, extension)
+                    let extension = '';
+                    const extMatch = phone.match(/\\s+(ext\\.?|extension|x)\\s*(\\d+)$/i);
+                    if (extMatch) {{
+                        extension = ' ext. ' + extMatch[2];
+                        phone = phone.substring(0, extMatch.index).trim();
+                    }}
+                    
+                    // Extract only digits from the main phone number
+                    const digits = phone.replace(/\\D/g, '');
+                    
+                    // Validate phone number has enough digits (7-10 digits for US numbers)
+                    if (digits.length < 7) {{
+                        console.warn(`Phone number "${{original}}" has too few digits (${{digits.length}}), keeping as-is`);
+                        return original;
+                    }}
+                    
+                    if (digits.length > 11) {{
+                        console.warn(`Phone number "${{original}}" has too many digits (${{digits.length}}), keeping as-is`);
+                        return original;
+                    }}
+                    
+                    // Format based on digit count
+                    let formatted;
+                    
+                    if (digits.length === 7) {{
+                        // Format: 111-1111
+                        formatted = `${{digits.slice(0, 3)}}-${{digits.slice(3)}}`;
+                    }} else if (digits.length === 10) {{
+                        // Format: (111) 111-1111
+                        formatted = `(${{digits.slice(0, 3)}}) ${{digits.slice(3, 6)}}-${{digits.slice(6)}}`;
+                    }} else if (digits.length === 11 && digits[0] === '1') {{
+                        // Format: 1 (111) 111-1111 (with country code)
+                        formatted = `1 (${{digits.slice(1, 4)}}) ${{digits.slice(4, 7)}}-${{digits.slice(7)}}`;
+                    }} else {{
+                        // Unrecognized format, keep digits with dashes
+                        console.warn(`Phone number "${{original}}" has unusual digit count (${{digits.length}}), formatting with dashes`);
+                        formatted = digits;
+                    }}
+                    
+                    const result = formatted + extension;
+                    console.log(`📞 Phone normalized: "${{original}}" → "${{result}}"`);
+                    return result;
+                }}
+                
                 const headers = parseCSVLine(lines[0]).map(h => h.trim().toLowerCase());
                 console.log('CSV Headers:', headers);
                 console.log('CSV Headers (original):', parseCSVLine(lines[0]));
                 
                 // Parse all contacts first
                 const allContacts = [];
-            for (let i = 1; i < lines.length; i++) {{
-                    const values = parseCSVLine(lines[i]);
+                const invalidRows = [];  // Track rows with parsing errors
                 
-                    if (values.length !== headers.length) {{
-                        console.warn(`Row ${{i}}: Column count mismatch. Got ${{values.length}}, expected ${{headers.length}}`);
-                        continue;
-                    }}
-                
-                const contact = {{}};
-                headers.forEach((header, index) => {{
-                    // Map CSV headers to contact fields
-                    const fieldMap = {{
-                        'email': 'email',
-                        'email_address': 'email',
-                        'email address': 'email',
-                        'e-mail': 'email',
-                        'e_mail': 'email',
-                        'first_name': 'first_name',
-                        'firstname': 'first_name',
-                        'first name': 'first_name',
-                        'first': 'first_name',
-                        'fname': 'first_name',
-                        'last_name': 'last_name',
-                        'lastname': 'last_name',
-                        'last name': 'last_name',
-                        'last': 'last_name',
-                        'lname': 'last_name',
-                        'title': 'title',
-                        'job_title': 'title',
-                        'job title': 'title',
-                        'position': 'title',
-                        'entity_type': 'entity_type',
-                        'entitytype': 'entity_type',
-                        'entity type': 'entity_type',
-                        'entity': 'entity_type',
-                        'state': 'state',
-                        'state_name': 'state',
-                        'state name': 'state',
-                        'agency_name': 'agency_name',
-                        'agencyname': 'agency_name',
-                        'agency name': 'agency_name',
-                        'agency': 'agency_name',
-                        'organization': 'agency_name',
-                        'org': 'agency_name',
-                        'sector': 'sector',
-                        'industry': 'sector',
-                        'subsection': 'subsection',
-                        'sub_section': 'subsection',
-                        'sub section': 'subsection',
-                        'phone': 'phone',
-                        'phone_number': 'phone',
-                        'phone number': 'phone',
-                        'telephone': 'phone',
-                        'tel': 'phone',
-                        'ms_isac_member': 'ms_isac_member',
-                        'ms-isac': 'ms_isac_member',
-                        'msisac': 'ms_isac_member',
-                        'ms isac': 'ms_isac_member',
-                        'soc_call': 'soc_call',
-                        'soc': 'soc_call',
-                        'soc call': 'soc_call',
-                        'fusion_center': 'fusion_center',
-                        'fusion': 'fusion_center',
-                        'fusion center': 'fusion_center',
-                        'k12': 'k12',
-                        'k-12': 'k12',
-                        'k 12': 'k12',
-                        'water_wastewater': 'water_wastewater',
-                        'water/wastewater': 'water_wastewater',
-                        'water': 'water_wastewater',
-                        'water wastewater': 'water_wastewater',
-                        'weekly_rollup': 'weekly_rollup',
-                        'weekly': 'weekly_rollup',
-                        'rollup': 'weekly_rollup',
-                        'weekly rollup': 'weekly_rollup',
-                        'alternate_email': 'alternate_email',
-                        'alt_email': 'alternate_email',
-                        'alt email': 'alternate_email',
-                        'alt_email_address': 'alternate_email',
-                        'alt email address': 'alternate_email',
-                        'region': 'region',
-                        'geographic_region': 'region',
-                        'geographic region': 'region',
-                        'group': 'group',
-                        'group_name': 'group',
-                        'group name': 'group'
-                    }};
-                    
-                    const fieldName = fieldMap[header];
-                    if (fieldName) {{
-                        contact[fieldName] = values[index];
-                        console.log(`Mapped: ${{header}} -> ${{fieldName}} = "${{values[index]}}"`);
-                    }} else {{
-                        console.log(`Unmapped header: "${{header}}" (value: "${{values[index]}}")`);
-                    }}
-                }});
-                
-                if (contact.email) {{
-                        allContacts.push(contact);
-                        console.log(`Contact ${{i}}:`, contact);
+                for (let i = 1; i < lines.length; i++) {{
+                    try {{
+                        const values = parseCSVLine(lines[i]);
+                        
+                        // Log raw CSV row data
+                        console.log(`\n📋 CSV Row ${{i + 1}} - Raw Values:`);
+                        console.log(`   Raw line: ${{lines[i]}}`);
+                        console.log(`   Parsed values (${{values.length}}):`, values);
+                        values.forEach((val, idx) => {{
+                            console.log(`   [${{idx}}] ${{headers[idx] || '(no header)'}}: "${{val}}"`);
+                        }});
+                        
+                        if (values.length !== headers.length) {{
+                            console.warn(`Row ${{i + 1}}: Column count mismatch. Got ${{values.length}}, expected ${{headers.length}}`);
+                            const errorMsg = 'Column count mismatch: ' + values.length + ' columns found, ' + headers.length + ' expected';
+                            invalidRows.push({{row: i + 1, error: errorMsg, rawLine: lines[i]}});
+                            continue;
+                        }}
+                        
+                        const contact = {{}};
+                        headers.forEach((header, index) => {{
+                            // Map CSV headers to contact fields
+                            const fieldMap = {{
+                                'email': 'email',
+                                'email_address': 'email',
+                                'email address': 'email',
+                                'e-mail': 'email',
+                                'e_mail': 'email',
+                                'first_name': 'first_name',
+                                'firstname': 'first_name',
+                                'first name': 'first_name',
+                                'first': 'first_name',
+                                'fname': 'first_name',
+                                'last_name': 'last_name',
+                                'lastname': 'last_name',
+                                'last name': 'last_name',
+                                'last': 'last_name',
+                                'lname': 'last_name',
+                                'title': 'title',
+                                'job_title': 'title',
+                                'job title': 'title',
+                                'position': 'title',
+                                'entity_type': 'entity_type',
+                                'entitytype': 'entity_type',
+                                'entity type': 'entity_type',
+                                'entity': 'entity_type',
+                                'state': 'state',
+                                'state_name': 'state',
+                                'state name': 'state',
+                                'agency_name': 'agency_name',
+                                'agencyname': 'agency_name',
+                                'agency name': 'agency_name',
+                                'agency': 'agency_name',
+                                'organization': 'agency_name',
+                                'org': 'agency_name',
+                                'sector': 'sector',
+                                'industry': 'sector',
+                                'subsection': 'subsection',
+                                'sub_section': 'subsection',
+                                'sub section': 'subsection',
+                                'phone': 'phone',
+                                'phone_number': 'phone',
+                                'phone number': 'phone',
+                                'telephone': 'phone',
+                                'tel': 'phone',
+                                'ms_isac_member': 'ms_isac_member',
+                                'ms-isac': 'ms_isac_member',
+                                'msisac': 'ms_isac_member',
+                                'ms isac': 'ms_isac_member',
+                                'soc_call': 'soc_call',
+                                'soc': 'soc_call',
+                                'soc call': 'soc_call',
+                                'fusion_center': 'fusion_center',
+                                'fusion': 'fusion_center',
+                                'fusion center': 'fusion_center',
+                                'k12': 'k12',
+                                'k-12': 'k12',
+                                'k 12': 'k12',
+                                'water_wastewater': 'water_wastewater',
+                                'water/wastewater': 'water_wastewater',
+                                'water': 'water_wastewater',
+                                'water wastewater': 'water_wastewater',
+                                'weekly_rollup': 'weekly_rollup',
+                                'weekly': 'weekly_rollup',
+                                'rollup': 'weekly_rollup',
+                                'weekly rollup': 'weekly_rollup',
+                                'alternate_email': 'alternate_email',
+                                'alt_email': 'alternate_email',
+                                'alt email': 'alternate_email',
+                                'alt_email_address': 'alternate_email',
+                                'alt email address': 'alternate_email',
+                                'region': 'region',
+                                'geographic_region': 'region',
+                                'geographic region': 'region',
+                                'group': 'group',
+                                'group_name': 'group',
+                                'group name': 'group'
+                            }};
+                            
+                            const fieldName = fieldMap[header];
+                            if (fieldName) {{
+                                contact[fieldName] = values[index];
+                                console.log(`Mapped: ${{header}} -> ${{fieldName}} = "${{values[index]}}"`);
+                            }} else {{
+                                console.log(`Unmapped header: "${{header}}" (value: "${{values[index]}}")`);
+                            }}
+                        }});
+                        
+                        // Normalize phone number if present
+                        if (contact.phone) {{
+                            contact.phone = normalizePhoneNumber(contact.phone);
+                        }}
+                        
+                        if (contact.email) {{
+                            allContacts.push(contact);
+                            console.log(`Contact row ${{i + 1}}:`, contact);
+                        }} else {{
+                            console.warn(`Row ${{i + 1}}: No valid email found, skipping`);
+                            invalidRows.push({{ row: i + 1, error: 'No valid email', rawLine: lines[i] }});
+                        }}
+                    }} catch (parseError) {{
+                        console.error(`CSV Parse Error on row ${{i + 1}}:`, parseError);
+                        console.error(`Raw line:`, lines[i].substring(0, 200));
+                        const parseErrorMsg = parseError.message || 'Unknown parse error';
+                        invalidRows.push({{ 
+                            row: i + 1, 
+                            error: parseErrorMsg, 
+                            rawLine: lines[i] 
+                        }});
+                        
+                        // Continue to next row
                     }}
                 }}
                 
@@ -3663,8 +3837,15 @@ def serve_web_ui(event):
                     console.log('Sample contact:', allContacts[0]);
                 }}
                 
+                if (invalidRows.length > 0) {{
+                    console.log(`⚠️ Found ${{invalidRows.length}} invalid rows:`);
+                    invalidRows.forEach(row => {{
+                        console.log(`  Row ${{row.row}}: ${{row.error}} - Raw: ${{row.rawLine.substring(0, 100)}}...`);
+                    }});
+                }}
+                
                 if (allContacts.length === 0) {{
-                    alert('No valid contacts found in CSV file');
+                    alert('No valid contacts found in CSV file. Check invalid rows in console.');
                     hideCSVProgress();
                     return;
                 }}
@@ -3701,7 +3882,26 @@ def serve_web_ui(event):
                         }});
                         
                         if (response.ok) {{
-                            const result = await response.json();
+                            let result;
+                            try {{
+                                const responseText = await response.text();
+                                console.log(`Batch ${{batchNum + 1}} raw response (${{response.status}}):`, responseText.substring(0, 500) + (responseText.length > 500 ? '...' : ''));
+                                result = JSON.parse(responseText);
+                            }} catch (parseError) {{
+                                console.error(`Batch ${{batchNum + 1}} JSON parse failed:`, parseError);
+                                console.error(`Raw response text:`, responseText.substring(0, 1000));
+                                errors += batch.length;
+                                failedBatches.push({{
+                                    batchNum: batchNum + 1,
+                                    rowStart: start + 1,
+                                    rowEnd: end,
+                                    contacts: batch,
+                                    error: `JSON Parse Error: ${{parseError.message}} (Status: ${{response.status}}`)
+                                }});
+                                updateCSVProgress(imported, allContacts.length, 
+                                    `Batch ${{batchNum + 1}}/${{totalBatches}} PARSE ERROR - Imported: ${{imported}}, Errors: ${{errors}}`);
+                                continue;
+                            }}
                             imported += result.imported || 0;
                             errors += result.unprocessed || 0;
                             
@@ -3712,7 +3912,7 @@ def serve_web_ui(event):
                             console.log(`✓ Batch ${{batchNum + 1}} complete: +${{result.imported}} imported, ${{result.unprocessed}} failed`);
                         }} else {{
                             const errorText = await response.text();
-                            console.error(`Batch ${{batchNum + 1}} failed:`, response.status, errorText);
+                            console.error(`Batch ${{batchNum + 1}} failed:`, response.status, response.statusText, errorText.substring(0, 500));
                             errors += batch.length;
                             
                             // Track failed batch details
@@ -3721,7 +3921,7 @@ def serve_web_ui(event):
                                 rowStart: start + 1,
                                 rowEnd: end,
                                 contacts: batch,
-                                error: `HTTP ${{response.status}}: ${{errorText}}`
+                                error: `HTTP ${{response.status}} ${{response.statusText}}: ${{errorText.substring(0, 200)}}`
                             }});
                             
                             updateCSVProgress(imported, allContacts.length, 
@@ -3997,7 +4197,6 @@ def serve_web_ui(event):
                 }});
             }}
         }}
-        
         async function applyCampaignFilter() {{
             console.log('Applying campaign filter...', selectedCampaignFilterValues);
             
@@ -4052,7 +4251,6 @@ def serve_web_ui(event):
                 alert(`Error loading filtered contacts: ${{error.message}}`);
             }}
         }}
-        
         function clearAllCampaignFilters() {{
             selectedCampaignFilterValues = {{}};
             currentCampaignFilterType = null;
@@ -4153,7 +4351,6 @@ def serve_web_ui(event):
             
             displayTargetContactsPage();
         }}
-        
         function displayTargetContactsPage() {{
             const {{ currentPage, pageSize, totalContacts, totalPages }} = targetContactsModalState;
             
@@ -4341,7 +4538,6 @@ def serve_web_ui(event):
             campaignAttachments.splice(index, 1);
             displayAttachments();
         }}
-        
         // Fetch all contacts using pagination to handle large datasets (20k+ contacts)
         async function fetchAllContactsPaginated() {{
             let allContacts = [];
@@ -4389,7 +4585,6 @@ def serve_web_ui(event):
             
             return allContacts;
         }}
-        
         async function sendCampaign(event) {{
             // Check form availability first
             if (!checkFormAvailability()) {{
@@ -4574,7 +4769,6 @@ def serve_web_ui(event):
                     }});
                 }}
             }});
-            
             // Step 2: Now process the HTML in tempDiv
             // Unwrap images from resize containers FIRST (before any cleanup)
             // The Quill image resize module wraps images in span containers
@@ -4685,7 +4879,6 @@ def serve_web_ui(event):
                 console.log(`✂️ Unwrapped ${{unwrappedCount}} image(s) from resize containers`);
             }}
             console.log(`🔒 Locked ${{imageComputedStyles.size}} image(s) to exact editor size/position`);
-            
             // THIRD: Preserve paragraph-level alignment for images (centered, right-aligned, etc.)
             tempDiv.querySelectorAll('p, div').forEach(container => {{
                 // Check if this container has text-align style
@@ -5119,11 +5312,8 @@ Breakdown:
 • To recipients: ${{toList.length}}
 • CC recipients: ${{ccList.length}}
 • BCC recipients: ${{bccList.length}}
-
 Filter: ${{filterDescription}}
-
 ⚠️ Are you sure you want to send this campaign?
-
 Click OK to proceed or Cancel to abort.
             `.trim();
             
@@ -5348,7 +5538,6 @@ Click OK to proceed or Cancel to abort.
                 headers: {{'Content-Type': 'application/json'}},
                 body: campaignJSON
             }});
-            
             // 📡 ENHANCED RESPONSE LOGGING
             console.log('📡 CAMPAIGN RESPONSE RECEIVED:');
             console.log('   Status:', response.status, response.statusText);
@@ -5496,7 +5685,6 @@ Click OK to proceed or Cancel to abort.
                 button.disabled = false;
             }}
         }}
-        
         async function loadConfig() {{
             try {{
                 console.log('Loading config from:', `${{API_URL}}/config`);
@@ -5572,7 +5760,6 @@ Click OK to proceed or Cancel to abort.
             
             return null;
         }}
-        
         async function selectFilterType(filterType) {{
             console.log('Filter type selected:', filterType, 'Current type:', currentFilterType);
             
@@ -5690,7 +5877,6 @@ Click OK to proceed or Cancel to abort.
             selectedFilterValues[filterType].push(value);
             updateSelectedValuesTags();
         }}
-        
         function removeFilterValue(filterType, value) {{
             console.log('Removing filter value:', filterType, value);
             
@@ -6024,7 +6210,6 @@ Click OK to proceed or Cancel to abort.
                 loading.style.display = 'none';
             }}
         }}
-        
         async function viewCampaignDetails(campaignId) {{
             currentCampaignId = campaignId;
             try {{
@@ -6338,7 +6523,6 @@ Click OK to proceed or Cancel to abort.
             
             Toast.success('CSV exported successfully', 2000);
         }}
-        
         function exportAllCampaigns() {{
             if (allCampaigns.length === 0) {{
                 Toast.error('No campaigns to export');
@@ -6370,7 +6554,6 @@ Click OK to proceed or Cancel to abort.
             
             Toast.success('All campaigns exported to CSV', 2000);
         }}
-        
         // ============================================
         // INITIALIZATION
         // ============================================
@@ -6392,7 +6575,6 @@ Click OK to proceed or Cancel to abort.
         'headers': {'Content-Type': 'text/html'},
         'body': html_content
     }
-
 def save_email_config(body, headers):
     """Save email configuration"""
     try:
@@ -6400,11 +6582,11 @@ def save_email_config(body, headers):
         
         # Prepare the item with proper data types
         item = {
-            'config_id': 'default',
+                'config_id': 'default',
             'email_service': str(body.get('email_service', 'ses')),
             'from_email': str(body.get('from_email', '')),
-            'updated_at': datetime.now().isoformat()
-        }
+                'updated_at': datetime.now().isoformat()
+            }
         
         # Add service-specific fields
         if body.get('email_service') == 'ses':
@@ -6485,7 +6667,6 @@ def get_email_config(headers):
     except Exception as e:
         print(f"Config retrieval error: {str(e)}")
         return {'statusCode': 500, 'headers': headers, 'body': json.dumps({'error': str(e)})}
-
 def get_contacts(headers, event=None):
     """Get contacts with pagination support"""
     try:
@@ -6677,7 +6858,6 @@ def get_distinct_values(headers, event):
         import traceback
         traceback.print_exc()
         return {'statusCode': 500, 'headers': headers, 'body': json.dumps({'error': str(e)})}
-
 def filter_contacts(body, headers):
     """Filter contacts from DynamoDB based on multiple field filters"""
     try:
@@ -6829,6 +7009,375 @@ def search_contacts(body, headers):
             'headers': headers,
             'body': json.dumps({'error': str(e)}, default=_json_default)
         }
+def add_contact(body, headers):
+    """Add a new contact to DynamoDB"""
+    try:
+        # Validate required fields
+        email = body.get('email', '').strip()
+        if not email:
+            return {
+                'statusCode': 400,
+                'headers': headers,
+                'body': json.dumps({'error': 'Email is required'})
+            }
+        
+        # Check if contact already exists
+        existing = contacts_table.get_item(Key={'email': email})
+        if 'Item' in existing:
+            return {
+                'statusCode': 409,
+                'headers': headers,
+                'body': json.dumps({'error': 'Contact with this email already exists'})
+            }
+        
+        # Build contact item with all fields
+        contact_item = {
+            'email': email,
+            'first_name': body.get('first_name', '').strip(),
+            'last_name': body.get('last_name', '').strip(),
+            'title': body.get('title', '').strip(),
+            'entity_type': body.get('entity_type', '').strip(),
+            'state': body.get('state', '').strip(),
+            'agency_name': body.get('agency_name', '').strip(),
+            'sector': body.get('sector', '').strip(),
+            'subsection': body.get('subsection', '').strip(),
+            'phone': body.get('phone', '').strip(),
+            'ms_isac_member': body.get('ms_isac_member', '').strip(),
+            'soc_call': body.get('soc_call', '').strip(),
+            'fusion_center': body.get('fusion_center', '').strip(),
+            'k12': body.get('k12', '').strip(),
+            'water_wastewater': body.get('water_wastewater', '').strip(),
+            'weekly_rollup': body.get('weekly_rollup', '').strip(),
+            'alternate_email': body.get('alternate_email', '').strip(),
+            'region': body.get('region', '').strip(),
+            'group': body.get('group', '').strip(),
+            'created_at': datetime.now().isoformat()
+        }
+        
+        # Remove empty values to save space
+        contact_item = {k: v for k, v in contact_item.items() if v}
+        
+        # Save to DynamoDB
+        contacts_table.put_item(Item=contact_item)
+        
+        print(f"✅ Contact added: {email}")
+        return {
+            'statusCode': 201,
+            'headers': headers,
+            'body': json.dumps({
+                'success': True,
+                'message': 'Contact added successfully',
+                'contact': convert_decimals(contact_item)
+            })
+        }
+    except Exception as e:
+        print(f"Error adding contact: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return {
+            'statusCode': 500,
+            'headers': headers,
+            'body': json.dumps({'error': str(e)})
+        }
+
+def update_contact(body, headers):
+    """Update an existing contact in DynamoDB"""
+    try:
+        # Get email (primary key)
+        email = body.get('email', '').strip()
+        if not email:
+            return {
+                'statusCode': 400,
+                'headers': headers,
+                'body': json.dumps({'error': 'Email is required to update contact'})
+            }
+        
+        # Check if contact exists
+        existing = contacts_table.get_item(Key={'email': email})
+        if 'Item' not in existing:
+            return {
+                'statusCode': 404,
+                'headers': headers,
+                'body': json.dumps({'error': 'Contact not found'})
+            }
+        
+        # Build update expression dynamically
+        update_parts = []
+        expression_attribute_names = {}
+        expression_attribute_values = {}
+        
+        # List of updateable fields
+        updateable_fields = [
+            'first_name', 'last_name', 'title', 'entity_type', 'state',
+            'agency_name', 'sector', 'subsection', 'phone', 'ms_isac_member',
+            'soc_call', 'fusion_center', 'k12', 'water_wastewater',
+            'weekly_rollup', 'alternate_email', 'region', 'group'
+        ]
+        
+        for field in updateable_fields:
+            if field in body:
+                value = body[field].strip() if isinstance(body[field], str) else body[field]
+                if value:  # Only update non-empty values
+                    update_parts.append(f'#{field} = :{field}')
+                    expression_attribute_names[f'#{field}'] = field
+                    expression_attribute_values[f':{field}'] = value
+        
+        # Add update timestamp
+        update_parts.append('#updated_at = :updated_at')
+        expression_attribute_names['#updated_at'] = 'updated_at'
+        expression_attribute_values[':updated_at'] = datetime.now().isoformat()
+        
+        if not update_parts:
+            return {
+                'statusCode': 400,
+                'headers': headers,
+                'body': json.dumps({'error': 'No fields to update'})
+            }
+        
+        # Update the contact
+        update_expression = 'SET ' + ', '.join(update_parts)
+        
+        response = contacts_table.update_item(
+            Key={'email': email},
+            UpdateExpression=update_expression,
+            ExpressionAttributeNames=expression_attribute_names,
+            ExpressionAttributeValues=expression_attribute_values,
+            ReturnValues='ALL_NEW'
+        )
+        
+        print(f"✅ Contact updated: {email}")
+        return {
+            'statusCode': 200,
+            'headers': headers,
+            'body': json.dumps({
+                'success': True,
+                'message': 'Contact updated successfully',
+                'contact': convert_decimals(response['Attributes'])
+            })
+        }
+    except Exception as e:
+        print(f"Error updating contact: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return {
+            'statusCode': 500,
+            'headers': headers,
+            'body': json.dumps({'error': str(e)})
+        }
+
+def delete_contact(event, headers):
+    """Delete a contact from DynamoDB"""
+    try:
+        # Get email from query parameters
+        query_params = event.get('queryStringParameters') or {}
+        email = query_params.get('email', '').strip()
+        
+        # Also check for contact_id (alias for email)
+        if not email:
+            email = query_params.get('contact_id', '').strip()
+        
+        if not email:
+            return {
+                'statusCode': 400,
+                'headers': headers,
+                'body': json.dumps({'error': 'Email or contact_id parameter is required'})
+            }
+        
+        # Check if contact exists
+        existing = contacts_table.get_item(Key={'email': email})
+        if 'Item' not in existing:
+            return {
+                'statusCode': 404,
+                'headers': headers,
+                'body': json.dumps({'error': 'Contact not found'})
+            }
+        
+        # Delete the contact
+        contacts_table.delete_item(Key={'email': email})
+        
+        print(f"✅ Contact deleted: {email}")
+        return {
+            'statusCode': 200,
+            'headers': headers,
+            'body': json.dumps({
+                'success': True,
+                'message': 'Contact deleted successfully'
+            })
+        }
+    except Exception as e:
+        print(f"Error deleting contact: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return {
+            'statusCode': 500,
+            'headers': headers,
+            'body': json.dumps({'error': str(e)})
+        }
+
+def batch_add_contacts(body, headers):
+    """Add multiple contacts in batch to DynamoDB"""
+    try:
+        contacts = body.get('contacts', [])
+        
+        if not contacts:
+            return {
+                'statusCode': 400,
+                'headers': headers,
+                'body': json.dumps({'error': 'No contacts provided'})
+            }
+        
+        # Validate and process contacts
+        success_count = 0
+        failed_contacts = []
+        added_contacts = []
+        
+        with contacts_table.batch_writer() as batch:
+            for contact_data in contacts:
+                email = contact_data.get('email', '').strip()
+                
+                if not email:
+                    failed_contacts.append({
+                        'contact': contact_data,
+                        'error': 'Email is required'
+                    })
+                    continue
+                
+                # Check if contact exists (batch check would be more efficient for large sets)
+                existing = contacts_table.get_item(Key={'email': email})
+                if 'Item' in existing:
+                    failed_contacts.append({
+                        'email': email,
+                        'error': 'Contact already exists'
+                    })
+                    continue
+                
+                # Build contact item
+                contact_item = {
+                    'email': email,
+                    'first_name': contact_data.get('first_name', '').strip(),
+                    'last_name': contact_data.get('last_name', '').strip(),
+                    'title': contact_data.get('title', '').strip(),
+                    'entity_type': contact_data.get('entity_type', '').strip(),
+                    'state': contact_data.get('state', '').strip(),
+                    'agency_name': contact_data.get('agency_name', '').strip(),
+                    'sector': contact_data.get('sector', '').strip(),
+                    'subsection': contact_data.get('subsection', '').strip(),
+                    'phone': contact_data.get('phone', '').strip(),
+                    'ms_isac_member': contact_data.get('ms_isac_member', '').strip(),
+                    'soc_call': contact_data.get('soc_call', '').strip(),
+                    'fusion_center': contact_data.get('fusion_center', '').strip(),
+                    'k12': contact_data.get('k12', '').strip(),
+                    'water_wastewater': contact_data.get('water_wastewater', '').strip(),
+                    'weekly_rollup': contact_data.get('weekly_rollup', '').strip(),
+                    'alternate_email': contact_data.get('alternate_email', '').strip(),
+                    'region': contact_data.get('region', '').strip(),
+                    'group': contact_data.get('group', '').strip(),
+                    'created_at': datetime.now().isoformat()
+                }
+                
+                # Remove empty values
+                contact_item = {k: v for k, v in contact_item.items() if v}
+                
+                try:
+                    batch.put_item(Item=contact_item)
+                    success_count += 1
+                    added_contacts.append(email)
+                except Exception as e:
+                    failed_contacts.append({
+                        'email': email,
+                        'error': str(e)
+                    })
+        
+        print(f"✅ Batch add completed: {success_count} succeeded, {len(failed_contacts)} failed")
+        
+        return {
+            'statusCode': 200 if success_count > 0 else 400,
+            'headers': headers,
+            'body': json.dumps({
+                'success': success_count > 0,
+                'added_count': success_count,
+                'added_contacts': added_contacts,
+                'failed_count': len(failed_contacts),
+                'failed_contacts': failed_contacts
+            })
+        }
+    except Exception as e:
+        print(f"Error in batch add contacts: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return {
+            'statusCode': 500,
+            'headers': headers,
+            'body': json.dumps({'error': str(e)})
+        }
+
+def upload_attachment(body, headers):
+    """Upload attachment to S3 and return the S3 key"""
+    try:
+        print("📎 Processing attachment upload")
+        
+        # Get file data
+        file_name = body.get('fileName', 'attachment')
+        file_content = body.get('fileContent', '')
+        
+        if not file_content:
+            return {
+                'statusCode': 400,
+                'headers': headers,
+                'body': json.dumps({'error': 'No file content provided'})
+            }
+        
+        # Decode base64 content
+        try:
+            file_data = base64.b64decode(file_content)
+            print(f"   → Decoded file size: {len(file_data)} bytes")
+        except Exception as e:
+            print(f"   ❌ Base64 decode error: {str(e)}")
+            return {
+                'statusCode': 400,
+                'headers': headers,
+                'body': json.dumps({'error': 'Invalid base64 file content'})
+            }
+        
+        # Generate unique S3 key
+        timestamp = int(datetime.now().timestamp())
+        s3_key = f"attachments/{timestamp}_{file_name}"
+        
+        # Upload to S3
+        try:
+            s3_client.put_object(
+                Bucket=ATTACHMENTS_BUCKET,
+                Key=s3_key,
+                Body=file_data,
+                ContentType=body.get('contentType', 'application/octet-stream')
+            )
+            print(f"   ✅ File uploaded to S3: {s3_key}")
+        except Exception as e:
+            print(f"   ❌ S3 upload error: {str(e)}")
+            return {
+                'statusCode': 500,
+                'headers': headers,
+                'body': json.dumps({'error': f'Failed to upload file to S3: {str(e)}'})
+            }
+        
+        return {
+            'statusCode': 200,
+            'headers': headers,
+            'body': json.dumps({
+                'success': True,
+                's3_key': s3_key,
+                'file_name': file_name
+            })
+        }
+    except Exception as e:
+        print(f"❌ Attachment upload error: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return {
+            'statusCode': 500,
+            'headers': headers,
+            'body': json.dumps({'error': str(e)})
+        }
 
 def get_groups(headers):
     """Get distinct groups from contacts - optimized for large datasets"""
@@ -6871,292 +7420,6 @@ def get_groups(headers):
             'headers': headers, 
             'body': json.dumps({'error': str(e)})
         }
-
-def upload_attachment(body, headers):
-    """Upload attachment to S3 bucket"""
-    try:
-        print("📎 Upload attachment request received")
-        print(f"Request body keys: {list(body.keys())}")
-        
-        filename = body.get('filename')
-        content_type = body.get('content_type', 'application/octet-stream')
-        s3_key = body.get('s3_key')
-        data = body.get('data')  # Base64 encoded file data
-        
-        print(f"📄 Filename: {filename}")
-        print(f"📋 ContentType: {content_type}")
-        print(f"🗂️  S3Key: {s3_key}")
-        print(f"📊 Data length: {len(data) if data else 0} characters (base64)")
-        
-        if not all([filename, s3_key, data]):
-            missing = []
-            if not filename: missing.append('filename')
-            if not s3_key: missing.append('s3_key')
-            if not data: missing.append('data')
-            error_msg = f'Missing required fields: {", ".join(missing)}'
-            print(f"ERROR: {error_msg}")
-            return {
-                'statusCode': 400, 
-                'headers': headers, 
-                'body': json.dumps({'error': error_msg})
-            }
-        
-        # Decode base64 data
-        print("Decoding base64 data...")
-        try:
-            file_data = base64.b64decode(data)
-            print(f"Decoded file size: {len(file_data)} bytes")
-        except Exception as decode_error:
-            error_msg = f"Base64 decode error: {str(decode_error)}"
-            print(f"ERROR: {error_msg}")
-            return {
-                'statusCode': 400,
-                'headers': headers,
-                'body': json.dumps({'error': error_msg})
-            }
-        
-        # Upload to S3
-        print(f"Uploading to S3 bucket: {ATTACHMENTS_BUCKET}, key: {s3_key}")
-        try:
-            s3_client.put_object(
-                Bucket=ATTACHMENTS_BUCKET,
-                Key=s3_key,
-                Body=file_data,
-                ContentType=content_type,
-                Metadata={
-                    'original_filename': filename
-                }
-            )
-            print(f"✓ Successfully uploaded: {filename} to s3://{ATTACHMENTS_BUCKET}/{s3_key}")
-        except Exception as s3_error:
-            error_msg = f"S3 upload error: {str(s3_error)}"
-            print(f"ERROR: {error_msg}")
-            # Check for specific S3 errors
-            if 'AccessDenied' in str(s3_error):
-                error_msg = f"S3 Access Denied: Lambda role does not have permission to write to bucket '{ATTACHMENTS_BUCKET}'. Add s3:PutObject permission."
-            elif 'NoSuchBucket' in str(s3_error):
-                error_msg = f"S3 bucket '{ATTACHMENTS_BUCKET}' does not exist or is not accessible."
-            return {
-                'statusCode': 500,
-                'headers': headers,
-                'body': json.dumps({'error': error_msg})
-            }
-        
-        return {
-            'statusCode': 200, 
-            'headers': headers, 
-            'body': json.dumps({
-                'success': True,
-                'filename': filename,
-                's3_key': s3_key,
-                'bucket': ATTACHMENTS_BUCKET,
-                'size': len(file_data),
-                'type': content_type
-            })
-        }
-    except Exception as e:
-        error_msg = f"Unexpected error uploading attachment: {str(e)}"
-        print(f"ERROR: {error_msg}")
-        import traceback
-        traceback.print_exc()
-        return {
-            'statusCode': 500, 
-            'headers': headers, 
-            'body': json.dumps({'error': error_msg})
-        }
-
-def add_contact(body, headers):
-    """Add new contact with all CISA-specific fields"""
-    try:
-        import uuid
-        contacts_table.put_item(
-            Item={
-                'contact_id': str(uuid.uuid4()),  # Generate unique contact_id
-                'email': body['email'],
-                'first_name': body.get('first_name', ''),
-                'last_name': body.get('last_name', ''),
-                'title': body.get('title', ''),
-                'entity_type': body.get('entity_type', ''),
-                'state': body.get('state', ''),
-                'agency_name': body.get('agency_name', ''),
-                'sector': body.get('sector', ''),
-                'subsection': body.get('subsection', ''),
-                'phone': body.get('phone', ''),
-                'ms_isac_member': body.get('ms_isac_member', ''),
-                'soc_call': body.get('soc_call', ''),
-                'fusion_center': body.get('fusion_center', ''),
-                'k12': body.get('k12', ''),
-                'water_wastewater': body.get('water_wastewater', ''),
-                'weekly_rollup': body.get('weekly_rollup', ''),
-                'alternate_email': body.get('alternate_email', ''),
-                'region': body.get('region', ''),
-                'group': body.get('group', ''),
-                'created_at': datetime.now().isoformat()
-            }
-        )
-        return {'statusCode': 200, 'headers': headers, 'body': json.dumps({'success': True})}
-    except Exception as e:
-        return {'statusCode': 500, 'headers': headers, 'body': json.dumps({'error': str(e)})}
-
-def batch_add_contacts(body, headers):
-    """Batch add contacts - up to 25 at a time (DynamoDB limit)"""
-    try:
-        import uuid
-        
-        contacts = body.get('contacts', [])
-        
-        if not contacts:
-            return {'statusCode': 400, 'headers': headers, 'body': json.dumps({'error': 'No contacts provided'})}
-        
-        if len(contacts) > 25:
-            return {'statusCode': 400, 'headers': headers, 'body': json.dumps({'error': 'Maximum 25 contacts per batch'})}
-        
-        # Prepare batch write requests
-        dynamodb_client = boto3.client('dynamodb', region_name='us-gov-west-1')
-        
-        request_items = []
-        for i, contact in enumerate(contacts):
-            if not contact.get('email'):
-                print(f"⚠️ Skipping contact {i+1}: No email address")
-                continue
-                
-            # Generate unique contact_id for each contact
-            contact_id = str(uuid.uuid4())
-            
-            # Validate email format
-            email = contact['email'].strip()
-            if '@' not in email:
-                print(f"⚠️ Skipping contact {i+1}: Invalid email format: {email}")
-                continue
-                
-            item = {
-                'contact_id': {'S': contact_id},  # Add contact_id field
-                'email': {'S': email},
-                'first_name': {'S': str(contact.get('first_name', '')).strip()},
-                'last_name': {'S': str(contact.get('last_name', '')).strip()},
-                'title': {'S': str(contact.get('title', '')).strip()},
-                'entity_type': {'S': str(contact.get('entity_type', '')).strip()},
-                'state': {'S': str(contact.get('state', '')).strip()},
-                'agency_name': {'S': str(contact.get('agency_name', '')).strip()},
-                'sector': {'S': str(contact.get('sector', '')).strip()},
-                'subsection': {'S': str(contact.get('subsection', '')).strip()},
-                'phone': {'S': str(contact.get('phone', '')).strip()},
-                'ms_isac_member': {'S': str(contact.get('ms_isac_member', '')).strip()},
-                'soc_call': {'S': str(contact.get('soc_call', '')).strip()},
-                'fusion_center': {'S': str(contact.get('fusion_center', '')).strip()},
-                'k12': {'S': str(contact.get('k12', '')).strip()},
-                'water_wastewater': {'S': str(contact.get('water_wastewater', '')).strip()},
-                'weekly_rollup': {'S': str(contact.get('weekly_rollup', '')).strip()},
-                'alternate_email': {'S': str(contact.get('alternate_email', '')).strip()},
-                'region': {'S': str(contact.get('region', '')).strip()},
-                'group': {'S': str(contact.get('group', '')).strip()},
-                'created_at': {'S': datetime.now().isoformat()}
-            }
-            
-            request_items.append({'PutRequest': {'Item': item}})
-        
-        if not request_items:
-            return {'statusCode': 400, 'headers': headers, 'body': json.dumps({'error': 'No valid contacts with email addresses'})}
-        
-        # Execute batch write
-        print(f"📝 Batch write: {len(request_items)} items to EmailContacts table")
-        response = dynamodb_client.batch_write_item(
-            RequestItems={
-                'EmailContacts': request_items
-            }
-        )
-        
-        # Check for unprocessed items
-        unprocessed = response.get('UnprocessedItems', {})
-        unprocessed_count = len(unprocessed.get('EmailContacts', []))
-        
-        print(f"✅ Batch write complete: {len(request_items) - unprocessed_count} imported, {unprocessed_count} unprocessed")
-        
-        return {
-            'statusCode': 200, 
-            'headers': headers, 
-            'body': json.dumps({
-                'success': True, 
-                'imported': len(request_items) - unprocessed_count,
-                'unprocessed': unprocessed_count
-            })
-        }
-    except Exception as e:
-        print(f"❌ Batch import error: {str(e)}")
-        import traceback
-        traceback.print_exc()
-        return {'statusCode': 500, 'headers': headers, 'body': json.dumps({'error': str(e)})}
-
-def update_contact(body, headers):
-    """Update contact with all CISA fields"""
-    try:
-        contact_id = body.get('contact_id')
-        email = body.get('email')
-        
-        if not contact_id:
-            return {'statusCode': 400, 'headers': headers, 'body': json.dumps({'error': 'contact_id is required'})}
-        
-        # Define all possible contact fields
-        contact_fields = [
-            'email', 'first_name', 'last_name', 'title', 'entity_type', 'state', 
-            'agency_name', 'sector', 'subsection', 'phone', 'ms_isac_member',
-            'soc_call', 'fusion_center', 'k12', 'water_wastewater', 
-            'weekly_rollup', 'alternate_email', 'region', 'group'
-        ]
-        
-        update_expr = "SET "
-        expr_values = {}
-        expr_names = {}
-        update_parts = []
-        
-        for field in contact_fields:
-            if field in body and field != 'contact_id':
-                # Use ExpressionAttributeNames to avoid reserved keyword issues
-                field_placeholder = f"#{field}"
-                value_placeholder = f":{field}"
-                update_parts.append(f"{field_placeholder} = {value_placeholder}")
-                expr_names[field_placeholder] = field
-                expr_values[value_placeholder] = body[field]
-        
-        if not update_parts:
-            return {'statusCode': 400, 'headers': headers, 'body': json.dumps({'error': 'No fields to update'})}
-        
-        update_expr += ", ".join(update_parts)
-        
-        contacts_table.update_item(
-            Key={'contact_id': contact_id},
-            UpdateExpression=update_expr,
-            ExpressionAttributeNames=expr_names,
-            ExpressionAttributeValues=expr_values
-        )
-        
-        print(f"Updated contact {contact_id} (email: {email}) with fields: {list(body.keys())}")
-        return {'statusCode': 200, 'headers': headers, 'body': json.dumps({'success': True})}
-    except Exception as e:
-        print(f"Error updating contact: {str(e)}")
-        return {'statusCode': 500, 'headers': headers, 'body': json.dumps({'error': str(e)})}
-
-def delete_contact(event, headers):
-    """Delete contact"""
-    try:
-        # Get contact_id from query parameters
-        query_params = event.get('queryStringParameters') or {}
-        contact_id = query_params.get('contact_id')
-        
-        print(f"Delete request - contact_id: {contact_id}")
-        
-        if not contact_id:
-            return {'statusCode': 400, 'headers': headers, 'body': json.dumps({'error': 'contact_id is required'})}
-        
-        contacts_table.delete_item(Key={'contact_id': contact_id})
-        print(f"Successfully deleted contact: {contact_id}")
-        return {'statusCode': 200, 'headers': headers, 'body': json.dumps({'success': True})}
-    except Exception as e:
-        print(f"Error deleting contact: {str(e)}")
-        import traceback
-        traceback.print_exc()
-        return {'statusCode': 500, 'headers': headers, 'body': json.dumps({'error': str(e)})}
-
 def send_campaign(body, headers, event=None):
     """Send email campaign by saving to DynamoDB and queuing contacts to SQS"""
     try:
@@ -7263,7 +7526,6 @@ def send_campaign(body, headers, event=None):
             print(f"✅ CC/BCC/To-only campaign: {len(cc_list)} CC + {len(bcc_list)} BCC + {len(to_list)} To recipients")
         
         campaign_id = f"campaign_{int(datetime.now().timestamp())}"
-        
         # Get attachments
         attachments = body.get('attachments', [])
         
@@ -7372,17 +7634,10 @@ def send_campaign(body, headers, event=None):
         for cc_email in cc_list:
             if cc_email:
                 all_recipients.add(cc_email.lower().strip())
-
-        # Add BCC recipients
-        for bcc_email in bcc_list:
-            if bcc_email:
-                all_recipients.add(bcc_email.lower().strip())
-
         # Add explicit TO recipients
         for to_email in to_list:
             if to_email:
                 all_recipients.add(to_email.lower().strip())
-
         # Queue each unique recipient
         for recipient_email in all_recipients:
             if not recipient_email or '@' not in recipient_email:
@@ -7616,8 +7871,6 @@ def get_attachment_url(event, headers):
             'headers': headers,
             'body': json.dumps({'error': 'Failed to generate download URL'})
         }
-
-
 def get_campaign_status(campaign_id, headers):
     """Get campaign status"""
     try:
@@ -7633,8 +7886,6 @@ def get_campaign_status(campaign_id, headers):
         return {'statusCode': 200, 'headers': headers, 'body': json.dumps(campaign, default=_json_default)}
     except Exception as e:
         return {'statusCode': 500, 'headers': headers, 'body': json.dumps({'error': str(e)})}
-
-
 def get_campaigns(headers, event=None):
     """Get campaigns page from DynamoDB with server-side pagination (limit=50) and optional search (q)."""
     try:
@@ -7818,7 +8069,6 @@ def mark_campaign_viewed(body, headers):
             'headers': headers,
             'body': json.dumps({'error': 'Failed to log campaign view'})
         }
-
 
 def get_aws_credentials_from_secrets_manager(secret_name):
     """Retrieve AWS credentials from Secrets Manager"""
