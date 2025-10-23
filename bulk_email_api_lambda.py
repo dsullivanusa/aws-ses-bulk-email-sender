@@ -3786,6 +3786,9 @@ def serve_web_ui(event):
                             imported += result.imported || 0;
                             errors += result.unprocessed || 0;
                             console.log(`   ✅ Batch ${{batchNum + 1}} stored successfully in DynamoDB`);
+                            if (result.retries && result.retries > 0) {{
+                                console.log(`   ⏳ DynamoDB throttling: Batch required ${{result.retries}} retries`);
+                            }}
                             console.log(`   Total imported so far: ${{imported}}/${{allContacts.length}}`);
                             
                             const percentage = Math.round((imported / allContacts.length) * 100);
@@ -3827,8 +3830,8 @@ def serve_web_ui(event):
                             `Batch ${{batchNum + 1}}/${{totalBatches}} ERROR - Imported: ${{imported}}, Errors: ${{errors}}`);
                     }}
                     
-                    // Small delay to avoid overwhelming the API
-                    await new Promise(resolve => setTimeout(resolve, 100));
+                    // Delay between batches to prevent DynamoDB throttling (500ms)
+                    await new Promise(resolve => setTimeout(resolve, 500));
                 }}
                 
                 console.log(`\n${{'='.repeat(70)}}`);  
@@ -7092,7 +7095,12 @@ def batch_add_contacts(body, headers):
     try:
         import uuid
         
+        print(f"\n📦 batch_add_contacts called")
+        print(f"   Body type: {type(body)}")
+        print(f"   Body keys: {list(body.keys()) if isinstance(body, dict) else 'NOT A DICT'}")
+        
         contacts = body.get('contacts', [])
+        print(f"   Contacts count: {len(contacts)}")
         
         if not contacts:
             return {'statusCode': 400, 'headers': headers, 'body': json.dumps({'error': 'No contacts provided'})}
@@ -7147,27 +7155,51 @@ def batch_add_contacts(body, headers):
         if not request_items:
             return {'statusCode': 400, 'headers': headers, 'body': json.dumps({'error': 'No valid contacts with email addresses'})}
         
-        # Execute batch write
+        # Execute batch write with retry logic for throttling
         print(f"📝 Batch write: {len(request_items)} items to EmailContacts table")
-        response = dynamodb_client.batch_write_item(
-            RequestItems={
-                'EmailContacts': request_items
-            }
-        )
         
-        # Check for unprocessed items
-        unprocessed = response.get('UnprocessedItems', {})
-        unprocessed_count = len(unprocessed.get('EmailContacts', []))
+        unprocessed_items = request_items
+        retry_count = 0
+        max_retries = 5
         
-        print(f"✅ Batch write complete: {len(request_items) - unprocessed_count} imported, {unprocessed_count} unprocessed")
+        while unprocessed_items and retry_count < max_retries:
+            if retry_count > 0:
+                # Exponential backoff: 1s, 2s, 4s, 8s, 16s
+                wait_time = 2 ** (retry_count - 1)
+                print(f"⏳ Retry {retry_count}/{max_retries}: Waiting {wait_time}s before retrying {len(unprocessed_items)} items...")
+                time.sleep(wait_time)
+            
+            response = dynamodb_client.batch_write_item(
+                RequestItems={
+                    'EmailContacts': unprocessed_items
+                }
+            )
+            
+            # Check for unprocessed items (throttled by DynamoDB)
+            unprocessed = response.get('UnprocessedItems', {})
+            unprocessed_items = unprocessed.get('EmailContacts', [])
+            
+            if unprocessed_items:
+                print(f"⚠️ {len(unprocessed_items)} items throttled by DynamoDB, will retry...")
+            
+            retry_count += 1
+        
+        final_unprocessed = len(unprocessed_items)
+        successfully_written = len(request_items) - final_unprocessed
+        
+        if final_unprocessed > 0:
+            print(f"⚠️ Batch write completed with {final_unprocessed} unprocessed items after {retry_count} retries")
+        else:
+            print(f"✅ Batch write complete: {successfully_written} items successfully written")
         
         return {
             'statusCode': 200, 
             'headers': headers, 
             'body': json.dumps({
                 'success': True, 
-                'imported': len(request_items) - unprocessed_count,
-                'unprocessed': unprocessed_count
+                'imported': successfully_written,
+                'unprocessed': final_unprocessed,
+                'retries': retry_count - 1 if retry_count > 1 else 0
             })
         }
     except Exception as e:
