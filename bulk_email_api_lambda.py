@@ -3488,8 +3488,7 @@ def serve_web_ui(event):
                     `Water/Wastewater: ${{contact.water_wastewater || 'N/A'}}\\n` +
                     `Weekly Rollup: ${{contact.weekly_rollup || 'N/A'}}\\n` +
                     `Alternate Email: ${{contact.alternate_email || 'N/A'}}\\n` +
-                    `Region: ${{contact.region || 'N/A'}}\\n` +
-                    `Group: ${{contact.group || 'N/A'}}`
+                    `Region: ${{contact.region || 'N/A'}}`
                 );
             }}
         }}
@@ -3673,10 +3672,7 @@ def serve_web_ui(event):
                         'secondary email': 'alternate_email',
                         'region': 'region',
                         'geographic_region': 'region',
-                        'geographic region': 'region',
-                        'group': 'group',
-                        'group_name': 'group',
-                        'group name': 'group'
+                        'geographic region': 'region'
                     }};
                     
                     const fieldName = fieldMap[header];
@@ -3943,7 +3939,7 @@ def serve_web_ui(event):
             // Create CSV content
             const headers = ['email', 'first_name', 'last_name', 'title', 'entity_type', 'state', 'agency_name', 
                            'sector', 'subsection', 'phone', 'ms_isac_member', 'soc_call', 'fusion_center', 
-                           'k12', 'water_wastewater', 'weekly_rollup', 'alternate_email', 'region', 'group'];
+                           'k12', 'water_wastewater', 'weekly_rollup', 'alternate_email', 'region'];
             
             let csvContent = headers.join(',') + '\\n';
             
@@ -7116,7 +7112,6 @@ def add_contact(body, headers):
                 'weekly_rollup': body.get('weekly_rollup', ''),
                 'alternate_email': body.get('alternate_email', ''),
                 'region': body.get('region', ''),
-                'group': body.get('group', ''),
                 'created_at': datetime.now().isoformat()
             }
         )
@@ -7180,7 +7175,6 @@ def batch_add_contacts(body, headers):
                 'weekly_rollup': {'S': str(contact.get('weekly_rollup', '')).strip()},
                 'alternate_email': {'S': str(contact.get('alternate_email', '')).strip()},
                 'region': {'S': str(contact.get('region', '')).strip()},
-                'group': {'S': str(contact.get('group', '')).strip()},
                 'created_at': {'S': datetime.now().isoformat()}
             }
             
@@ -7256,7 +7250,7 @@ def update_contact(body, headers):
             'email', 'first_name', 'last_name', 'title', 'entity_type', 'state', 
             'agency_name', 'sector', 'subsection', 'phone', 'ms_isac_member',
             'soc_call', 'fusion_center', 'k12', 'water_wastewater', 
-            'weekly_rollup', 'alternate_email', 'region', 'group'
+            'weekly_rollup', 'alternate_email', 'region'
         ]
         
         update_expr = "SET "
@@ -7633,7 +7627,6 @@ def personalize_content(content, contact):
     content = content.replace('{{weekly_rollup}}', contact.get('weekly_rollup', ''))
     content = content.replace('{{alternate_email}}', contact.get('alternate_email', ''))
     content = content.replace('{{region}}', contact.get('region', ''))
-    content = content.replace('{{group}}', contact.get('group', ''))
     
     # Legacy support
     content = content.replace('{{company}}', contact.get('agency_name', ''))
