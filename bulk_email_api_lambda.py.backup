@@ -2633,8 +2633,8 @@ def serve_web_ui(event):
         
         async function loadAllContacts() {{
             await loadContacts();
-            currentFilterType = null;
-            document.getElementById('availableValuesArea').style.display = 'none';
+            document.getElementById('filterType').value = '';
+            document.getElementById('filterValueContainer').style.display = 'none';
             document.getElementById('nameSearch').value = '';
             applyContactFilter();
         }}
@@ -2821,28 +2821,19 @@ def serve_web_ui(event):
                     
                     console.log(`✅ Found ${{searchedContacts.length}} contacts matching "${{searchTerm}}"`);
                     
-                    // Apply category filters on search results if active
+                    // Apply category filter on search results if active
+                    const filterType = document.getElementById('filterType').value;
+                    const checkedBoxes = document.querySelectorAll('.filterCheckbox:checked');
+                    
                     let finalContacts = searchedContacts;
                     
-                    // Check if any filters are selected
-                    const hasFilters = Object.keys(selectedFilterValues).length > 0;
-                    
-                    if (hasFilters) {{
-                        // Apply all active filters to search results
+                    if (filterType && checkedBoxes.length > 0) {{
+                        const selectedValues = Array.from(checkedBoxes).map(cb => cb.value);
                         finalContacts = searchedContacts.filter(contact => {{
-                            // Check all filter types - contact must match ALL selected filters
-                            for (const [filterType, values] of Object.entries(selectedFilterValues)) {{
-                                if (values && values.length > 0) {{
-                                    const contactValue = getFieldValue(contact, filterType);
-                                    if (!contactValue || !values.includes(contactValue)) {{
-                                        return false;  // Contact doesn't match this filter
-                                    }}
-                                }}
-                            }}
-                            return true;  // Contact matches all filters
+                            const contactValue = getFieldValue(contact, filterType);
+                            return contactValue && selectedValues.includes(contactValue);
                         }});
-                        const filterCount = Object.values(selectedFilterValues).reduce((sum, vals) => sum + vals.length, 0);
-                        searchResults.textContent = `Found ${{finalContacts.length}} contact(s) matching "${{searchTerm}}" with ${{filterCount}} filter(s)`;
+                        searchResults.textContent = `Found ${{finalContacts.length}} contact(s) matching "${{searchTerm}}" with selected filters`;
                     }} else {{
                         searchResults.textContent = `Found ${{finalContacts.length}} contact(s) matching "${{searchTerm}}"`;
                     }}
