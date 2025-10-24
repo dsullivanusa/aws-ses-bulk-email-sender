@@ -2752,8 +2752,12 @@ def serve_web_ui(event):
         let searchTimeout;
         function debouncedSearch() {{
             clearTimeout(searchTimeout);
-            const searchTerm = document.getElementById('nameSearch').value.trim();
+            const nameSearchEl = document.getElementById('nameSearch');
             const searchResults = document.getElementById('searchResults');
+            
+            if (!nameSearchEl) return; // Element doesn't exist yet
+            
+            const searchTerm = nameSearchEl.value.trim();
             
             if (!searchTerm) {{
                 // If empty, clear immediately and hide indicator
@@ -2779,13 +2783,21 @@ def serve_web_ui(event):
             // This is kept for compatibility with old code
         }}
         async function searchContactsByName() {{
-            const searchTerm = document.getElementById('nameSearch').value.trim();
+            const nameSearchEl = document.getElementById('nameSearch');
             const searchResults = document.getElementById('searchResults');
             const searchingIndicator = document.getElementById('searchingIndicator');
             
+            // Safety check: element might not exist if tab isn't loaded
+            if (!nameSearchEl) {{
+                console.warn('nameSearch element not found - contacts tab may not be active');
+                return;
+            }}
+            
+            const searchTerm = nameSearchEl.value.trim();
+            
             if (!searchTerm) {{
                 // Empty search - apply current filter or show all
-                searchResults.textContent = '';
+                if (searchResults) searchResults.textContent = '';
                 hideSearchingIndicator();
                 applyContactFilter();
                 return;
