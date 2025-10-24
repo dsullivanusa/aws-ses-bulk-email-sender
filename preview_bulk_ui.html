@@ -1865,8 +1865,8 @@
         
         async function loadAllContacts() {
             await loadContacts();
-            document.getElementById('filterType').value = '';
-            document.getElementById('filterValueContainer').style.display = 'none';
+            currentFilterType = null;
+            document.getElementById('availableValuesArea').style.display = 'none';
             document.getElementById('nameSearch').value = '';
             applyContactFilter();
         }
@@ -2054,19 +2054,28 @@
                     
                     console.log(`✅ Found ${searchedContacts.length} contacts matching "${searchTerm}"`);
                     
-                    // Apply category filter on search results if active
-                    const filterType = document.getElementById('filterType').value;
-                    const checkedBoxes = document.querySelectorAll('.filterCheckbox:checked');
-                    
+                    // Apply category filters on search results if active
                     let finalContacts = searchedContacts;
                     
-                    if (filterType && checkedBoxes.length > 0) {
-                        const selectedValues = Array.from(checkedBoxes).map(cb => cb.value);
+                    // Check if any filters are selected
+                    const hasFilters = Object.keys(selectedFilterValues).length > 0;
+                    
+                    if (hasFilters) {
+                        // Apply all active filters to search results
                         finalContacts = searchedContacts.filter(contact => {
-                            const contactValue = getFieldValue(contact, filterType);
-                            return contactValue && selectedValues.includes(contactValue);
+                            // Check all filter types - contact must match ALL selected filters
+                            for (const [filterType, values] of Object.entries(selectedFilterValues)) {
+                                if (values && values.length > 0) {
+                                    const contactValue = getFieldValue(contact, filterType);
+                                    if (!contactValue || !values.includes(contactValue)) {
+                                        return false;  // Contact doesn't match this filter
+                                    }
+                                }
+                            }
+                            return true;  // Contact matches all filters
                         });
-                        searchResults.textContent = `Found ${finalContacts.length} contact(s) matching "${searchTerm}" with selected filters`;
+                        const filterCount = Object.values(selectedFilterValues).reduce((sum, vals) => sum + vals.length, 0);
+                        searchResults.textContent = `Found ${finalContacts.length} contact(s) matching "${searchTerm}" with ${filterCount} filter(s)`;
                     } else {
                         searchResults.textContent = `Found ${finalContacts.length} contact(s) matching "${searchTerm}"`;
                     }
