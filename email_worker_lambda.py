@@ -252,7 +252,7 @@ def send_cloudwatch_metric(metric_name, value, unit="Count", dimensions=None):
 
 
 def check_campaign_completion_status(campaign_id, expected_total):
-    """Check if campaign is completed and send metric if incomplete"""
+    """Check if campaign is completed and send metric if incomplete (only after 30 minutes)"""
     try:
         # Get current campaign status
         campaign_response = campaigns_table.get_item(Key={"campaign_id": campaign_id})
@@ -267,33 +267,63 @@ def check_campaign_completion_status(campaign_id, expected_total):
             if expected_total > 0:
                 completion_percentage = (total_processed / expected_total) * 100
 
-                # If less than 90% complete and we've been processing for a while
-                if completion_percentage < 90:
-                    logger.warning(
-                        f"Campaign {campaign_id} only {completion_percentage:.1f}% complete ({total_processed}/{expected_total})"
-                    )
+                # Only flag as incomplete if campaign has been running for >30 minutes
+                # This prevents false alarms for campaigns actively sending
+                start_time_str = campaign.get("start_time") or campaign.get("sent_at")
+                
+                if start_time_str:
+                    try:
+                        start_time = datetime.fromisoformat(start_time_str)
+                        elapsed_minutes = (datetime.now() - start_time).total_seconds() / 60
+                        
+                        # Only flag if campaign has been running for >30 minutes AND <90% complete
+                        if elapsed_minutes > 30 and completion_percentage < 90:
+                            logger.warning(
+                                f"Campaign {campaign_id} stuck at {completion_percentage:.1f}% complete after {elapsed_minutes:.1f} minutes ({total_processed}/{expected_total})"
+                            )
 
-                    # Send metric for incomplete campaign
-                    print(
-                        f"📊 ERROR METRIC → CloudWatch: IncompleteCampaigns (Campaign: {campaign_id}, Completion: {completion_percentage:.1f}%)"
-                    )
-                    logger.warning(
-                        f"📊 Sending ERROR metric to CloudWatch: IncompleteCampaigns - Campaign {campaign_id} is {completion_percentage:.1f}% complete"
-                    )
-                    send_cloudwatch_metric(
-                        "IncompleteCampaigns",
-                        1,
-                        "Count",
-                        [
-                            {"Name": "CampaignId", "Value": campaign_id},
-                            {
-                                "Name": "CompletionPercentage",
-                                "Value": f"{completion_percentage:.1f}",
-                            },
-                        ],
-                    )
+                            # Send metric for incomplete campaign
+                            print(
+                                f"📊 ERROR METRIC → CloudWatch: IncompleteCampaigns (Campaign: {campaign_id}, Completion: {completion_percentage:.1f}%, Elapsed: {elapsed_minutes:.1f}m)"
+                            )
+                            logger.warning(
+                                f"📊 Sending ERROR metric to CloudWatch: IncompleteCampaigns - Campaign {campaign_id} is {completion_percentage:.1f}% complete after {elapsed_minutes:.1f} minutes"
+                            )
+                            send_cloudwatch_metric(
+                                "IncompleteCampaigns",
+                                1,
+                                "Count",
+                                [
+                                    {"Name": "CampaignId", "Value": campaign_id},
+                                    {
+                                        "Name": "CompletionPercentage",
+                                        "Value": f"{completion_percentage:.1f}",
+                                    },
+                                    {
+                                        "Name": "ElapsedMinutes",
+                                        "Value": f"{elapsed_minutes:.1f}",
+                                    },
+                                ],
+                            )
 
-                    return False
+                            return False
+                        else:
+                            # Campaign is either >90% complete or hasn't been running long enough
+                            if completion_percentage < 90:
+                                logger.info(
+                                    f"Campaign {campaign_id} at {completion_percentage:.1f}% complete after {elapsed_minutes:.1f} minutes (still in progress - not flagging yet)"
+                                )
+                            return True
+                    except Exception as time_parse_error:
+                        logger.warning(
+                            f"Could not parse start_time for campaign {campaign_id}: {str(time_parse_error)} - skipping time-based check"
+                        )
+                        return True
+                else:
+                    logger.info(
+                        f"Campaign {campaign_id} has no start_time - skipping completion check"
+                    )
+                    return True
 
         return True
 
@@ -310,11 +340,38 @@ def lambda_handler(event, context):
     
     # Check if event has Records key to prevent KeyError
     if 'Records' not in event:
+        # Check if this is a non-SQS event (health check, scheduled event, etc.)
+        event_source = event.get('source', 'unknown')
+        event_detail_type = event.get('detail-type', 'unknown')
+        
+        # Ignore known non-SQS event sources to prevent false alarms
+        if event_source in ['aws.events', 'aws.health', 'aws.apigateway']:
+            logger.info(f"⚠️ Ignoring non-SQS event from {event_source} (detail-type: {event_detail_type})")
+            logger.info(f"Event keys: {list(event.keys())}")
+            return {
+                "statusCode": 200,
+                "body": json.dumps({"message": f"Ignored non-SQS event from {event_source}"})
+            }
+        
+        # Only log error for truly invalid events
         logger.error("❌ FATAL ERROR: Event does not contain 'Records' key")
+        logger.error(f"Event source: {event_source}")
         logger.error(f"Event structure: {list(event.keys())}")
         return {
             "statusCode": 400,
             "body": json.dumps({"error": "Invalid event structure - missing Records key"})
+        }
+    
+    # Check for empty SQS batch (no messages to process)
+    if len(event['Records']) == 0:
+        logger.info("✅ Empty SQS batch received (0 messages) - no processing needed")
+        return {
+            "statusCode": 200,
+            "body": json.dumps({
+                "message": "Empty batch processed",
+                "successful": 0,
+                "failed": 0
+            })
         }
     
     logger.info(f"Processing {len(event['Records'])} messages from SQS queue")
@@ -815,8 +872,8 @@ def lambda_handler(event, context):
         send_cloudwatch_metric("EmailsProcessed", total_emails, "Count")
         send_cloudwatch_metric("EmailsSentSuccessfully", results["successful"], "Count")
 
-        # EmailsFailed metric - Log if any failures
-        if results["failed"] > 0:
+        # EmailsFailed metric - Log if any failures (only when actually processing emails)
+        if results["failed"] > 0 and total_emails > 0:
             print(
                 f"📊 ERROR METRIC → CloudWatch: EmailsFailed = {results['failed']} (out of {total_emails} total)"
             )
@@ -836,8 +893,8 @@ def lambda_handler(event, context):
         )  # SES measures in emails/second
         send_cloudwatch_metric("SuccessRate", success_rate, "Percent")
 
-        # FailureRate metric - Log if failure rate is significant
-        if failure_rate > 0:
+        # FailureRate metric - Log if failure rate is significant (only when actually processing emails)
+        if failure_rate > 0 and total_emails > 0:
             print(f"📊 ERROR METRIC → CloudWatch: FailureRate = {failure_rate:.1f}%")
             logger.warning(
                 f"📊 Sending ERROR metric to CloudWatch: FailureRate = {failure_rate:.1f}% ({results['failed']}/{total_emails})"
